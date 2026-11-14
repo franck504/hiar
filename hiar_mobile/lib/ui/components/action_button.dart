@@ -77,93 +77,158 @@ class ActionButton extends StatelessWidget {
                     )
                   ],
           ),
-          child: Row(
-            children: [
-              if (icon != null) ...[
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: isPrimary || isDestructive
-                        ? Colors.white.withOpacity(0.2)
-                        : HiarColors.azurSoft,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 22,
-                    color: isPrimary || isDestructive ? Colors.white : HiarColors.azur,
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Column(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isCompact = constraints.maxWidth < 280;
+              final isPrimaryOrDestructive = isPrimary || isDestructive;
+
+              if (isCompact) {
+                // Disposition compacte (cartes en grille 2 colonnes) : pas de compression horizontale
+                return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (icon != null)
+                          _buildIcon(isPrimaryOrDestructive, size: 30, iconSize: 18)
+                        else
+                          const SizedBox.shrink(),
+                        if (voiceHint != null)
+                          Flexible(child: _buildVoiceBadge(isPrimaryOrDestructive)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
                     Text(
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: foregroundColor,
                       ),
                     ),
                     if (subtitle != null) ...[
-                      const SizedBox(height: 1),
+                      const SizedBox(height: 2),
                       Text(
                         subtitle!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12,
-                          color: isPrimary || isDestructive ? Colors.white70 : HiarColors.text2,
+                          fontSize: 11,
+                          height: 1.25,
+                          color: isPrimaryOrDestructive ? Colors.white70 : HiarColors.text2,
                         ),
                       ),
                     ],
                   ],
-                ),
-              ),
-              if (voiceHint != null) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isPrimary || isDestructive
-                        ? Colors.white.withOpacity(0.2)
-                        : HiarColors.brume,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isPrimary || isDestructive ? Colors.white24 : HiarColors.border,
+                );
+              }
+
+              // Disposition large (liste en colonne unique ou écran d'accueil)
+              return Row(
+                children: [
+                  if (icon != null) ...[
+                    _buildIcon(isPrimaryOrDestructive, size: 38, iconSize: 22),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: foregroundColor,
+                          ),
+                        ),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 1),
+                          Text(
+                            subtitle!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isPrimaryOrDestructive ? Colors.white70 : HiarColors.text2,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.mic,
-                        size: 13,
-                        color: isPrimary || isDestructive ? Colors.white70 : HiarColors.azur,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        "« $voiceHint »",
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isPrimary || isDestructive ? Colors.white : HiarColors.marine,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
+                  if (voiceHint != null) ...[
+                    const SizedBox(width: 8),
+                    _buildVoiceBadge(isPrimaryOrDestructive),
+                  ],
+                ],
+              );
+            },
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildIcon(bool isPrimaryOrDestructive, {required double size, required double iconSize}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: isPrimaryOrDestructive
+            ? Colors.white.withOpacity(0.2)
+            : HiarColors.azurSoft,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        icon,
+        size: iconSize,
+        color: isPrimaryOrDestructive ? Colors.white : HiarColors.azur,
+      ),
+    );
+  }
+
+  Widget _buildVoiceBadge(bool isPrimaryOrDestructive) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: isPrimaryOrDestructive
+            ? Colors.white.withOpacity(0.2)
+            : HiarColors.brume,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isPrimaryOrDestructive ? Colors.white24 : HiarColors.border,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.mic,
+            size: 12,
+            color: isPrimaryOrDestructive ? Colors.white70 : HiarColors.azur,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              "« $voiceHint »",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isPrimaryOrDestructive ? Colors.white : HiarColors.marine,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

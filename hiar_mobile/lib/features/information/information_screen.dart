@@ -26,12 +26,48 @@ class InformationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topics = [
-      {'key': 'HIV', 'title': 'VIH / SIDA', 'hint': 'VIH', 'desc': 'Prévention, transmission et dépistage'},
-      {'key': 'MALARIA', 'title': 'Paludisme', 'hint': 'Paludisme', 'desc': 'Transmission par moustiques, symptômes'},
-      {'key': 'DIABETES', 'title': 'Diabète', 'hint': 'Diabète', 'desc': 'Glycémie, dépistage et précautions'},
-      {'key': 'HYPERTENSION', 'title': 'Hypertension', 'hint': 'Hypertension', 'desc': 'Pression artérielle et suivi médical'},
-      {'key': 'TUBERCULOSIS', 'title': 'Tuberculose', 'hint': 'Tuberculose', 'desc': 'Transmission par l’air et prise en charge'},
-      {'key': 'MENSTRUAL_HEALTH', 'title': 'Santé menstruelle', 'hint': 'Règles', 'desc': 'Manifestations, hygiène et suivi'},
+      {
+        'key': 'HIV',
+        'title': 'VIH / SIDA',
+        'hint': 'VIH',
+        'desc': 'Prévention, transmission et dépistage',
+        'icon': Icons.healing_outlined,
+      },
+      {
+        'key': 'MALARIA',
+        'title': 'Paludisme',
+        'hint': 'Paludisme',
+        'desc': 'Transmission par moustiques, symptômes',
+        'icon': Icons.pest_control_outlined,
+      },
+      {
+        'key': 'DIABETES',
+        'title': 'Diabète',
+        'hint': 'Diabète',
+        'desc': 'Glycémie, dépistage et précautions',
+        'icon': Icons.bloodtype_outlined,
+      },
+      {
+        'key': 'HYPERTENSION',
+        'title': 'Hypertension',
+        'hint': 'Hypertension',
+        'desc': 'Pression artérielle et suivi médical',
+        'icon': Icons.favorite_outline,
+      },
+      {
+        'key': 'TUBERCULOSIS',
+        'title': 'Tuberculose',
+        'hint': 'Tuberculose',
+        'desc': 'Transmission par l’air et prise en charge',
+        'icon': Icons.air_outlined,
+      },
+      {
+        'key': 'MENSTRUAL_HEALTH',
+        'title': 'Santé menstruelle',
+        'hint': 'Règles',
+        'desc': 'Manifestations, hygiène et suivi',
+        'icon': Icons.water_drop_outlined,
+      },
     ];
 
     return LandscapeScaffold(
@@ -52,17 +88,17 @@ class InformationScreen extends StatelessWidget {
               crossAxisCount: 2,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
-              childAspectRatio: 2.3,
+              childAspectRatio: 1.95,
             ),
             itemCount: topics.length,
             itemBuilder: (context, index) {
               final t = topics[index];
               return ActionButton(
-                label: t['title']!,
-                subtitle: t['desc']!,
-                icon: Icons.article_outlined,
-                voiceHint: t['hint']!,
-                onTap: () => onSelectTopic(t['key']!, t['title']!),
+                label: t['title'] as String,
+                subtitle: t['desc'] as String,
+                icon: t['icon'] as IconData,
+                voiceHint: t['hint'] as String,
+                onTap: () => onSelectTopic(t['key'] as String, t['title'] as String),
               );
             },
           ),

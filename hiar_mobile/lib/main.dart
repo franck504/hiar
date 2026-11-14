@@ -374,56 +374,84 @@ class _HiarAppState extends State<HiarApp> {
       _closeDialogIfOpen();
 
       final media = MediaQuery.of(_navKey.currentContext ?? context);
-      final dialogMaxHeight = (media.size.height * 0.52).clamp(150.0, 360.0);
-      final dialogMaxWidth = (media.size.width * 0.72).clamp(300.0, 680.0);
+      final dialogMaxWidth = (media.size.width * 0.75).clamp(320.0, 700.0);
 
       showDialog(
         context: _navKey.currentContext ?? context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          titlePadding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-          actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-          title: Row(
-            children: [
-              const Icon(Icons.menu_book, color: HiarColors.azur, size: 24),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "Fiche OMS : $title",
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: HiarColors.marine),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Container(
             width: dialogMaxWidth,
-            height: dialogMaxHeight,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Text(
-                text,
-                style: const TextStyle(fontSize: 14, height: 1.45, color: HiarColors.text1),
-              ),
+            constraints: BoxConstraints(
+              maxHeight: media.size.height * 0.82,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // En-tête avec titre et bouton de fermeture direct
+                Row(
+                  children: [
+                    const Icon(Icons.menu_book, color: HiarColors.azur, size: 24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        "Fiche OMS : $title",
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: HiarColors.marine,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: HiarColors.text2),
+                      tooltip: "Fermer",
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _hub.publishAction('info.close', {'topic': topicKey});
+                      },
+                    ),
+                  ],
+                ),
+                const Divider(height: 16, thickness: 1),
+                // Contenu scrollable adaptatif
+                Flexible(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Text(
+                      text,
+                      style: const TextStyle(fontSize: 14, height: 1.45, color: HiarColors.text1),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Action inférieure
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: HiarColors.azur,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _hub.publishAction('info.close', {'topic': topicKey});
+                    },
+                    child: const Text("Fermer"),
+                  ),
+                ),
+              ],
             ),
           ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: HiarColors.azur,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                _hub.publishAction('info.close', {'topic': topicKey});
-              },
-              child: const Text("Fermer"),
-            ),
-          ],
         ),
       );
     } catch (e) {
