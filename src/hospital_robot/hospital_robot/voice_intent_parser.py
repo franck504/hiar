@@ -23,7 +23,7 @@ def normalize_text(text: str) -> str:
 
 @dataclass
 class ParsedIntent:
-    intent_type: str  # "STOP", "ORIENTATION", "VITALS", "INFORMATION", "CONSULTATION", "HOME", "UNKNOWN"
+    intent_type: str
     confidence: float = 1.0
     category: Optional[str] = None
     target_field: Optional[str] = None
@@ -88,12 +88,36 @@ class VoiceIntentParser:
     CONSULTATION_REGEX = r"\b(rendez-vous|rdv|consultation|consulter|medecin|docteur|visite medicale|prendre rdv)\b"
     HOME_REGEX = r"\b(retour a l accueil|menu principal|accueil principal|quitter|fermer|retour accueil)\b"
 
+    GREETING_REGEX = r"\b(bonjour|salut|bonsoir|coucou|hello|hey|allo)\b"
+    THANKS_REGEX = r"\b(merci|merci beaucoup|remercie|parfait merci|super merci)\b"
+    INFO_GENERAL_REGEX = r"\b(renseignements?|rense|informations?|fiches? de sante|conseils? sante|fiches? oms|prevention)\b"
+
+    CONSULT_REASON_SUIVI = r"\b(suivi medical|suivi|controle)\b"
+    CONSULT_REASON_GENERALE = r"\b(consultation generale|generale|standard)\b"
+    CONSULT_STEP_NEXT = r"\b(etape suivante|suivant|suivante|continuer|valider|confirmer)\b"
+    CONSULT_STEP_PREV = r"\b(etape precedente|precedent|precedente|reculer)\b"
+    CONSULT_TICKET = r"\b(ticket|mon ticket|voir le ticket|billet)\b"
+
+    STOPWORDS_FRAGMENTS = {
+        "je", "tu", "il", "elle", "on", "nous", "vous", "ils",
+        "le", "la", "les", "de", "des", "du", "un", "une",
+        "et", "ou", "a", "au", "en", "ce", "ces", "c"
+    }
+
     def parse(self, raw_text: str, confidence: float = 1.0) -> ParsedIntent:
         """Analyse le texte brut et renvoie une intention typée."""
         norm = normalize_text(raw_text)
 
         if not norm:
             return ParsedIntent(intent_type="UNKNOWN", confidence=0.0)
+
+        # 0. FRAGMENTS ISOLÉS / PAUSES DE PAROLE (ignorer silencieusement)
+        if norm in self.STOPWORDS_FRAGMENTS or len(norm) <= 2:
+            return ParsedIntent(
+                intent_type="IGNORED_FRAGMENT",
+                confidence=confidence,
+                details={"fragment": norm},
+            )
 
         # 1. ARRÊT D'URGENCE (Priorité absolue)
         if re.search(self.STOP_REGEX, norm):
@@ -103,7 +127,23 @@ class VoiceIntentParser:
                 ros_command="STOP",
             )
 
-        # 2. RETOUR ACCUEIL SPÉCIFIQUE
+        # 2. POLITESSE : MERCI
+        if re.search(self.THANKS_REGEX, norm):
+            return ParsedIntent(
+                intent_type="THANKS",
+                confidence=confidence,
+                label="Remerciement",
+            )
+
+        # 3. POLITESSE : BONJOUR
+        if re.search(self.GREETING_REGEX, norm):
+            return ParsedIntent(
+                intent_type="GREETING",
+                confidence=confidence,
+                label="Salutation",
+            )
+
+        # 4. RETOUR ACCUEIL
         if re.search(self.HOME_REGEX, norm):
             return ParsedIntent(
                 intent_type="HOME",
@@ -111,7 +151,7 @@ class VoiceIntentParser:
                 label="Accueil",
             )
 
-        # 3. ORIENTATION VERS UN SERVICE
+        # 5. ORIENTATION VERS UN SERVICE
         for dest_key, info in self.DEPARTMENTS.items():
             if re.search(info["regex"], norm):
                 return ParsedIntent(
@@ -124,7 +164,7 @@ class VoiceIntentParser:
                     ros_request={"category": "ORIENTATION", "destination": dest_key},
                 )
 
-        # 4. MESURE DES SIGNES VITAUX
+        # 6. MESURE DES SIGNES VITAUX
         if re.search(self.VITALS_REGEX, norm):
             return ParsedIntent(
                 intent_type="VITALS",
@@ -136,7 +176,7 @@ class VoiceIntentParser:
                 ros_request={"category": "CONSULTATION", "action": "VITAL_SIGNS"},
             )
 
-        # 5. INFORMATION SANTE PUBLIQUE (Fiches OMS)
+        # 7. INFORMATION SANTE PUBLIQUE SPÉCIFIQUE (Fiches OMS)
         for topic_key, info in self.TOPICS.items():
             if re.search(info["regex"], norm):
                 return ParsedIntent(
@@ -149,7 +189,57 @@ class VoiceIntentParser:
                     ros_request={"category": "INFORMATION", "topic": topic_key},
                 )
 
-        # 6. CONSULTATION & RENDEZ-VOUS
+        # 8. RENSEIGNEMENTS / INFORMATIONS GÉNÉRALES
+        if re.search(self.INFO_GENERAL_REGEX, norm):
+            return ParsedIntent(
+                intent_type="INFORMATION_GENERAL",
+                confidence=confidence,
+                category="INFORMATION",
+                label="Fiches de santé",
+                ros_request={"category": "INFORMATION", "topic": "MALARIA"},
+            )
+
+        # 9. TICKET DE CONSULTATION
+        if re.search(self.CONSULT_TICKET, norm):
+            return ParsedIntent(
+                intent_type="CONSULTATION_TICKET",
+                confidence=confidence,
+                label="Ticket",
+            )
+
+        # 10. SAISIE VOCALE DU MOTIF DE CONSULTATION
+        if re.search(self.CONSULT_REASON_SUIVI, norm):
+            return ParsedIntent(
+                intent_type="CONSULTATION_REASON",
+                confidence=confidence,
+                target_value="suivi_medical",
+                label="Suivi médical",
+            )
+        if re.search(self.CONSULT_REASON_GENERALE, norm):
+            return ParsedIntent(
+                intent_type="CONSULTATION_REASON",
+                confidence=confidence,
+                target_value="consultation_generale",
+                label="Consultation générale",
+            )
+
+        # 11. NAVIGATION DANS LES ÉTAPES DE CONSULTATION
+        if re.search(self.CONSULT_STEP_NEXT, norm):
+            return ParsedIntent(
+                intent_type="CONSULTATION_STEP",
+                confidence=confidence,
+                target_value="next",
+                label="Suivant",
+            )
+        if re.search(self.CONSULT_STEP_PREV, norm):
+            return ParsedIntent(
+                intent_type="CONSULTATION_STEP",
+                confidence=confidence,
+                target_value="prev",
+                label="Précédent",
+            )
+
+        # 12. OUVERTURE DE CONSULTATION & RENDEZ-VOUS
         if re.search(self.CONSULTATION_REGEX, norm):
             return ParsedIntent(
                 intent_type="CONSULTATION",
@@ -161,7 +251,7 @@ class VoiceIntentParser:
                 ros_request={"category": "CONSULTATION", "action": "APPOINTMENT"},
             )
 
-        # 7. INCONNU / NON ACTIONNABLE
+        # 13. INCONNU / NON ACTIONNABLE
         return ParsedIntent(
             intent_type="UNKNOWN",
             confidence=confidence,
@@ -169,11 +259,10 @@ class VoiceIntentParser:
         )
 
     def build_instruction(self, intent: ParsedIntent, raw_text: str = "") -> Dict:
-        """Construit le payload conforme au topic 'server/instruction'.
+        """Construit le payload conforme au topic 'server/instruction'."""
+        if intent.intent_type == "IGNORED_FRAGMENT":
+            return {}
 
-        Règle d'or : aucune boîte de dialogue pop-up de confirmation ne doit
-        s'ouvrir si l'action provient d'une commande vocale (require_confirmation: false).
-        """
         if intent.intent_type == "STOP":
             return {
                 "origin": "voice",
@@ -193,6 +282,34 @@ class VoiceIntentParser:
                     "status_label": "ROBOT ARRÊTÉ",
                 },
                 "voice_hints": ["Reprendre", "Accueil"],
+            }
+
+        if intent.intent_type == "GREETING":
+            return {
+                "origin": "voice",
+                "text_to_speak": "Bonjour ! Je suis le robot hospitalier HIAR. Que puis-je faire pour vous ?",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "home",
+                    "require_confirmation": False,
+                },
+                "voice_hints": ["Pharmacie", "Laboratoire", "Consultation", "Constantes"],
+                "robot_status": {
+                    "face_expression": "happy",
+                    "status_label": "Bonjour !",
+                },
+            }
+
+        if intent.intent_type == "THANKS":
+            return {
+                "origin": "voice",
+                "text_to_speak": "Je vous en prie ! N'hésitez pas si vous avez une autre question.",
+                "speech_priority": "normal",
+                "voice_hints": ["Accueil", "Pharmacie", "Consultation"],
+                "robot_status": {
+                    "face_expression": "happy",
+                    "status_label": "Avec plaisir",
+                },
             }
 
         if intent.intent_type == "ORIENTATION":
@@ -259,6 +376,82 @@ class VoiceIntentParser:
                 "robot_status": {
                     "face_expression": "speaking",
                     "status_label": "Informations de santé",
+                },
+            }
+
+        if intent.intent_type == "INFORMATION_GENERAL":
+            return {
+                "origin": "voice",
+                "text_to_speak": "Voici les fiches d'information et de prévention de l'Organisation Mondiale de la Santé.",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "information",
+                    "require_confirmation": False,
+                },
+                "voice_hints": ["Paludisme", "Diabète", "VIH", "Hypertension"],
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": "Fiches de santé OMS",
+                },
+            }
+
+        if intent.intent_type == "CONSULTATION_REASON":
+            reason_label = intent.label or "Consultation"
+            return {
+                "origin": "voice",
+                "text_to_speak": f"Motif sélectionné : {reason_label}.",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "consultation",
+                    "step": 1,
+                    "require_confirmation": False,
+                },
+                "fields": {
+                    "selected_reason": intent.target_value,
+                },
+                "voice_hints": ["Suivant", "Médecin A", "Médecin B"],
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": reason_label,
+                },
+            }
+
+        if intent.intent_type == "CONSULTATION_STEP":
+            action = intent.target_value or "next"
+            speech = "Étape suivante." if action == "next" else "Étape précédente."
+            return {
+                "origin": "voice",
+                "text_to_speak": speech,
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "consultation",
+                    "action": action,
+                    "require_confirmation": False,
+                },
+                "voice_hints": ["Suivant", "Précédent", "Annuler"],
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": speech,
+                },
+            }
+
+        if intent.intent_type == "CONSULTATION_TICKET":
+            return {
+                "origin": "voice",
+                "text_to_speak": "Votre rendez-vous est confirmé. Voici votre ticket de passage numéro A-MAT-3.",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "consultation",
+                    "step": 6,
+                    "require_confirmation": False,
+                },
+                "fields": {
+                    "ticket_label": "A-MAT-3",
+                },
+                "voice_hints": ["Terminer", "Accueil"],
+                "robot_status": {
+                    "face_expression": "happy",
+                    "status_label": "Ticket A-MAT-3",
                 },
             }
 

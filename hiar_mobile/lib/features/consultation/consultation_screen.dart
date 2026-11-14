@@ -98,6 +98,9 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     if (fields.containsKey('ticket_label') && fields['ticket_label'] != null) {
       _ticketLabel = fields['ticket_label'].toString();
     }
+    if (fields.containsKey('selected_reason') && fields['selected_reason'] != null) {
+      _selectedReason = fields['selected_reason'].toString();
+    }
     if (fields.containsKey('vitals_state')) {
       _vitalsRunning = fields['vitals_state'] == 'measuring';
     }

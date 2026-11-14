@@ -171,6 +171,100 @@ def test_unknown_intent(parser):
     assert "voice_hints" in instruction
 
 
+# ============================================================
+# TESTS POLITESSE & DIALOGUE NATUREL
+# ============================================================
+
+@pytest.mark.parametrize("phrase", [
+    "Bonjour",
+    "Salut !",
+    "Bonsoir",
+    "Coucou",
+])
+def test_greeting_intent(parser, phrase):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "GREETING"
+    instruction = parser.build_instruction(intent)
+    assert "Bonjour" in instruction["text_to_speak"]
+    assert instruction["instruction_ui"]["screen"] == "home"
+
+
+@pytest.mark.parametrize("phrase", [
+    "Merci",
+    "Merci beaucoup",
+    "Parfait merci",
+])
+def test_thanks_intent(parser, phrase):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "THANKS"
+    instruction = parser.build_instruction(intent)
+    assert "Je vous en prie" in instruction["text_to_speak"]
+
+
+# ============================================================
+# TESTS RENSEIGNEMENTS GÉNÉRAUX & MOTIFS DE CONSULTATION
+# ============================================================
+
+@pytest.mark.parametrize("phrase", [
+    "Renseignements",
+    "Rense",
+    "Informations",
+    "Fiches de santé",
+])
+def test_general_info_intent(parser, phrase):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "INFORMATION_GENERAL"
+    instruction = parser.build_instruction(intent)
+    assert instruction["instruction_ui"]["screen"] == "information"
+    assert "fiches" in instruction["text_to_speak"].lower()
+
+
+@pytest.mark.parametrize("phrase,expected_reason", [
+    ("C'est plutôt suivi médical", "suivi_medical"),
+    ("Suivi médical", "suivi_medical"),
+    ("Consultation générale", "consultation_generale"),
+])
+def test_consultation_reason_intent(parser, phrase, expected_reason):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "CONSULTATION_REASON"
+    assert intent.target_value == expected_reason
+    instruction = parser.build_instruction(intent)
+    assert instruction["fields"]["selected_reason"] == expected_reason
+    assert "Motif sélectionné" in instruction["text_to_speak"]
+
+
+@pytest.mark.parametrize("phrase,expected_action", [
+    ("Étape suivante", "next"),
+    ("Suivant", "next"),
+    ("Continuer", "next"),
+    ("Étape précédente", "prev"),
+    ("Précédent", "prev"),
+])
+def test_consultation_step_navigation(parser, phrase, expected_action):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "CONSULTATION_STEP"
+    assert intent.target_value == expected_action
+    instruction = parser.build_instruction(intent)
+    assert instruction["instruction_ui"]["action"] == expected_action
+
+
+def test_consultation_ticket_intent(parser):
+    intent = parser.parse("Quel est mon ticket ?")
+    assert intent.intent_type == "CONSULTATION_TICKET"
+    instruction = parser.build_instruction(intent)
+    assert instruction["instruction_ui"]["screen"] == "consultation"
+    assert instruction["instruction_ui"]["step"] == 6
+    assert instruction["fields"]["ticket_label"] == "A-MAT-3"
+
+
+def test_ignored_fragments_do_not_trigger_tts(parser):
+    for frag in ["je", "le", "de", "un", "a"]:
+        intent = parser.parse(frag)
+        assert intent.intent_type == "IGNORED_FRAGMENT"
+        instruction = parser.build_instruction(intent)
+        assert instruction == {}
+
+
 def test_empty_input(parser):
     intent = parser.parse("   ")
     assert intent.intent_type == "UNKNOWN"

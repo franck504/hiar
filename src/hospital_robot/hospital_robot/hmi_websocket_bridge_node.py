@@ -64,10 +64,10 @@ except ImportError:
             self.data = data
 
 try:
-    from hospital_robot.voice_intent_parser import ParsedIntent, VoiceIntentParser
+    from hospital_robot.voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from hospital_robot.vitals_data_parser import build_vitals_instruction, parse_vitals_frame
 except ImportError:
-    from voice_intent_parser import ParsedIntent, VoiceIntentParser
+    from voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from vitals_data_parser import build_vitals_instruction, parse_vitals_frame
 
 import websockets
@@ -114,6 +114,8 @@ class HMIWebSocketBridgeNode(Node):
 
         # Composants de traitement métier
         self.intent_parser = VoiceIntentParser()
+        self._last_stt_text = ""
+        self._last_stt_time = 0.0
 
         # Clients WebSocket connectés
         self.clients: Set[WSConnection] = set()
@@ -303,11 +305,25 @@ class HMIWebSocketBridgeNode(Node):
         if not text:
             return
 
-        self.get_logger().info(f"🎤 Spoken text received: '{text}' (conf={confidence:.2f})")
+        norm_incoming = normalize_text(text)
+
+        # 0. Anti-rebond temporel (doublon Android STT émis à < 1.8s)
+        now = time.time()
+        if norm_incoming == self._last_stt_text and (now - self._last_stt_time) < 1.8:
+            self.get_logger().info(f"⏩ Duplicate STT frame suppressed: '{text}' (elapsed={now - self._last_stt_time:.2f}s)")
+            return
+        self._last_stt_text = norm_incoming
+        self._last_stt_time = now
 
         # Analyse et classification d'intention
         intent = self.intent_parser.parse(text, confidence=confidence)
-        self.get_logger().info(f"Parsed intent: {intent.intent_type}")
+
+        # Filtrage des fragments isolés ("je", "le", etc.) : on attend la suite sans parler
+        if intent.intent_type == "IGNORED_FRAGMENT":
+            self.get_logger().info(f"Silently ignored fragment: '{text}'")
+            return
+
+        self.get_logger().info(f"🎤 Spoken text received: '{text}' (conf={confidence:.2f}) -> {intent.intent_type}")
 
         # 1. Action ROS 2 Navigation Command (ex: STOP)
         if intent.ros_command:
@@ -324,18 +340,19 @@ class HMIWebSocketBridgeNode(Node):
 
         # 4. Construction de l'instruction UI & TTS pour le mobile
         instruction = self.intent_parser.build_instruction(intent, text)
-        await self.broadcast("server/instruction", instruction)
+        if instruction:
+            await self.broadcast("server/instruction", instruction)
 
-        # Diffusion synchronisée sur le topic TTS dédié si texte à prononcer
-        text_to_speak = instruction.get("text_to_speak")
-        if text_to_speak:
-            await self.broadcast(
-                "voice/tts/request",
-                {
-                    "text": text_to_speak,
-                    "priority": instruction.get("speech_priority", "normal"),
-                },
-            )
+            # Diffusion synchronisée sur le topic TTS dédié si texte à prononcer
+            text_to_speak = instruction.get("text_to_speak")
+            if text_to_speak:
+                await self.broadcast(
+                    "voice/tts/request",
+                    {
+                        "text": text_to_speak,
+                        "priority": instruction.get("speech_priority", "normal"),
+                    },
+                )
 
     # ========================================================
     # LOGIQUE TACTILE UI ACTION
@@ -497,6 +514,10 @@ class HMIWebSocketBridgeNode(Node):
 
 
 def main(args=None):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
     if ROS_AVAILABLE:
         rclpy.init(args=args)
 

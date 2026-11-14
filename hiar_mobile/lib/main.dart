@@ -302,6 +302,16 @@ class _HiarAppState extends State<HiarApp> {
     if (ui != null) {
       if (ui['action'] == 'stop') {
         _triggerStop();
+      } else if (ui['action'] == 'next') {
+        setState(() {
+          if (_consultationStep < 6) _consultationStep++;
+        });
+        _goToScreen('consultation');
+      } else if (ui['action'] == 'prev') {
+        setState(() {
+          if (_consultationStep > 1) _consultationStep--;
+        });
+        _goToScreen('consultation');
       }
 
       final targetScreen = ui['screen']?.toString();
