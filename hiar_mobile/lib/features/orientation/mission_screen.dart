@@ -47,7 +47,7 @@ class MissionScreen extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 580),
           child: Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
@@ -60,27 +60,29 @@ class MissionScreen extends StatelessWidget {
                 )
               ],
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isStopped ? Icons.stop_circle_outlined : Icons.directions_walk,
-                  size: 64,
-                  color: isStopped ? HiarColors.err : HiarColors.azur,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  isStopped
-                      ? "Le robot s'est arrêté."
-                      : "Je vous accompagne vers : $destinationLabel",
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: HiarColors.marine,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isStopped ? Icons.stop_circle_outlined : Icons.directions_walk,
+                    size: 44,
+                    color: isStopped ? HiarColors.err : HiarColors.azur,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
+                  const SizedBox(height: 10),
+                  Text(
+                    isStopped
+                        ? "Le robot s'est arrêté."
+                        : "Je vous accompagne vers : $destinationLabel",
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: HiarColors.marine,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
                 Text(
                   isStopped
                       ? "Vous pouvez retourner à l'accueil."
@@ -174,6 +176,7 @@ class MissionScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

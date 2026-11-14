@@ -373,28 +373,40 @@ class _HiarAppState extends State<HiarApp> {
       if (!mounted) return;
       _closeDialogIfOpen();
 
+      final media = MediaQuery.of(_navKey.currentContext ?? context);
+      final dialogMaxHeight = (media.size.height * 0.52).clamp(150.0, 360.0);
+      final dialogMaxWidth = (media.size.width * 0.72).clamp(300.0, 680.0);
+
       showDialog(
         context: _navKey.currentContext ?? context,
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          titlePadding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
           title: Row(
             children: [
-              const Icon(Icons.menu_book, color: HiarColors.azur, size: 28),
-              const SizedBox(width: 10),
+              const Icon(Icons.menu_book, color: HiarColors.azur, size: 24),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   "Fiche OMS : $title",
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: HiarColors.marine),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: HiarColors.marine),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 620, maxHeight: 420),
+          content: SizedBox(
+            width: dialogMaxWidth,
+            height: dialogMaxHeight,
             child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
               child: Text(
                 text,
-                style: const TextStyle(fontSize: 15, height: 1.5, color: HiarColors.text1),
+                style: const TextStyle(fontSize: 14, height: 1.45, color: HiarColors.text1),
               ),
             ),
           ),

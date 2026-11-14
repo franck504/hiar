@@ -55,8 +55,8 @@ class ActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          constraints: const BoxConstraints(minHeight: 56),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(16),
@@ -81,21 +81,21 @@ class ActionButton extends StatelessWidget {
             children: [
               if (icon != null) ...[
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: isPrimary || isDestructive
                         ? Colors.white.withOpacity(0.2)
                         : HiarColors.azurSoft,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     icon,
-                    size: 26,
+                    size: 22,
                     color: isPrimary || isDestructive ? Colors.white : HiarColors.azur,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 10),
               ],
               Expanded(
                 child: Column(
@@ -104,18 +104,22 @@ class ActionButton extends StatelessWidget {
                   children: [
                     Text(
                       label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 17,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: foregroundColor,
                       ),
                     ),
                     if (subtitle != null) ...[
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
                         subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           color: isPrimary || isDestructive ? Colors.white70 : HiarColors.text2,
                         ),
                       ),
