@@ -166,25 +166,37 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       bottomBar: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              side: const BorderSide(color: HiarColors.border),
+          Flexible(
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                side: const BorderSide(color: HiarColors.border),
+              ),
+              onPressed: widget.onCancel,
+              child: const Text(
+                "Annuler (🎤 « Annuler »)",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: HiarColors.text2),
+              ),
             ),
-            onPressed: widget.onCancel,
-            child: const Text("Annuler (🎤 « Annuler »)", style: TextStyle(color: HiarColors.text2)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: HiarColors.azur,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: _nextStep,
-            child: Text(
-              _currentStep == 5 ? "Confirmer mon rendez-vous" : "Continuer (🎤 « Suivant »)",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          const SizedBox(width: 12),
+          Flexible(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: HiarColors.azur,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _nextStep,
+              child: Text(
+                _currentStep == 5 ? "Confirmer (🎤 « Confirmer »)" : "Continuer (🎤 « Suivant »)",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],
@@ -193,20 +205,30 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   }
 
   Widget _buildStepContent() {
+    Widget content;
     switch (_currentStep) {
       case 1:
-        return _buildReasonStep();
+        content = _buildReasonStep();
+        break;
       case 2:
-        return _buildDoctorStep();
+        content = _buildDoctorStep();
+        break;
       case 3:
-        return _buildContactStep();
+        content = _buildContactStep();
+        break;
       case 4:
-        return _buildVitalsStep();
+        content = _buildVitalsStep();
+        break;
       case 5:
-        return _buildReviewStep();
+        content = _buildReviewStep();
+        break;
       default:
-        return const SizedBox.shrink();
+        content = const SizedBox.shrink();
     }
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: content,
+    );
   }
 
   // Étape 1 : Motif
@@ -359,11 +381,12 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Température
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
@@ -371,28 +394,28 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.thermostat, color: HiarColors.azur, size: 34),
+                  const Icon(Icons.thermostat, color: HiarColors.azur, size: 28),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Température corporelle", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                        Text("Capteur DS18B20 (ID: temperature)", style: TextStyle(color: HiarColors.text2, fontSize: 12)),
+                        Text("Température corporelle", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text("Capteur DS18B20 (ID: temperature)", style: TextStyle(color: HiarColors.text2, fontSize: 11)),
                       ],
                     ),
                   ),
                   Text(
                     _temperatureC != null ? "${_temperatureC!.toStringAsFixed(1)} °C" : "—",
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: HiarColors.ok),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: HiarColors.ok),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             // Fréquence cardiaque
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
@@ -400,28 +423,28 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.favorite, color: HiarColors.err, size: 34),
+                  const Icon(Icons.favorite, color: HiarColors.err, size: 28),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Fréquence cardiaque", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                        Text("Capteur MAX30102 (ID: heart_rate)", style: TextStyle(color: HiarColors.text2, fontSize: 12)),
+                        Text("Fréquence cardiaque", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text("Capteur MAX30102 (ID: heart_rate)", style: TextStyle(color: HiarColors.text2, fontSize: 11)),
                       ],
                     ),
                   ),
                   Text(
                     _heartRateBpm != null ? "$_heartRateBpm BPM" : "—",
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: HiarColors.ok),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: HiarColors.ok),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             // Oxygénation SpO2
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
@@ -429,30 +452,36 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.air, color: HiarColors.cyan, size: 34),
+                  const Icon(Icons.air, color: HiarColors.cyan, size: 28),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Oxygénation sanguine (SpO2)", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                        Text("Capteur MAX30102 (ID: spo2)", style: TextStyle(color: HiarColors.text2, fontSize: 12)),
+                        Text("Oxygénation sanguine (SpO2)", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text("Capteur MAX30102 (ID: spo2)", style: TextStyle(color: HiarColors.text2, fontSize: 11)),
                       ],
                     ),
                   ),
                   Text(
                     _spo2Percent != null ? "$_spo2Percent %" : "—",
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: HiarColors.ok),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: HiarColors.ok),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
               icon: _vitalsRunning
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.sensors),
-              label: Text(_vitalsRunning ? "Mesure des capteurs en cours…" : "Lancer une nouvelle mesure (🎤 « Mesurer »)"),
+                  : const Icon(Icons.sensors, size: 20),
+              label: Text(
+                _vitalsRunning ? "Mesure des capteurs en cours…" : "Lancer une nouvelle mesure (🎤 « Mesurer »)",
+                style: const TextStyle(fontSize: 13),
+              ),
               onPressed: () {
                 setState(() => _vitalsRunning = true);
                 widget.onRequestMeasure?.call();
@@ -471,9 +500,9 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   Widget _buildReviewStep() {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500),
+        constraints: const BoxConstraints(maxWidth: 520),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -483,8 +512,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Récapitulatif de votre rendez-vous", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const Divider(height: 24),
+              const Text("Récapitulatif de votre rendez-vous", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const Divider(height: 14, thickness: 1),
               _buildReviewRow("Patient :", _nameController.text),
               _buildReviewRow("Téléphone :", _phoneController.text),
               _buildReviewRow("Motif :", _selectedReason == 'consultation_generale' ? 'Consultation générale' : 'Suivi médical'),
@@ -501,12 +530,12 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   Widget _buildReviewRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: HiarColors.text2, fontSize: 15)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+          Text(label, style: const TextStyle(color: HiarColors.text2, fontSize: 14)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
         ],
       ),
     );
@@ -524,54 +553,57 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       onMicTap: widget.onMicTap,
       isRobotConnected: widget.isRobotConnected,
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: HiarColors.border),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.check_circle_outline, color: HiarColors.ok, size: 56),
-                const SizedBox(height: 12),
-                const Text(
-                  "Votre numéro de passage :",
-                  style: TextStyle(fontSize: 16, color: HiarColors.text2),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _ticketLabel ?? "A-MAT-1",
-                  style: const TextStyle(
-                    fontSize: 42,
-                    fontWeight: FontWeight.w900,
-                    color: HiarColors.azur,
-                    letterSpacing: 2,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: HiarColors.border),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_circle_outline, color: HiarColors.ok, size: 44),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "Votre numéro de passage :",
+                    style: TextStyle(fontSize: 15, color: HiarColors.text2),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  "Patient : ${_nameController.text}",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: HiarColors.azur,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  const SizedBox(height: 4),
+                  Text(
+                    _ticketLabel ?? "A-MAT-1",
+                    style: const TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      color: HiarColors.azur,
+                      letterSpacing: 2,
                     ),
-                    onPressed: widget.onFinish,
-                    child: const Text("Terminer (🎤 « Terminer »)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    "Patient : ${_nameController.text}",
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: HiarColors.azur,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: widget.onFinish,
+                      child: const Text("Terminer (🎤 « Terminer »)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

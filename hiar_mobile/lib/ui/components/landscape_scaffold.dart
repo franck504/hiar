@@ -59,9 +59,9 @@ class LandscapeScaffold extends StatelessWidget {
             Expanded(
               child: Column(
                 children: [
-                  // Barre d'en-tête de scène (56 dp)
+                  // Barre d'en-tête de scène (50 dp)
                   Container(
-                    height: 56,
+                    height: 50,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: const BoxDecoration(
                       color: Colors.white,
@@ -73,25 +73,30 @@ class LandscapeScaffold extends StatelessWidget {
                       children: [
                         if (showBack)
                           Padding(
-                            padding: const EdgeInsets.only(right: 12),
+                            padding: const EdgeInsets.only(right: 10),
                             child: IconButton(
-                              icon: const Icon(Icons.arrow_back, color: HiarColors.marine),
+                              icon: const Icon(Icons.arrow_back, color: HiarColors.marine, size: 22),
                               tooltip: "Retour",
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
                               onPressed: onBack ?? () => Navigator.of(context).maybePop(),
                             ),
                           ),
                         Expanded(
                           child: Row(
                             children: [
-                              Text(
-                                title,
-                                style: HiarTypography.screenTitle.copyWith(fontSize: 22),
-                                overflow: TextOverflow.ellipsis,
+                              Flexible(
+                                child: Text(
+                                  title,
+                                  style: HiarTypography.screenTitle.copyWith(fontSize: 20),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               if (step != null) ...[
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 10),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: HiarColors.azurSoft,
                                     borderRadius: BorderRadius.circular(12),
@@ -99,7 +104,7 @@ class LandscapeScaffold extends StatelessWidget {
                                   child: Text(
                                     step!,
                                     style: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: HiarColors.marine,
                                     ),
@@ -116,7 +121,7 @@ class LandscapeScaffold extends StatelessWidget {
                   // Contenu principal de la scène
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 10.0),
                       child: body,
                     ),
                   ),

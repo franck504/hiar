@@ -39,36 +39,39 @@ class HomeScreen extends StatelessWidget {
       onMicTap: onMicTap,
       isRobotConnected: isRobotConnected,
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ActionButton(
-                label: "Orientation",
-                subtitle: "Pharmacie, laboratoire et accueil / réception",
-                icon: Icons.navigation_outlined,
-                voiceHint: "Orientation",
-                onTap: onOpenOrientation,
-              ),
-              const SizedBox(height: 14),
-              ActionButton(
-                label: "Renseignements",
-                subtitle: "Repères de santé publique et prévention (OMS)",
-                icon: Icons.info_outline,
-                voiceHint: "Renseignements",
-                onTap: onOpenInformation,
-              ),
-              const SizedBox(height: 14),
-              ActionButton(
-                label: "Consultation",
-                subtitle: "Prendre un ticket de consultation avec un médecin",
-                icon: Icons.calendar_today_outlined,
-                voiceHint: "Consultation",
-                isPrimary: true,
-                onTap: onOpenConsultation,
-              ),
-            ],
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ActionButton(
+                  label: "Orientation",
+                  subtitle: "Pharmacie, laboratoire et accueil / réception",
+                  icon: Icons.navigation_outlined,
+                  voiceHint: "Orientation",
+                  onTap: onOpenOrientation,
+                ),
+                const SizedBox(height: 12),
+                ActionButton(
+                  label: "Renseignements",
+                  subtitle: "Repères de santé publique et prévention (OMS)",
+                  icon: Icons.info_outline,
+                  voiceHint: "Renseignements",
+                  onTap: onOpenInformation,
+                ),
+                const SizedBox(height: 12),
+                ActionButton(
+                  label: "Consultation",
+                  subtitle: "Prendre un ticket de consultation avec un médecin",
+                  icon: Icons.calendar_today_outlined,
+                  voiceHint: "Consultation",
+                  isPrimary: true,
+                  onTap: onOpenConsultation,
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -36,35 +36,38 @@ class OrientationScreen extends StatelessWidget {
       onMicTap: onMicTap,
       isRobotConnected: isRobotConnected,
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ActionButton(
-                label: "Pharmacie",
-                subtitle: "Médicaments et ordonnances",
-                icon: Icons.local_pharmacy_outlined,
-                voiceHint: "Pharmacie",
-                onTap: () => onDestinationSelected("PHARMACY", "Pharmacie"),
-              ),
-              const SizedBox(height: 14),
-              ActionButton(
-                label: "Laboratoire",
-                subtitle: "Analyses médicales et prélèvements",
-                icon: Icons.biotech_outlined,
-                voiceHint: "Laboratoire",
-                onTap: () => onDestinationSelected("LABORATORY", "Laboratoire"),
-              ),
-              const SizedBox(height: 14),
-              ActionButton(
-                label: "Réception",
-                subtitle: "Accueil général et admissions",
-                icon: Icons.meeting_room_outlined,
-                voiceHint: "Réception",
-                onTap: () => onDestinationSelected("RECEPTION", "Réception"),
-              ),
-            ],
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ActionButton(
+                  label: "Pharmacie",
+                  subtitle: "Médicaments et ordonnances",
+                  icon: Icons.local_pharmacy_outlined,
+                  voiceHint: "Pharmacie",
+                  onTap: () => onDestinationSelected("PHARMACY", "Pharmacie"),
+                ),
+                const SizedBox(height: 12),
+                ActionButton(
+                  label: "Laboratoire",
+                  subtitle: "Analyses médicales et prélèvements",
+                  icon: Icons.biotech_outlined,
+                  voiceHint: "Laboratoire",
+                  onTap: () => onDestinationSelected("LABORATORY", "Laboratoire"),
+                ),
+                const SizedBox(height: 12),
+                ActionButton(
+                  label: "Réception",
+                  subtitle: "Accueil général et admissions",
+                  icon: Icons.meeting_room_outlined,
+                  voiceHint: "Réception",
+                  onTap: () => onDestinationSelected("RECEPTION", "Réception"),
+                ),
+              ],
+            ),
           ),
         ),
       ),

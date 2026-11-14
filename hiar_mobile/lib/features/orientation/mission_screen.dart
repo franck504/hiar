@@ -129,12 +129,12 @@ class MissionScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
                 if (!isStopped)
                   // Bouton ARRÊT d'urgence R3
                   SizedBox(
                     width: double.infinity,
-                    height: 58,
+                    height: 52,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: HiarColors.err,
@@ -144,10 +144,10 @@ class MissionScreen extends StatelessWidget {
                         ),
                         elevation: 4,
                       ),
-                      icon: const Icon(Icons.stop, size: 28),
+                      icon: const Icon(Icons.stop, size: 26),
                       label: const Text(
                         "ARRÊT DU ROBOT  (🎤 « Stop »)",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                       ),
                       onPressed: onStopRobot,
                     ),
@@ -155,7 +155,7 @@ class MissionScreen extends StatelessWidget {
                 else
                   SizedBox(
                     width: double.infinity,
-                    height: 52,
+                    height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: HiarColors.azur,
@@ -167,7 +167,7 @@ class MissionScreen extends StatelessWidget {
                       onPressed: onFinish,
                       child: const Text(
                         "Terminer  (🎤 « Terminer »)",
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),

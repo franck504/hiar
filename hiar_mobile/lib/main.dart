@@ -495,12 +495,19 @@ class _HiarAppState extends State<HiarApp> {
       context: _navKey.currentContext ?? context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
             const Icon(Icons.navigation, color: HiarColors.azur),
             const SizedBox(width: 8),
-            Text("Accompagnement : $label"),
+            Flexible(
+              child: Text(
+                "Accompagnement : $label",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: Text(
@@ -553,6 +560,8 @@ class _HiarAppState extends State<HiarApp> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("Connexion au Raspberry Pi 4"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
