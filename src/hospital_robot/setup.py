@@ -35,6 +35,7 @@ setup(
             'obstacle_detector = hospital_robot.obstacle_detector_node:main',
             'navigation_decision = hospital_robot.navigation_decision_node:main',
             'hmi_request_receiver = hospital_robot.hmi_request_node:main',
+            'hmi_websocket_bridge = hospital_robot.hmi_websocket_bridge_node:main',
         ],
     },
 )

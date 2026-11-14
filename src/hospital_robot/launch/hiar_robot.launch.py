@@ -10,4 +10,5 @@ def generate_launch_description():
         Node(package=pkg, executable='robot_supervisor', output='screen'),
         Node(package=pkg, executable='navigation_decision', output='screen'),
         Node(package=pkg, executable='hmi_request_receiver', output='screen'),
+        Node(package=pkg, executable='hmi_websocket_bridge', output='screen'),
     ])
