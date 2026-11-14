@@ -87,11 +87,10 @@ def test_build_vitals_instruction_success():
     assert instruction["instruction_ui"]["require_confirmation"] is False
     assert instruction["value_to_show"]["field_id"] == "vitals_state"
     assert instruction["value_to_show"]["value"] == "done"
-    assert instruction["fields"] == {
-        "temperature": "36.8 °C",
-        "heart_rate": "72 bpm",
-        "spo2": "98 %",
-    }
+    assert instruction["fields"]["temperature"] == 36.8
+    assert instruction["fields"]["heart_rate"] == 72
+    assert instruction["fields"]["spo2"] == 98
+    assert instruction["fields"]["temperature_formatted"] == "36.8 °C"
     assert "Mesure des constantes terminée" in instruction["text_to_speak"]
 
 

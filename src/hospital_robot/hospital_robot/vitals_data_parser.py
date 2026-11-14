@@ -142,11 +142,17 @@ def build_vitals_instruction(parsed: Dict) -> Dict:
 
     fields = {}
     if temp is not None:
-        fields["temperature"] = f"{temp} °C"
+        fields["temperature"] = temp
+        fields["temperature_c"] = temp
+        fields["temperature_formatted"] = f"{temp} °C"
     if hr is not None:
-        fields["heart_rate"] = f"{hr} bpm"
+        fields["heart_rate"] = hr
+        fields["heart_rate_bpm"] = hr
+        fields["heart_rate_formatted"] = f"{hr} bpm"
     if spo2 is not None:
-        fields["spo2"] = f"{spo2} %"
+        fields["spo2"] = spo2
+        fields["spo2_percent"] = spo2
+        fields["spo2_formatted"] = f"{spo2} %"
 
     return {
         "origin": "server",

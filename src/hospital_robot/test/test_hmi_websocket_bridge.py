@@ -151,9 +151,9 @@ def test_bridge_lifecycle_and_messages(bridge_node):
             assert vitals_inst is not None
             assert vitals_inst["instruction_ui"]["screen"] == "consultation"
             assert vitals_inst["value_to_show"]["value"] == "done"
-            assert vitals_inst["fields"]["temperature"] == "36.8 °C"
-            assert vitals_inst["fields"]["heart_rate"] == "72 bpm"
-            assert vitals_inst["fields"]["spo2"] == "98 %"
+            assert vitals_inst["fields"]["temperature"] == 36.8
+            assert vitals_inst["fields"]["heart_rate"] == 72
+            assert vitals_inst["fields"]["spo2"] == 98
 
             # 7. Test de retour ROS 2 ➔ WebSocket : statut d'arrêt d'urgence
             node._on_robot_status(FakeMsg("EMERGENCY_STOP"))
