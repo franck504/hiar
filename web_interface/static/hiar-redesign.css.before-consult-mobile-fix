@@ -1,0 +1,1938 @@
+/* HIAR — couche de redesign visuel additive */
+:root {
+  --hiar-radius: 20px;
+  --hiar-shadow: 0 12px 32px rgba(11, 37, 69, 0.09);
+  --hiar-shadow-soft: 0 5px 16px rgba(11, 37, 69, 0.07);
+}
+
+body {
+  color: var(--marine);
+  background:
+    radial-gradient(circle at 8% 5%, rgba(32, 201, 232, 0.09), transparent 27rem),
+    var(--brume);
+}
+
+main {
+  width: min(100%, 1100px);
+  max-width: 1100px;
+  margin-inline: auto;
+}
+
+h1, h2, h3 {
+  color: var(--marine);
+  letter-spacing: -0.025em;
+}
+
+.subtitle {
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.big-button,
+.back-button,
+.hiar-voice-button {
+  box-sizing: border-box;
+  min-height: 56px;
+  border-radius: 16px;
+  font-family: var(--font-title);
+  font-weight: 700;
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.big-button {
+  border: 1px solid rgba(26, 115, 200, 0.12);
+  background: linear-gradient(135deg, var(--azur), #145A9E);
+  box-shadow: var(--hiar-shadow-soft);
+}
+
+.big-button:active,
+.back-button:active,
+.hiar-voice-button:active {
+  transform: scale(0.985);
+}
+
+.big-button:focus-visible,
+.back-button:focus-visible,
+.slot-card:focus-visible,
+.field:focus-visible,
+.hiar-voice-button:focus-visible {
+  outline: 3px solid #20C9E8;
+  outline-offset: 3px;
+}
+
+.big-button.unavailable {
+  background: #8797A8;
+  box-shadow: none;
+}
+
+.back-button {
+  border: 1px solid var(--border);
+  background: #FFFFFF;
+  color: var(--azur);
+  box-shadow: none;
+}
+
+.screen.active:not(#hiar-splash) {
+  padding: clamp(18px, 3vw, 34px);
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(213, 225, 238, 0.9);
+  border-radius: 26px;
+  box-shadow: var(--hiar-shadow);
+}
+
+#hiar-splash.screen.active {
+  min-height: min(78vh, 620px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#hiar-splash .hiar-robot {
+  width: min(300px, 42vw);
+}
+
+#home.screen.active {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-content: center;
+  min-height: 65vh;
+}
+
+#home > h1,
+#home > .subtitle {
+  margin-inline: 0;
+  text-align: center;
+}
+
+#home > h1 { font-size: clamp(2rem, 4vw, 3rem); }
+#home > .subtitle { margin-top: 0; }
+#home > .big-button { margin: 0; }
+
+section[id^="menu-"].screen.active {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-content: start;
+}
+
+section[id^="menu-"] > h2,
+section[id^="menu-"] > .back-button {
+  grid-column: 1 / -1;
+}
+
+section[id^="menu-"] > h2 {
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+section[id^="menu-"] > .big-button,
+section[id^="menu-"] > .back-button { margin: 0; }
+
+#appointment-screen.screen.active {
+  display: block;
+  text-align: left;
+}
+
+#appointment-screen > h2 {
+  margin: 8px 0 18px;
+  text-align: center;
+}
+
+#consult-progress {
+  display: inline-block;
+  margin: 0 auto 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--azur-soft);
+  color: var(--marine);
+  font-weight: 700;
+}
+
+#appointment-screen .field {
+  border: 1.5px solid var(--border);
+  border-radius: 13px;
+  background: #FFFFFF;
+}
+
+#appointment-screen .slot-card,
+#appointment-screen .vital-card,
+#appointment-screen .recap {
+  border-radius: 16px;
+  box-shadow: var(--hiar-shadow-soft);
+}
+
+#appointment-screen .slot-card.selected {
+  border-color: var(--azur);
+  box-shadow: 0 0 0 3px rgba(26, 115, 200, 0.12);
+}
+
+#appointment-screen .vital-card {
+  border-color: var(--border);
+  background: #FFFFFF;
+}
+
+#appointment-screen .queue-block {
+  padding: 18px;
+  border-radius: 20px;
+  background: var(--azur-soft);
+}
+
+#confirm.screen.active {
+  display: block;
+  text-align: center;
+}
+
+#confirm-title { margin-top: 0; }
+#confirm-text { line-height: 1.65; }
+#confirm .back-button { margin-inline: auto; }
+
+#hiar-voice-bar {
+  box-sizing: border-box;
+  width: min(calc(100% - 24px), 1100px);
+  margin: 14px auto;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #FFFFFF;
+  box-shadow: var(--hiar-shadow-soft);
+}
+
+.hiar-voice-button {
+  padding: 11px 16px;
+  border: 1px solid var(--border);
+  background: var(--azur-soft);
+  color: var(--marine);
+}
+
+@media (orientation: landscape) and (min-width: 650px) {
+  body { padding: 14px 22px; }
+  main { width: min(100%, 1180px); }
+
+  #home.screen.active {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    min-height: 70vh;
+  }
+
+  #home > h1,
+  #home > .subtitle { grid-column: 1 / -1; }
+
+  #home > .big-button {
+    min-height: 112px;
+    padding: 22px;
+    font-size: clamp(1.15rem, 2vw, 1.5rem);
+  }
+
+  section[id^="menu-"].screen.active {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 18px;
+  }
+
+  section[id^="menu-"] > .big-button {
+    min-height: 86px;
+    padding: 18px;
+    font-size: 1.15rem;
+  }
+
+  #appointment-screen .slot-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #appointment-screen .consult-step[data-step="3"].active {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 14px;
+    align-items: stretch;
+  }
+
+  #appointment-screen .consult-step[data-step="3"] > .vital-card {
+    min-width: 0;
+    margin: 0;
+    padding: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #appointment-screen .consult-step[data-step="3"] > .vital-card .vital-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  #appointment-screen .consult-step[data-step="3"] > .feedback,
+  #appointment-screen .consult-step[data-step="3"] > button {
+    grid-column: 1 / -1;
+    margin: 2px 0;
+  }
+
+  #appointment-screen .consult-step[data-step="3"] > button {
+    min-height: 48px;
+  }
+
+  #appointment-screen .consult-step[data-step="2"],
+  #appointment-screen .consult-step[data-step="4"],
+  #appointment-screen .consult-step[data-step="5"] {
+    max-width: 900px;
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 649px), (orientation: portrait) {
+  body { padding: 12px; }
+
+  .screen.active:not(#hiar-splash) {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  #home.screen.active { min-height: 0; }
+  #home > .big-button { min-height: 64px; }
+  section[id^="menu-"] > .big-button { min-height: 60px; }
+
+  #appointment-screen .vital-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  #appointment-screen .vital-right {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .big-button,
+  .back-button,
+  .hiar-voice-button { transition: none; }
+}
+
+/* ==========================================================
+   HIAR — identité visuelle, icônes et commandes compactes
+   Couche additive : aucune logique fonctionnelle modifiée.
+   ========================================================== */
+
+.hiar-icon-library {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Identité HIAR et logo */
+.hiar-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.hiar-logo-mark {
+  display: block;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  color: var(--azur);
+}
+
+.hiar-brand-name {
+  color: var(--marine);
+  font-family: var(--font-title);
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+
+.hiar-splash-lockup {
+  margin-top: 2px;
+}
+
+.hiar-splash-lockup .hiar-logo-mark {
+  width: 38px;
+  height: 38px;
+}
+
+.hiar-tagline {
+  max-width: 540px;
+  margin: 0 auto;
+  color: var(--text-2);
+  font-size: clamp(.82rem, 1.8vw, 1rem);
+  line-height: 1.5;
+  text-align: center;
+}
+
+#hiar-splash h1 {
+  margin: 8px 0 0;
+  font-family: var(--font-title);
+  font-weight: 800;
+}
+
+/* En-tête de l'accueil principal */
+.hiar-home-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.hiar-home-heading .hiar-logo-mark {
+  width: 42px;
+  height: 42px;
+}
+
+.hiar-home-heading h1 {
+  margin: 3px 0 0;
+  font-family: var(--font-title);
+  font-size: clamp(1.65rem, 3.5vw, 2.35rem);
+}
+
+.hiar-home-heading .subtitle {
+  margin: 0;
+  font-size: clamp(.92rem, 1.8vw, 1.08rem);
+}
+
+.hiar-home-caption {
+  margin: 0;
+  color: var(--text-2);
+  font-size: .76rem;
+  letter-spacing: .035em;
+}
+
+/* Panneaux des trois services */
+.service-tile.big-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 15px;
+  min-width: 0;
+  min-height: 104px;
+  margin: 0;
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 19px;
+  background: linear-gradient(145deg, #FFFFFF, #F7FAFE);
+  color: var(--marine);
+  text-align: left;
+  box-shadow: var(--hiar-shadow-soft);
+  animation: hiar-fade-up 380ms ease both;
+}
+
+.service-tile:nth-of-type(2) { animation-delay: 45ms; }
+.service-tile:nth-of-type(3) { animation-delay: 90ms; }
+.service-tile:nth-of-type(4) { animation-delay: 135ms; }
+
+.service-tile-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  border-radius: 16px;
+  background: var(--azur-soft);
+  color: var(--azur);
+}
+
+.service-tile-icon svg {
+  width: 29px;
+  height: 29px;
+}
+
+.service-tile-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.service-tile-copy strong {
+  color: var(--marine);
+  font-family: var(--font-title);
+  font-size: 1.03rem;
+  font-weight: 750;
+}
+
+.service-tile-copy small {
+  color: var(--text-2);
+  font-size: .76rem;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.service-tile-arrow {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  color: #7890A9;
+}
+
+/* Icônes et choix dans les sous-menus */
+.menu-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.menu-heading-icon {
+  width: 29px;
+  height: 29px;
+  color: var(--azur);
+}
+
+.menu-item.big-button {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 76px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px 17px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #FFFFFF;
+  color: var(--marine);
+  text-align: left;
+  box-shadow: var(--hiar-shadow-soft);
+}
+
+.menu-item-icon {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  flex: 0 0 43px;
+  border-radius: 13px;
+  background: var(--azur-soft);
+  color: var(--azur);
+}
+
+.menu-item-icon svg {
+  width: 25px;
+  height: 25px;
+}
+
+.menu-item-label {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-title);
+  font-size: .96rem;
+  font-weight: 700;
+}
+
+.menu-item-arrow {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #8A9CB0;
+}
+
+.menu-item.unavailable {
+  background: #F1F4F7;
+  color: #718096;
+  box-shadow: none;
+}
+
+.menu-item.unavailable .menu-item-icon {
+  background: #E4EAF0;
+  color: #8192A4;
+}
+
+/* Retour sous forme d'icône, en haut à gauche */
+.screen.active:not(#hiar-splash) > .icon-back,
+#appointment-screen.screen.active .consult-step.active > .icon-back {
+  position: fixed;
+  z-index: 1002;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: #FFFFFF;
+  color: var(--marine);
+  box-shadow: 0 4px 14px rgba(11, 37, 69, .10);
+}
+
+.icon-back svg {
+  width: 21px;
+  height: 21px;
+}
+
+/* Les commandes vocales viennent à côté de Retour */
+#hiar-voice-bar {
+  position: fixed;
+  z-index: 1001;
+  top: 12px;
+  right: auto;
+  bottom: auto;
+  left: 64px;
+  display: flex;
+  width: fit-content;
+  max-width: calc(100vw - 76px);
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 4px 16px rgba(11, 37, 69, .10);
+}
+
+#hiar-voice-bar[hidden] {
+  display: none !important;
+}
+
+.hiar-voice-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+#hiar-voice-bar .hiar-voice-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #DCE6F0;
+  border-radius: 10px;
+  background: #F7FAFE;
+  color: var(--marine);
+  font-family: var(--font-body);
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#hiar-voice-bar .hiar-voice-button:active {
+  transform: scale(.97);
+}
+
+#hiar-voice-status {
+  width: auto;
+  max-width: 230px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: .67rem;
+  line-height: 1.3;
+  text-align: left;
+}
+
+#hiar-voice-bar small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Réservation de place pour la barre de commandes */
+body.hiar-voice-enabled {
+  padding-bottom: 12px;
+}
+
+body.hiar-voice-enabled main {
+  padding-top: 56px;
+}
+
+/* Petits détails sur les formulaires et les boutons */
+#appointment-screen .field {
+  min-height: 46px;
+  padding: 11px 13px;
+  border-radius: 13px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+#appointment-screen .field:focus {
+  border-color: var(--azur);
+  box-shadow: 0 0 0 3px rgba(26, 115, 200, .11);
+  outline: none;
+}
+
+#appointment-screen .big-button,
+#appointment-screen .back-button {
+  min-height: 46px;
+  border-radius: 13px;
+  font-size: .92rem;
+}
+
+#appointment-screen .slot-card {
+  transition: border-color 160ms ease, box-shadow 160ms ease,
+              transform 160ms ease;
+}
+
+#appointment-screen .feedback {
+  line-height: 1.45;
+}
+
+/* Interactions discrètes */
+@keyframes hiar-fade-up {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.service-tile,
+.menu-item,
+.icon-back {
+  transition: transform 160ms ease, box-shadow 160ms ease,
+              border-color 160ms ease, background-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .service-tile:hover,
+  .menu-item:hover {
+    transform: translateY(-2px);
+    border-color: #B7D1E8;
+    box-shadow: 0 10px 22px rgba(11, 37, 69, .10);
+  }
+}
+
+@media (orientation: landscape) and (min-width: 650px) {
+  .service-tile.big-button {
+    min-height: 112px;
+    padding: 18px 20px;
+  }
+
+  .menu-item.big-button {
+    min-height: 82px;
+  }
+
+  .hiar-home-heading {
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 649px), (orientation: portrait) {
+  .service-tile.big-button {
+    min-height: 82px;
+    padding: 13px;
+    gap: 11px;
+  }
+
+  .service-tile-icon {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+    border-radius: 13px;
+  }
+
+  .service-tile-icon svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  .service-tile-copy strong {
+    font-size: .94rem;
+  }
+
+  .service-tile-copy small {
+    font-size: .70rem;
+  }
+
+  .menu-item.big-button {
+    min-height: 66px;
+    padding: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .service-tile,
+  .menu-item,
+  .icon-back {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* HIAR — fiches de renseignements et responsive final */
+
+#confirm.is-information #confirm-title {
+  max-width: 900px;
+  margin: 4px auto 18px;
+  font-family: var(--font-title);
+  font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+  text-align: center;
+}
+
+#confirm.is-information #confirm-text {
+  box-sizing: border-box;
+  width: min(100%, 920px);
+  max-height: min(56vh, 560px);
+  margin: 0 auto 18px;
+  padding: clamp(17px, 2.5vw, 28px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #30465E;
+  background: #F8FAFD;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--azur);
+  border-radius: 16px;
+  box-shadow: var(--hiar-shadow-soft);
+  font-size: clamp(.91rem, 1.35vw, 1.04rem);
+  line-height: 1.8;
+  text-align: left;
+}
+
+#confirm.is-information #confirm-debug {
+  max-width: 920px;
+  margin-inline: auto;
+  overflow-wrap: anywhere;
+}
+
+/* Commandes vocales compactes */
+#hiar-voice-bar .hiar-voice-button {
+  box-sizing: border-box;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 8px;
+}
+
+#hiar-voice-bar .hiar-voice-button svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+#hiar-voice-bar .hiar-voice-button.is-listening {
+  border-color: #20AFCB;
+  background: #E5F8FC;
+  color: #087D99;
+  box-shadow: 0 0 0 3px rgba(32, 201, 232, .13);
+}
+
+.hiar-voice-hints {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 5px;
+  color: #7A90A7;
+}
+
+.hiar-voice-hints svg {
+  width: 16px;
+  height: 16px;
+}
+
+#hiar-voice-status:empty {
+  display: none;
+}
+
+/* Protection contre les débordements */
+#home,
+section[id^="menu-"],
+#appointment-screen,
+#confirm {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.service-tile,
+.menu-item,
+#appointment-screen .vital-card,
+#appointment-screen .recap {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Portrait et petits écrans */
+@media (max-width: 649px), (orientation: portrait) {
+  #confirm.is-information #confirm-text {
+    width: 100%;
+    max-height: min(52vh, 470px);
+    padding: 16px;
+    font-size: .91rem;
+    line-height: 1.7;
+  }
+
+  #hiar-voice-bar {
+    left: 60px;
+    max-width: calc(100vw - 70px);
+  }
+
+  #hiar-voice-bar .hiar-voice-button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 7px;
+  }
+
+  .hiar-voice-hints {
+    gap: 3px;
+    padding-inline: 2px;
+  }
+
+  .hiar-voice-hints svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  body.hiar-voice-enabled main {
+    padding-top: 52px;
+  }
+
+  #appointment-screen .slot-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Smartphones en paysage */
+@media (orientation: landscape) and (min-width: 650px) and (max-height: 500px) {
+  #confirm.is-information #confirm-text {
+    max-height: 43vh;
+    padding: 13px 17px;
+    line-height: 1.55;
+  }
+
+  body.hiar-voice-enabled main {
+    padding-top: 50px;
+  }
+
+  #hiar-voice-bar {
+    top: 7px;
+    left: 58px;
+    padding: 4px;
+  }
+
+  .screen.active:not(#hiar-splash) {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+
+/* Très petits téléphones */
+@media (max-width: 360px) {
+  #hiar-voice-bar {
+    left: 56px;
+    max-width: calc(100vw - 64px);
+  }
+
+  #hiar-voice-bar .hiar-voice-button {
+    width: 31px;
+    min-width: 31px;
+    height: 31px;
+    min-height: 31px;
+    padding: 6px;
+  }
+
+  #hiar-voice-bar .hiar-voice-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .hiar-voice-hints svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  #confirm.is-information #confirm-text {
+    padding: 13px;
+    font-size: .87rem;
+  }
+}
+
+
+/* HIAR — disposition finale des panneaux de services */
+
+/* Paysage : trois panneaux équilibrés et bien alignés. */
+#home.screen.active {
+  width: min(100%, 1080px);
+  margin-inline: auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  align-items: stretch;
+  align-content: center;
+  justify-content: center;
+  gap: clamp(12px, 2vw, 22px);
+  min-height: min(68vh, 580px);
+}
+
+#home .hiar-home-heading {
+  grid-column: 1 / -1;
+  margin-bottom: clamp(8px, 2vh, 18px);
+}
+
+#home .service-tile.big-button {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: clamp(130px, 22vh, 170px);
+  margin: 0;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  border: 1px solid #DCE6F0;
+  border-radius: 20px;
+  background: #FFFFFF;
+  text-align: center;
+  box-shadow: 0 7px 22px rgba(11, 37, 69, .07);
+}
+
+#home .service-tile-icon {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 15px;
+}
+
+#home .service-tile-icon svg {
+  width: 27px;
+  height: 27px;
+}
+
+#home .service-tile-copy {
+  width: 100%;
+  flex: 0 1 auto;
+  align-items: center;
+  padding: 0 5px;
+  text-align: center;
+}
+
+#home .service-tile-copy strong {
+  font-size: clamp(.96rem, 1.45vw, 1.12rem);
+}
+
+#home .service-tile-copy small {
+  max-width: 230px;
+  font-size: clamp(.70rem, 1vw, .80rem);
+  line-height: 1.45;
+}
+
+#home .service-tile-arrow {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 17px;
+  height: 17px;
+  color: #91A2B5;
+}
+
+/* Portrait : cartes horizontales, faciles à parcourir au toucher. */
+@media (max-width: 649px), (orientation: portrait) {
+  #home.screen.active {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    min-height: 0;
+    align-content: start;
+  }
+
+  #home .hiar-home-heading {
+    margin-bottom: 8px;
+  }
+
+  #home .service-tile.big-button {
+    min-height: 82px;
+    padding: 12px 14px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    text-align: left;
+  }
+
+  #home .service-tile-icon {
+    width: 45px;
+    height: 45px;
+    flex-basis: 45px;
+  }
+
+  #home .service-tile-copy {
+    flex: 1;
+    min-width: 0;
+    align-items: flex-start;
+    padding: 0 22px 0 0;
+    text-align: left;
+  }
+
+  #home .service-tile-copy small {
+    font-size: .73rem;
+  }
+
+  #home .service-tile-arrow {
+    top: 50%;
+    right: 13px;
+    transform: translateY(-50%);
+  }
+}
+
+/* Paysage très bas : réduire les hauteurs sans écraser les cartes. */
+@media (orientation: landscape) and (min-width: 650px) and (max-height: 500px) {
+  #home.screen.active {
+    min-height: 0;
+    gap: 12px;
+  }
+
+  #home .hiar-home-heading {
+    margin-bottom: 4px;
+  }
+
+  #home .service-tile.big-button {
+    min-height: 118px;
+    padding: 12px;
+  }
+
+  #home .service-tile-icon {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+}
+
+
+/* HIAR — grille des créneaux et couleurs des actions */
+:root {
+  --hiar-blue: #1A73C8;
+  --hiar-blue-soft: #EAF3FC;
+  --hiar-green: #15803D;
+  --hiar-green-soft: #DCFCE7;
+  --hiar-red: #B91C1C;
+  --hiar-red-soft: #FEE2E2;
+  --hiar-yellow: #A16207;
+  --hiar-yellow-soft: #FEF3C7;
+}
+
+/* Deux créneaux par ligne : deux en haut, deux en dessous. */
+#appointment-screen .slot-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+#appointment-screen .slot-card {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 100px;
+  margin: 0;
+  padding: 13px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px solid #D5E1EE;
+  border-radius: 15px;
+  background: #FFFFFF;
+  color: var(--marine);
+  text-align: center;
+  box-shadow: 0 3px 10px rgba(11, 37, 69, .045);
+  transition: background-color 150ms ease, border-color 150ms ease,
+              box-shadow 150ms ease, transform 150ms ease;
+}
+
+#appointment-screen .slot-time {
+  color: var(--marine);
+  font-family: var(--font-title);
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+#appointment-screen .slot-doctor {
+  max-width: 100%;
+  color: var(--text-2);
+  font-size: .78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+#appointment-screen .slot-state {
+  color: var(--hiar-green);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+/* Élément sélectionné : vert, contour et halo visibles. */
+#appointment-screen .slot-card.selected,
+#appointment-screen .slot-card[aria-pressed="true"] {
+  border: 2px solid var(--hiar-green);
+  background: var(--hiar-green-soft);
+  color: #14532D;
+  box-shadow: 0 0 0 3px rgba(21, 128, 61, .12);
+  transform: translateY(-1px);
+}
+
+#appointment-screen .slot-card.selected .slot-time {
+  color: #14532D;
+}
+
+#appointment-screen .slot-card:disabled {
+  border-color: #E1E6EC;
+  background: #F0F3F6;
+  color: #8492A2;
+  box-shadow: none;
+  opacity: .85;
+  cursor: not-allowed;
+}
+
+#appointment-screen .slot-card:disabled .slot-state {
+  color: #7C8794;
+}
+
+#appointment-screen .slot-card:focus-visible {
+  outline: 3px solid #20C9E8;
+  outline-offset: 3px;
+}
+
+/* Bleu : continuer et naviguer. */
+#appointment-screen #step1-next,
+#appointment-screen #step2-next,
+#appointment-screen #step3-next {
+  border: 1px solid var(--hiar-blue);
+  background: var(--hiar-blue);
+  color: #FFFFFF;
+}
+
+#appointment-screen #step1-next:disabled {
+  border-color: #CFD8E2;
+  background: #E5EAF0;
+  color: #7D8997;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Vert : confirmation explicite. */
+#appointment-screen #step4-confirm {
+  border: 1px solid var(--hiar-green);
+  background: var(--hiar-green);
+  color: #FFFFFF;
+}
+
+/* Bleu clair : modifier ou revenir. */
+#appointment-screen #step4-back {
+  border: 1px solid #B7D3EE;
+  background: var(--hiar-blue-soft);
+  color: #145A9E;
+}
+
+/* Rouge : annulation, et non simple retour. */
+#appointment-screen .consult-step[data-step="4"] > button[data-goto="home"],
+#confirm > button[data-goto="home"] {
+  border: 1px solid #F0B7B7;
+  background: var(--hiar-red-soft);
+  color: var(--hiar-red);
+}
+
+/* Jaune : attente et avertissement. */
+#appointment-screen .pill-wait {
+  border-color: #F4D58A;
+  background: var(--hiar-yellow-soft);
+  color: #854D0E;
+}
+
+/* Les actions actives restent lisibles au toucher. */
+#appointment-screen button:not(:disabled):active {
+  transform: scale(.985);
+}
+
+@media (max-width: 360px) {
+  #appointment-screen .slot-list {
+    gap: 8px;
+  }
+
+  #appointment-screen .slot-card {
+    min-height: 88px;
+    padding: 10px 6px;
+  }
+
+  #appointment-screen .slot-time {
+    font-size: .98rem;
+  }
+
+  #appointment-screen .slot-doctor {
+    font-size: .70rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #appointment-screen .slot-card {
+    transition: none;
+  }
+}
+
+
+/* HIAR — rendu éditorial des fiches Renseignements */
+#confirm.is-information #confirm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  white-space: normal;
+}
+
+#confirm.is-information .info-section {
+  padding: 0 0 15px;
+  margin: 0 0 15px;
+  border-bottom: 1px solid #E2EAF2;
+}
+
+#confirm.is-information .info-section:last-of-type {
+  border-bottom: 0;
+}
+
+#confirm.is-information .info-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 8px;
+  color: var(--marine);
+  font-family: var(--font-title);
+  font-size: .96rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+#confirm.is-information .info-section h3::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  flex: 0 0 4px;
+  border-radius: 5px;
+  background: var(--azur);
+}
+
+#confirm.is-information .info-section-content p,
+#confirm.is-information .info-section > p {
+  margin: 0;
+  color: #40546A;
+  font-size: .91rem;
+  line-height: 1.65;
+  white-space: normal;
+}
+
+#confirm.is-information .info-section-content ul {
+  margin: 7px 0 0;
+  padding-left: 22px;
+  color: #40546A;
+}
+
+#confirm.is-information .info-section-content li {
+  margin: 5px 0;
+  padding-left: 3px;
+  font-size: .90rem;
+  line-height: 1.5;
+}
+
+#confirm.is-information .info-source-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 7px 12px;
+  border: 1px solid #B7D3EE;
+  border-radius: 10px;
+  background: #EAF3FC;
+  color: #145A9E;
+  font-size: .82rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+#confirm.is-information .info-disclaimer {
+  margin-top: 5px;
+  padding: 12px 14px;
+  border: 1px solid #F4D58A;
+  border-left: 4px solid #D69E20;
+  border-radius: 12px;
+  background: #FFFAE9;
+  color: #76520B;
+  font-size: .82rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 649px), (orientation: portrait) {
+  #confirm.is-information .info-section {
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  #confirm.is-information .info-section h3 {
+    font-size: .91rem;
+  }
+
+  #confirm.is-information .info-section-content p,
+  #confirm.is-information .info-section > p,
+  #confirm.is-information .info-section-content li {
+    font-size: .86rem;
+  }
+}
+
+
+/* HIAR — header, footer, transcription et rendez-vous final */
+
+/* Header et footer : visibles après l'écran de bienvenue. */
+.hiar-header,
+.hiar-footer {
+  display: none;
+}
+
+body.hiar-voice-enabled .hiar-header {
+  display: flex;
+  width: min(100%, 1160px);
+  min-height: 52px;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0 auto 14px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hiar-header-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--marine);
+  font-family: var(--font-title);
+  font-size: 1.25rem;
+  font-weight: 850;
+  letter-spacing: .09em;
+}
+
+.hiar-header-brand .hiar-logo-mark {
+  width: 34px;
+  height: 34px;
+}
+
+body.hiar-voice-enabled .hiar-footer {
+  display: flex;
+  justify-content: center;
+  width: min(100%, 1160px);
+  margin: 22px auto 0;
+  padding: 12px 8px;
+  border-top: 1px solid var(--border);
+  color: #8291A2;
+  font-size: .72rem;
+  letter-spacing: .025em;
+  text-align: center;
+}
+
+/* Pas de bouton Annuler dans une fiche de renseignements. */
+#confirm.is-information > button[data-goto="home"] {
+  display: none !important;
+}
+
+/* Retour de la fiche : retour au menu des renseignements. */
+#confirm.is-information #confirm-back {
+  display: inline-flex;
+}
+
+/* Transcription compacte sous les commandes vocales. */
+#hiar-voice-bar .hiar-voice-transcript {
+  max-width: 300px;
+  margin: 3px 0 0;
+  padding: 6px 9px;
+  border-left: 3px solid var(--azur);
+  border-radius: 5px 9px 9px 5px;
+  background: #F1F6FC;
+  color: #344E69;
+  font-size: .72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+#hiar-voice-transcript[hidden] {
+  display: none !important;
+}
+
+/* Les éléments actifs doivent être immédiatement identifiables. */
+.service-tile:focus-visible,
+.menu-item:focus-visible {
+  outline: 3px solid #20C9E8;
+  outline-offset: 3px;
+  border-color: var(--azur);
+}
+
+.service-tile:active,
+.menu-item:active {
+  border-color: var(--azur);
+  background: var(--azur-soft);
+  transform: scale(.985);
+}
+
+.menu-item:focus,
+.service-tile:focus {
+  border-color: var(--azur);
+}
+
+#appointment-screen #consult-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 6px 13px;
+  border: 1px solid #B7D3EE;
+  border-radius: 999px;
+  background: var(--hiar-blue-soft);
+  color: #145A9E;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+#appointment-screen .consult-step.active {
+  animation: hiar-fade-up 180ms ease both;
+}
+
+#appointment-screen .field:focus {
+  border-color: var(--azur);
+  box-shadow: 0 0 0 3px rgba(26, 115, 200, .14);
+}
+
+/* Rendez-vous : date à gauche, créneaux à droite en paysage. */
+@media (orientation: landscape) and (min-width: 760px) {
+  #appointment-screen.screen.active {
+    width: min(100%, 1120px);
+    margin-inline: auto;
+  }
+
+  #appointment-screen .consult-step[data-step="1"].active {
+    display: grid;
+    grid-template-columns: minmax(220px, .72fr) minmax(0, 1.28fr);
+    gap: 12px 24px;
+    align-items: start;
+  }
+
+  #appointment-screen .consult-step[data-step="1"] > .field-label[for="consult-date"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #appointment-screen #consult-date {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  #appointment-screen #slot-list {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  #appointment-screen #slot-feedback {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  #appointment-screen #step1-next {
+    grid-column: 2;
+    grid-row: 4;
+    justify-self: end;
+    min-width: 210px;
+  }
+
+  /* Étape coordonnées : deux champs côte à côte. */
+  #appointment-screen .consult-step[data-step="2"].active {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 20px;
+    align-items: end;
+  }
+
+  #appointment-screen .consult-step[data-step="2"] label[for="consult-name"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #appointment-screen #consult-name {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  #appointment-screen .consult-step[data-step="2"] label[for="consult-contact"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #appointment-screen #consult-contact {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  #appointment-screen .consult-step[data-step="2"] label[for="consult-reason"] {
+    grid-column: 1 / -1;
+  }
+
+  #appointment-screen #consult-reason,
+  #appointment-screen #info-feedback {
+    grid-column: 1 / -1;
+  }
+
+  #appointment-screen #step2-next {
+    grid-column: 2;
+    justify-self: end;
+    min-width: 210px;
+  }
+
+  #appointment-screen .consult-step[data-step="4"].active #recap,
+  #appointment-screen .consult-step[data-step="4"].active #confirm-feedback {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Portrait et écrans étroits : formulaire en une seule colonne. */
+@media (max-width: 759px), (orientation: portrait) {
+  body.hiar-voice-enabled .hiar-header {
+    margin-bottom: 10px;
+  }
+
+  body.hiar-voice-enabled .hiar-footer {
+    margin-top: 14px;
+  }
+
+  #appointment-screen .consult-step[data-step="1"].active,
+  #appointment-screen .consult-step[data-step="2"].active {
+    display: block;
+  }
+
+  #appointment-screen #consult-date,
+  #appointment-screen #consult-name,
+  #appointment-screen #consult-contact,
+  #appointment-screen #consult-reason {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  #hiar-voice-bar .hiar-voice-transcript {
+    max-width: min(260px, calc(100vw - 90px));
+    font-size: .68rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #appointment-screen .consult-step.active {
+    animation: none;
+  }
+}
+
+
+/* HIAR — header et footer fixes */
+
+/* Barre supérieure fixe : retour à gauche, identité au centre,
+   commandes vocales à droite. */
+body.hiar-voice-enabled .hiar-header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1100;
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  height: 56px;
+  min-height: 56px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid #DCE6F0;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 3px 14px rgba(11, 37, 69, .055);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hiar-header-brand {
+  gap: 8px;
+  font-size: 1.18rem;
+}
+
+.hiar-header-brand .hiar-logo-mark {
+  width: 33px;
+  height: 33px;
+}
+
+/* Flèche Retour à gauche du header. */
+.screen.active:not(#hiar-splash) > .icon-back,
+#appointment-screen.screen.active .consult-step.active > .icon-back {
+  top: 7px;
+  left: 12px;
+  z-index: 1102;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-color: #DCE6F0;
+  box-shadow: none;
+}
+
+/* Commandes vocales à droite du header. */
+body.hiar-voice-enabled #hiar-voice-bar {
+  position: fixed;
+  top: 7px;
+  right: 12px;
+  bottom: auto;
+  left: auto;
+  z-index: 1103;
+  width: fit-content;
+  max-width: calc(100vw - 104px);
+  margin: 0;
+  padding: 3px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+}
+
+#hiar-voice-bar .hiar-voice-controls {
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+#hiar-voice-bar .hiar-voice-button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 8px;
+  background: #F4F8FC;
+}
+
+/* Footer fixe en bas de la fenêtre. */
+body.hiar-voice-enabled .hiar-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1099;
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  height: 42px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 6px 12px;
+  border: 0;
+  border-top: 1px solid #DCE6F0;
+  background: rgba(255, 255, 255, .97);
+  color: #8291A2;
+  font-size: .71rem;
+  box-shadow: 0 -3px 14px rgba(11, 37, 69, .04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Zone de sécurité : les écrans ne passent pas sous les barres fixes. */
+body.hiar-voice-enabled {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding-top: 56px;
+  padding-bottom: 42px;
+}
+
+body.hiar-voice-enabled main {
+  box-sizing: border-box;
+  width: min(100%, 1180px);
+  margin-inline: auto;
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+/* Transcription sous les icônes sans élargir le header. */
+#hiar-voice-bar .hiar-voice-transcript {
+  max-width: 230px;
+  margin-top: 4px;
+  background: #FFFFFF;
+  border: 1px solid #DCE6F0;
+  box-shadow: 0 3px 12px rgba(11, 37, 69, .09);
+}
+
+/* Téléphones étroits. */
+@media (max-width: 380px) {
+  body.hiar-voice-enabled .hiar-header {
+    height: 50px;
+    min-height: 50px;
+  }
+
+  .hiar-header-brand {
+    font-size: 1rem;
+  }
+
+  .hiar-header-brand .hiar-logo-mark {
+    width: 29px;
+    height: 29px;
+  }
+
+  .screen.active:not(#hiar-splash) > .icon-back,
+  #appointment-screen.screen.active .consult-step.active > .icon-back {
+    top: 6px;
+    left: 7px;
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+
+  body.hiar-voice-enabled #hiar-voice-bar {
+    top: 5px;
+    right: 6px;
+    max-width: calc(100vw - 92px);
+  }
+
+  #hiar-voice-bar .hiar-voice-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 7px;
+  }
+
+  .hiar-voice-hints {
+    display: none;
+  }
+
+  body.hiar-voice-enabled {
+    padding-top: 50px;
+  }
+
+  body.hiar-voice-enabled main {
+    padding-top: 12px;
+  }
+}
+
+/* Paysage avec faible hauteur disponible. */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.hiar-voice-enabled .hiar-header {
+    height: 46px;
+    min-height: 46px;
+  }
+
+  body.hiar-voice-enabled {
+    padding-top: 46px;
+  }
+
+  body.hiar-voice-enabled main {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  body.hiar-voice-enabled .hiar-footer {
+    height: 34px;
+    min-height: 34px;
+  }
+
+  body.hiar-voice-enabled {
+    padding-bottom: 34px;
+  }
+}
+
+/* HIAR — Consultation centrée et adaptée aux smartphones */
+#appointment-screen.screen.active {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+#appointment-screen > h2 {
+  text-align: center;
+  margin: 10px 0 18px;
+}
+
+#appointment-screen #consult-progress {
+  display: table;
+  margin: 0 auto 10px;
+}
+
+#appointment-screen .consult-step.active {
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+  text-align: left;
+}
+
+#appointment-screen .consult-step.active > .subtitle {
+  text-align: center;
+  margin: 0 0 16px;
+}
+
+#appointment-screen .slot-list {
+  width: 100%;
+  box-sizing: border-box;
+  margin-inline: auto;
+}
+
+#appointment-screen .big-button,
+#appointment-screen .back-button {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 12px auto;
+  box-sizing: border-box;
+}
+
+#appointment-screen .field,
+#appointment-screen #consult-date,
+#appointment-screen #consult-name,
+#appointment-screen #consult-contact,
+#appointment-screen #consult-reason {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 649px), (orientation: portrait) {
+  #appointment-screen.screen.active {
+    padding: 16px;
+  }
+
+  #appointment-screen .consult-step.active {
+    max-width: 100%;
+  }
+
+  #appointment-screen .slot-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  #appointment-screen .slot-card {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

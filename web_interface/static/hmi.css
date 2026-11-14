@@ -1,0 +1,236 @@
+body { font-family: var(--font-body); margin: 0; padding: 24px; background: var(--bg); text-align: center; }
+main { max-width: 480px; margin: 0 auto; }
+h1 { font-size: 2.2rem; margin: 8px 0; }
+.subtitle { font-size: 1.3rem; color: var(--muted); margin-bottom: 24px; }
+.big-button {
+  display: block; width: 100%; margin: 16px 0; padding: 28px;
+  font-size: 1.5rem; border: none; border-radius: 16px;
+  background: var(--primary); color: white;
+}
+.big-button:active { background: var(--primary-dark); }
+
+.screen { display: none; }
+.screen.active { display: block; }
+h2 { font-size: 1.8rem; margin: 8px 0 24px; }
+.big-button.unavailable { background: var(--text-2); }
+.back-button {
+  display: block; width: 100%; margin: 12px 0; padding: 18px;
+  font-size: 1.2rem; border: 2px solid var(--primary); border-radius: 16px;
+  background: white; color: var(--primary);
+}
+.debug { font-family: monospace; font-size: 0.9rem; color: var(--muted); word-break: break-all; }
+
+/* Mode paysage : téléphone à l'horizontale */
+@media (orientation: landscape) and (max-height: 600px) {
+  body { padding: 10px 16px; }
+  main { max-width: 900px; }
+  h1 { font-size: 1.6rem; margin: 2px 0; }
+  h2 { font-size: 1.3rem; margin: 2px 0 10px; }
+  .subtitle { font-size: 1.05rem; margin-bottom: 10px; }
+  .screen.active {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .screen.active > h1,
+  .screen.active > h2,
+  .screen.active > .subtitle,
+  .screen.active > .debug,
+  .screen.active > .back-button { grid-column: 1 / -1; }
+  .big-button { margin: 0; padding: 20px 12px; font-size: 1.2rem; }
+  .back-button { margin: 0; padding: 12px; font-size: 1.05rem; }
+}
+
+/* Textes d'information : retours à la ligne et défilement si trop long */
+#confirm-text { white-space: pre-line; line-height: 1.4; }
+@media (orientation: landscape) and (max-height: 600px) {
+  #confirm-text { font-size: 1rem; max-height: 45vh; overflow-y: auto; }
+}
+
+/* Formulaire de demande de rendez-vous */
+#appointment-screen.screen.active {
+  display: block;
+  text-align: left;
+}
+
+#appointment-screen > h2,
+#appointment-screen > .subtitle {
+  text-align: center;
+}
+
+#appointment-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  text-align: left;
+}
+
+#appointment-form label {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+#appointment-form input,
+#appointment-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 14px;
+  font: inherit;
+  font-size: 1.1rem;
+  border: 2px solid #aab4c3;
+  border-radius: 10px;
+  background: white;
+  color: #222;
+}
+
+#appointment-form textarea {
+  resize: vertical;
+}
+
+#appointment-form input:focus,
+#appointment-form textarea:focus {
+  outline: 3px solid #9bc2ff;
+  border-color: var(--primary);
+}
+
+#appointment-form button {
+  margin: 4px 0;
+}
+
+#appointment-feedback {
+  color: #9b1c1c;
+  font-weight: 600;
+  white-space: pre-line;
+}
+
+#appointment-submit:disabled {
+  opacity: 0.65;
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  #appointment-screen.screen.active {
+    display: block;
+  }
+
+  #appointment-form {
+    grid-template-columns: 180px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  #appointment-form label {
+    margin: 0;
+  }
+
+  #appointment-form button,
+  #appointment-feedback {
+    grid-column: 1 / -1;
+  }
+
+  #appointment-form input,
+  #appointment-form textarea {
+    padding: 9px;
+    font-size: 1rem;
+  }
+}
+
+/* Espace du personnel médical */
+/* Espace du personnel médical */
+#staff-screen.screen.active {
+  display: block;
+  text-align: left;
+}
+
+#staff-screen > h2,
+#staff-screen > .subtitle {
+  text-align: center;
+}
+
+#staff-login-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+#staff-login-form label,
+#staff-screen > label {
+  display: block;
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+#staff-login-form input,
+#staff-status-filter {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 14px;
+  font: inherit;
+  font-size: 1rem;
+  border: 2px solid #aab4c3;
+  border-radius: 10px;
+  background: white;
+  color: #222;
+}
+
+#staff-feedback {
+  color: #9b1c1c;
+  font-weight: 600;
+  white-space: pre-line;
+}
+
+.staff-appointment-card {
+  margin: 16px 0;
+  padding: 16px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  background: white;
+  border: 1px solid #d5dce5;
+  border-radius: 12px;
+}
+
+.staff-appointment-card h3 {
+  margin-top: 0;
+  font-size: 1.25rem;
+}
+
+.staff-appointment-card p {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.staff-appointment-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#staff-screen button:disabled {
+  opacity: 0.6;
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  #staff-screen.screen.active {
+    display: block;
+  }
+
+  #staff-login-form {
+    grid-template-columns: 180px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  #staff-login-form button,
+  #staff-feedback {
+    grid-column: 1 / -1;
+  }
+
+  #staff-login-form input,
+  #staff-status-filter {
+    padding: 9px;
+  }
+}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#12304A">
+  <title>HIAR — Espace médecin</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='hiar-tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='staff.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="HIAR — Accueil">HIAR</a>
+    <span class="topbar-title">Espace médecin</span>
+  </header>
+
+  <main>
+    <section id="login-panel" class="panel">
+      <h1>Connexion du médecin</h1>
+      <p class="muted">Accès réservé au médecin, avec son jeton personnel.</p>
+      <form id="login-form">
+        <label for="token">Jeton médecin</label>
+        <input id="token" type="password" autocomplete="off"
+               autocapitalize="none" spellcheck="false" required>
+        <p id="login-feedback" class="feedback"
+           role="status" aria-live="polite"></p>
+        <button type="submit" class="btn">Accéder à ma file</button>
+      </form>
+    </section>
+
+    <section id="queue-panel" class="panel" hidden>
+      <div class="toolbar">
+        <div>
+          <h1 id="queue-title">Ma file</h1>
+          <p class="muted" id="queue-date"></p>
+        </div>
+        <div class="toolbar-actions">
+          <button type="button" class="btn btn-outline" id="refresh-btn">Actualiser</button>
+          <button type="button" class="btn btn-outline" id="logout-btn">Déconnexion</button>
+        </div>
+      </div>
+
+      <div id="sessions" class="toolbar-actions"></div>
+      <p id="queue-feedback" class="feedback"
+         role="status" aria-live="polite"></p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticket</th><th>Période</th><th>Patient</th>
+              <th>Motif</th><th>Statut</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="queue-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='doctor.js') }}" defer></script>
+</body>
+</html>

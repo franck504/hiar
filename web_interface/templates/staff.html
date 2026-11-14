@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#12304A">
+  <title>HIAR — Espace du personnel</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='hiar-tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='staff.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="HIAR — Accueil"><svg class="brand-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect x="4" y="4" width="40" height="40" rx="13" fill="none" stroke="currentColor" stroke-width="2.5"/>
+      <rect x="11" y="13" width="26" height="21" rx="7" fill="none" stroke="currentColor" stroke-width="2.2"/>
+      <circle cx="19" cy="22" r="2.3" fill="currentColor"/>
+      <circle cx="29" cy="22" r="2.3" fill="currentColor"/>
+      <path d="M18 29 Q24 34 30 29" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M24 13 V8 M20 8 H28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </svg></a>
+    <span class="topbar-title">Espace du personnel médical</span>
+    <div id="staff-topbar-actions" class="staff-topbar-actions" hidden>
+      <button type="button" id="refresh" class="btn btn-outline icon-btn staff-refresh-icon"
+              aria-label="Actualiser les rendez-vous" title="Actualiser les rendez-vous">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20 7v5h-5M4 17v-5h5M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"
+                fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button type="button" id="logout" class="btn btn-outline icon-btn staff-logout-icon"
+              aria-label="Déconnexion" title="Déconnexion">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M10 17l5-5-5-5M15 12H3M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"
+                fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section id="login-panel" class="panel">
+      <h1>Connexion du personnel</h1>
+      <p class="muted">Accès réservé au personnel autorisé.</p>
+      <form id="login-form">
+        <label for="token">Jeton d'accès</label>
+        <input id="token" type="password" autocomplete="off"
+               autocapitalize="none" spellcheck="false" required>
+        <p id="login-feedback" class="feedback"
+           role="status" aria-live="polite"></p>
+        <button type="submit" class="btn">Accéder aux rendez-vous</button>
+      </form>
+    </section>
+
+    <section id="list-panel" class="panel" hidden>
+      <div class="toolbar">
+        <div>
+          <h1>Rendez-vous</h1>
+          <p class="muted">Suivi de la file de consultation.</p>
+        </div>
+        <div class="toolbar-actions">
+          <label for="date-filter" class="sr-only">Date des consultations</label>
+          <input id="date-filter" type="date" required>
+
+          <label for="doctor-filter" class="sr-only">Filtrer par médecin</label>
+          <select id="doctor-filter">
+            <option value="">Tous les médecins</option>
+            <option value="A">Médecin A</option>
+            <option value="B">Médecin B</option>
+            <option value="C">Médecin C</option>
+            <option value="D">Médecin D</option>
+          </select>
+
+          <label for="period-filter" class="sr-only">Filtrer par période</label>
+          <select id="period-filter">
+            <option value="">Toutes les périodes</option>
+            <option value="MAT">Matin (08 h – 12 h)</option>
+            <option value="AM">Après-midi (13 h – 18 h)</option>
+          </select>
+
+          <label for="status-filter" class="sr-only">Filtrer par statut</label>
+          <select id="status-filter">
+            <option value="">Tous les statuts</option>
+            <option value="en attente">En attente</option>
+            <option value="appelé">Appelés</option>
+            <option value="terminé">Terminés</option>
+            <option value="annulé">Annulés</option>
+            <option value="non reçu">Non reçus</option>
+          </select>
+
+        </div>
+      </div>
+
+      <p id="list-feedback" class="feedback"
+         role="status" aria-live="polite"></p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Date</th>
+              <th>Créneau</th>
+              <th>Médecin</th>
+              <th>Patient</th>
+              <th>Téléphone</th>
+              <th>Motif</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <section id="details-panel" class="subpanel" hidden
+               aria-labelledby="details-title">
+        <div class="section-heading">
+          <h2 id="details-title">Détails du rendez-vous</h2>
+          <button type="button" id="close-details"
+                  class="btn btn-outline">Fermer</button>
+        </div>
+        <div id="details-content"></div>
+      </section>
+
+      <section id="correction-panel" class="subpanel" hidden
+               aria-labelledby="correction-title">
+        <h2 id="correction-title">Correction exceptionnelle</h2>
+        <p class="muted">
+          Réservée aux corrections justifiées. Vérifiez le rendez-vous et
+          confirmez explicitement le changement.
+        </p>
+        <p id="correction-appointment" class="correction-summary"></p>
+        <form id="correction-form">
+          <label for="correction-status">Nouveau statut</label>
+          <select id="correction-status" required>
+            <option value="en attente">En attente</option>
+            <option value="appelé">Appelé</option>
+            <option value="terminé">Terminé</option>
+            <option value="annulé">Annulé</option>
+            <option value="non reçu">Non reçu</option>
+          </select>
+          <div class="toolbar-actions correction-actions">
+            <button type="submit" class="btn">
+              Confirmer la correction
+            </button>
+            <button type="button" id="cancel-correction"
+                    class="btn btn-outline">Annuler</button>
+          </div>
+        </form>
+        <p id="correction-feedback" class="feedback"
+           role="status" aria-live="polite"></p>
+      </section>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='staff.js') }}" defer></script>
+</body>
+</html>

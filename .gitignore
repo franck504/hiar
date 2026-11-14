@@ -1,0 +1,22 @@
+build/
+install/
+log/
+
+__pycache__/
+*.pyc
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Données locales du service de rendez-vous HIAR
+web_interface/instance/
+*.sqlite3
+*.sqlite3-*
+
+# Secrets locaux des comptes médecins HIAR
+web_interface/.doctor-secrets
+
+# Jeton permanent du personnel HIAR (secret local)
+.env

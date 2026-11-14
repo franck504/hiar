@@ -1,0 +1,3819 @@
+{
+ "contract_version": "1.0.0",
+ "protocol": "hiar.v1",
+ "note": "Contrat normatif unique partagé par l'application mobile, le hub du Raspberry Pi et les outils de test. En cas de conflit : ce fichier > Cahier des charges > Dossier V4.",
+ "limits": {
+  "max_msg_bytes": 65536,
+  "heartbeat_s": 5,
+  "ack_timeout_ms": 1500,
+  "ack_retries": 3,
+  "dedupe_cache": 512,
+  "replay_ring": 256,
+  "partial_max_per_s": 10,
+  "max_msg_per_s": 50
+ },
+ "roles": [
+  "kiosk",
+  "service",
+  "monitor"
+ ],
+ "envelope": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HIAR envelope v1",
+  "type": "object",
+  "required": [
+   "v",
+   "type"
+  ],
+  "properties": {
+   "v": {
+    "const": 1
+   },
+   "id": {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 64
+   },
+   "ts": {
+    "type": "integer",
+    "minimum": 0
+   },
+   "seq": {
+    "type": "integer",
+    "minimum": 0
+   },
+   "corr": {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 64
+   },
+   "qos": {
+    "enum": [
+     0,
+     1
+    ]
+   },
+   "retain": {
+    "type": "boolean"
+   },
+   "type": {
+    "type": "string",
+    "enum": [
+     "pub",
+     "sub",
+     "unsub",
+     "ack",
+     "nack",
+     "ping",
+     "pong",
+     "hello",
+     "welcome",
+     "bye",
+     "error"
+    ]
+   },
+   "topic": {
+    "type": "string",
+    "pattern": "^[a-z0-9_+#/]+$",
+    "maxLength": 128
+   },
+   "payload": {
+    "type": "object"
+   },
+   "device_id": {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 64
+   },
+   "role": {
+    "type": "string",
+    "enum": [
+     "kiosk",
+     "service",
+     "monitor"
+    ]
+   },
+   "app_version": {
+    "type": "string"
+   },
+   "registry_hash": {
+    "type": "string"
+   },
+   "last_seq": {
+    "type": "integer",
+    "minimum": 0
+   },
+   "token": {
+    "type": "string",
+    "minLength": 1
+   },
+   "session": {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 64
+   },
+   "server_time": {
+    "type": "integer"
+   },
+   "registry_stale": {
+    "type": "boolean"
+   },
+   "heartbeat_s": {
+    "type": "integer"
+   },
+   "max_msg_bytes": {
+    "type": "integer"
+   },
+   "granted": {
+    "type": "object",
+    "properties": {
+     "publish": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "subscribe": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [],
+    "additionalProperties": true
+   },
+   "replay": {
+    "type": "integer"
+   },
+   "code": {
+    "type": "string",
+    "enum": [
+     "unsupported_version",
+     "auth_failed",
+     "forbidden_topic",
+     "too_large",
+     "rate_limited",
+     "bad_payload",
+     "unknown_topic",
+     "internal"
+    ]
+   },
+   "message": {
+    "type": "string"
+   }
+  },
+  "allOf": [
+   {
+    "if": {
+     "properties": {
+      "type": {
+       "const": "pub"
+      }
+     }
+    },
+    "then": {
+     "required": [
+      "id",
+      "topic",
+      "ts",
+      "seq",
+      "qos",
+      "payload"
+     ]
+    }
+   },
+   {
+    "if": {
+     "properties": {
+      "type": {
+       "enum": [
+        "sub",
+        "unsub"
+       ]
+      }
+     }
+    },
+    "then": {
+     "required": [
+      "id",
+      "topic"
+     ]
+    }
+   },
+   {
+    "if": {
+     "properties": {
+      "type": {
+       "enum": [
+        "ack",
+        "nack"
+       ]
+      }
+     }
+    },
+    "then": {
+     "required": [
+      "corr"
+     ]
+    }
+   },
+   {
+    "if": {
+     "properties": {
+      "type": {
+       "const": "nack"
+      }
+     }
+    },
+    "then": {
+     "required": [
+      "code"
+     ]
+    }
+   },
+   {
+    "if": {
+     "properties": {
+      "type": {
+       "const": "hello"
+      }
+     }
+    },
+    "then": {
+     "required": [
+      "device_id",
+      "role",
+      "app_version",
+      "token"
+     ]
+    }
+   },
+   {
+    "if": {
+     "properties": {
+      "type": {
+       "const": "welcome"
+      }
+     }
+    },
+    "then": {
+     "required": [
+      "session",
+      "heartbeat_s",
+      "max_msg_bytes",
+      "granted"
+     ]
+    }
+   },
+   {
+    "if": {
+     "properties": {
+      "type": {
+       "const": "error"
+      }
+     }
+    },
+    "then": {
+     "required": [
+      "code"
+     ]
+    }
+   }
+  ]
+ },
+ "topics": {
+  "voice/vad": {
+   "mode": "local",
+   "qos": 0,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "event": {
+      "type": "string",
+      "enum": [
+       "speech_start",
+       "speech_end"
+      ]
+     },
+     "level": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     }
+    },
+    "required": [
+     "event"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/mic/control": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk",
+    "service"
+   ],
+   "subscribers": [
+    "kiosk"
+   ],
+   "payload": {
+    "allOf": [
+     {
+      "type": "object",
+      "properties": {
+       "cmd": {
+        "type": "string",
+        "enum": [
+         "start",
+         "stop",
+         "mute",
+         "unmute",
+         "mode"
+        ]
+       },
+       "mode": {
+        "type": "string",
+        "enum": [
+         "push",
+         "session"
+        ]
+       }
+      },
+      "required": [
+       "cmd"
+      ],
+      "additionalProperties": true
+     },
+     {
+      "if": {
+       "properties": {
+        "cmd": {
+         "const": "mode"
+        }
+       }
+      },
+      "then": {
+       "required": [
+        "mode"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "voice/stt/state": {
+   "mode": "both",
+   "qos": 0,
+   "retain": true,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "state": {
+      "type": "string",
+      "enum": [
+       "idle",
+       "listening",
+       "hearing",
+       "decoding",
+       "error"
+      ]
+     },
+     "engine": {
+      "type": "string"
+     },
+     "model": {
+      "type": "string"
+     },
+     "lang": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "state"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/stt/partial": {
+   "mode": "both",
+   "qos": 0,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "utt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "text": {
+      "type": "string"
+     },
+     "lang": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "utt",
+     "text",
+     "lang"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/stt/final": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "utt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "text": {
+      "type": "string"
+     },
+     "lang": {
+      "type": "string"
+     },
+     "conf": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "engine": {
+      "type": "string"
+     },
+     "model": {
+      "type": "string"
+     },
+     "mode": {
+      "type": "string",
+      "enum": [
+       "command",
+       "dictation"
+      ]
+     },
+     "sensitive": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "utt",
+     "text",
+     "lang",
+     "conf",
+     "mode",
+     "sensitive"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/stt/error": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string",
+      "enum": [
+       "mic_denied",
+       "model_missing",
+       "engine_crash",
+       "no_audio"
+      ]
+     },
+     "message": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "code"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/tts/request": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk",
+    "service"
+   ],
+   "subscribers": [
+    "kiosk"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "utt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+     },
+     "lang": {
+      "type": "string"
+     },
+     "voice": {
+      "type": "string"
+     },
+     "speed": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 2
+     },
+     "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+     },
+     "interrupt": {
+      "type": "string",
+      "enum": [
+       "none",
+       "queue",
+       "replace"
+      ]
+     },
+     "source": {
+      "type": "string"
+     },
+     "ttl_ms": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "sensitive": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "utt",
+     "text",
+     "lang",
+     "priority",
+     "interrupt",
+     "source"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/tts/control": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk",
+    "service"
+   ],
+   "subscribers": [
+    "kiosk"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "cmd": {
+      "type": "string",
+      "enum": [
+       "stop",
+       "pause",
+       "resume",
+       "repeat"
+      ]
+     },
+     "utt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     }
+    },
+    "required": [
+     "cmd"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/tts/state": {
+   "mode": "both",
+   "qos": 1,
+   "retain": true,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "utt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "state": {
+      "type": "string",
+      "enum": [
+       "queued",
+       "started",
+       "sentence",
+       "finished",
+       "cancelled",
+       "error"
+      ]
+     },
+     "index": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "reason": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "utt",
+     "state"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/intent/resolved": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "utt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "action_id": {
+      "type": "string",
+      "enum": [
+       "app.back",
+       "app.help",
+       "app.home",
+       "confirm.no",
+       "confirm.yes",
+       "consult.cancel",
+       "consult.field.clear",
+       "consult.field.dictate",
+       "consult.field.set",
+       "consult.finish",
+       "consult.next",
+       "consult.reason.select",
+       "consult.review.confirm",
+       "consult.review.modify",
+       "consult.session.select",
+       "consult.start",
+       "consult.ticket.read",
+       "consult.vitals.cancel",
+       "consult.vitals.skip",
+       "consult.vitals.start",
+       "error.dismiss",
+       "error.retry",
+       "home.open_category",
+       "info.next_section",
+       "info.open",
+       "info.pause",
+       "info.prev_section",
+       "info.read_all",
+       "info.read_section",
+       "info.resume",
+       "info.show_source",
+       "mission.dismiss",
+       "orientation.confirm",
+       "orientation.decline",
+       "orientation.select",
+       "robot.stop",
+       "splash.start",
+       "voice.mic_off",
+       "voice.read_screen",
+       "voice.repeat",
+       "voice.stop_speaking"
+      ]
+     },
+     "args": {
+      "type": "object"
+     },
+     "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "source": {
+      "type": "string",
+      "enum": [
+       "grammar",
+       "server"
+      ]
+     },
+     "epoch": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "needs_confirm": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "utt",
+     "action_id",
+     "args",
+     "score",
+     "source",
+     "epoch",
+     "needs_confirm"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/intent/unresolved": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "utt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "text": {
+      "type": "string"
+     },
+     "screen": {
+      "type": "string"
+     },
+     "reason": {
+      "type": "string",
+      "enum": [
+       "low_score",
+       "out_of_scope",
+       "ambiguous"
+      ]
+     },
+     "candidates": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "action_id": {
+         "type": "string",
+         "enum": [
+          "app.back",
+          "app.help",
+          "app.home",
+          "confirm.no",
+          "confirm.yes",
+          "consult.cancel",
+          "consult.field.clear",
+          "consult.field.dictate",
+          "consult.field.set",
+          "consult.finish",
+          "consult.next",
+          "consult.reason.select",
+          "consult.review.confirm",
+          "consult.review.modify",
+          "consult.session.select",
+          "consult.start",
+          "consult.ticket.read",
+          "consult.vitals.cancel",
+          "consult.vitals.skip",
+          "consult.vitals.start",
+          "error.dismiss",
+          "error.retry",
+          "home.open_category",
+          "info.next_section",
+          "info.open",
+          "info.pause",
+          "info.prev_section",
+          "info.read_all",
+          "info.read_section",
+          "info.resume",
+          "info.show_source",
+          "mission.dismiss",
+          "orientation.confirm",
+          "orientation.decline",
+          "orientation.select",
+          "robot.stop",
+          "splash.start",
+          "voice.mic_off",
+          "voice.read_screen",
+          "voice.repeat",
+          "voice.stop_speaking"
+         ]
+        },
+        "score": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        }
+       },
+       "required": [
+        "action_id",
+        "score"
+       ],
+       "additionalProperties": true
+      }
+     }
+    },
+    "required": [
+     "utt",
+     "screen",
+     "reason"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "voice/intent/suggest": {
+   "mode": "in",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "service"
+   ],
+   "subscribers": [
+    "kiosk"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "utt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "action_id": {
+      "type": "string",
+      "enum": [
+       "app.back",
+       "app.help",
+       "app.home",
+       "confirm.no",
+       "confirm.yes",
+       "consult.cancel",
+       "consult.field.clear",
+       "consult.field.dictate",
+       "consult.field.set",
+       "consult.finish",
+       "consult.next",
+       "consult.reason.select",
+       "consult.review.confirm",
+       "consult.review.modify",
+       "consult.session.select",
+       "consult.start",
+       "consult.ticket.read",
+       "consult.vitals.cancel",
+       "consult.vitals.skip",
+       "consult.vitals.start",
+       "error.dismiss",
+       "error.retry",
+       "home.open_category",
+       "info.next_section",
+       "info.open",
+       "info.pause",
+       "info.prev_section",
+       "info.read_all",
+       "info.read_section",
+       "info.resume",
+       "info.show_source",
+       "mission.dismiss",
+       "orientation.confirm",
+       "orientation.decline",
+       "orientation.select",
+       "robot.stop",
+       "splash.start",
+       "voice.mic_off",
+       "voice.read_screen",
+       "voice.repeat",
+       "voice.stop_speaking"
+      ]
+     },
+     "args": {
+      "type": "object"
+     },
+     "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "rationale": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "utt",
+     "action_id",
+     "args",
+     "score"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "ui/state": {
+   "mode": "both",
+   "qos": 1,
+   "retain": true,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "screen": {
+      "type": "string"
+     },
+     "epoch": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "step": {
+      "type": "integer"
+     },
+     "actions": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "app.back",
+        "app.help",
+        "app.home",
+        "confirm.no",
+        "confirm.yes",
+        "consult.cancel",
+        "consult.field.clear",
+        "consult.field.dictate",
+        "consult.field.set",
+        "consult.finish",
+        "consult.next",
+        "consult.reason.select",
+        "consult.review.confirm",
+        "consult.review.modify",
+        "consult.session.select",
+        "consult.start",
+        "consult.ticket.read",
+        "consult.vitals.cancel",
+        "consult.vitals.skip",
+        "consult.vitals.start",
+        "error.dismiss",
+        "error.retry",
+        "home.open_category",
+        "info.next_section",
+        "info.open",
+        "info.pause",
+        "info.prev_section",
+        "info.read_all",
+        "info.read_section",
+        "info.resume",
+        "info.show_source",
+        "mission.dismiss",
+        "orientation.confirm",
+        "orientation.decline",
+        "orientation.select",
+        "robot.stop",
+        "splash.start",
+        "voice.mic_off",
+        "voice.read_screen",
+        "voice.repeat",
+        "voice.stop_speaking"
+       ]
+      }
+     },
+     "dynamic": {
+      "type": "object"
+     },
+     "sensitive_fields": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "mission_active": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "screen",
+     "epoch",
+     "actions",
+     "mission_active"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "ui/action/request": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk",
+    "service"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "action_id": {
+      "type": "string",
+      "enum": [
+       "app.back",
+       "app.help",
+       "app.home",
+       "confirm.no",
+       "confirm.yes",
+       "consult.cancel",
+       "consult.field.clear",
+       "consult.field.dictate",
+       "consult.field.set",
+       "consult.finish",
+       "consult.next",
+       "consult.reason.select",
+       "consult.review.confirm",
+       "consult.review.modify",
+       "consult.session.select",
+       "consult.start",
+       "consult.ticket.read",
+       "consult.vitals.cancel",
+       "consult.vitals.skip",
+       "consult.vitals.start",
+       "error.dismiss",
+       "error.retry",
+       "home.open_category",
+       "info.next_section",
+       "info.open",
+       "info.pause",
+       "info.prev_section",
+       "info.read_all",
+       "info.read_section",
+       "info.resume",
+       "info.show_source",
+       "mission.dismiss",
+       "orientation.confirm",
+       "orientation.decline",
+       "orientation.select",
+       "robot.stop",
+       "splash.start",
+       "voice.mic_off",
+       "voice.read_screen",
+       "voice.repeat",
+       "voice.stop_speaking"
+      ]
+     },
+     "args": {
+      "type": "object"
+     },
+     "origin": {
+      "type": "string",
+      "enum": [
+       "touch",
+       "voice",
+       "system",
+       "server"
+      ]
+     },
+     "corr": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "epoch": {
+      "type": "integer",
+      "minimum": 0
+     }
+    },
+    "required": [
+     "action_id",
+     "args",
+     "origin",
+     "corr",
+     "epoch"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "ui/action/result": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "corr": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "ok": {
+      "type": "boolean"
+     },
+     "error": {
+      "type": "string"
+     },
+     "code": {
+      "type": "string",
+      "enum": [
+       "stale",
+       "busy",
+       "unavailable",
+       "forbidden",
+       "network",
+       "server",
+       "rejected",
+       "timeout"
+      ]
+     },
+     "next_screen": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "corr",
+     "ok"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "ui/confirm/request": {
+   "mode": "local",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "corr": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "action_id": {
+      "type": "string",
+      "enum": [
+       "app.back",
+       "app.help",
+       "app.home",
+       "confirm.no",
+       "confirm.yes",
+       "consult.cancel",
+       "consult.field.clear",
+       "consult.field.dictate",
+       "consult.field.set",
+       "consult.finish",
+       "consult.next",
+       "consult.reason.select",
+       "consult.review.confirm",
+       "consult.review.modify",
+       "consult.session.select",
+       "consult.start",
+       "consult.ticket.read",
+       "consult.vitals.cancel",
+       "consult.vitals.skip",
+       "consult.vitals.start",
+       "error.dismiss",
+       "error.retry",
+       "home.open_category",
+       "info.next_section",
+       "info.open",
+       "info.pause",
+       "info.prev_section",
+       "info.read_all",
+       "info.read_section",
+       "info.resume",
+       "info.show_source",
+       "mission.dismiss",
+       "orientation.confirm",
+       "orientation.decline",
+       "orientation.select",
+       "robot.stop",
+       "splash.start",
+       "voice.mic_off",
+       "voice.read_screen",
+       "voice.repeat",
+       "voice.stop_speaking"
+      ]
+     },
+     "args": {
+      "type": "object"
+     },
+     "timeout_ms": {
+      "type": "integer",
+      "minimum": 1000
+     },
+     "prompt": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "corr",
+     "action_id",
+     "timeout_ms",
+     "prompt"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "ui/confirm/answer": {
+   "mode": "local",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "corr": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     },
+     "answer": {
+      "type": "string",
+      "enum": [
+       "yes",
+       "no",
+       "timeout"
+      ]
+     }
+    },
+    "required": [
+     "corr",
+     "answer"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "robot/hmi/status": {
+   "mode": "in",
+   "qos": 1,
+   "retain": true,
+   "publishers": [],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "state": {
+      "type": "string",
+      "enum": [
+       "VALIDATED",
+       "REJECTED"
+      ]
+     },
+     "category": {
+      "type": "string"
+     },
+     "item": {
+      "type": "string"
+     },
+     "reason": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "state"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "robot/mission/status": {
+   "mode": "in",
+   "qos": 1,
+   "retain": true,
+   "publishers": [],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string",
+      "enum": [
+       "REQUEST_RECEIVED",
+       "RUNNING",
+       "BLOCKED",
+       "IDLE",
+       "MISSION_TIMEOUT",
+       "REQUEST_REJECTED",
+       "START_REJECTED"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "destination": {
+      "type": "string",
+      "enum": [
+       "PHARMACY",
+       "LABORATORY",
+       "RECEPTION"
+      ]
+     }
+    },
+    "required": [
+     "code"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "robot/safety": {
+   "mode": "in",
+   "qos": 1,
+   "retain": false,
+   "publishers": [],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "event": {
+      "type": "string",
+      "enum": [
+       "OBSTACLE",
+       "TIMEOUT",
+       "SENSOR_INVALID"
+      ]
+     },
+     "cm": {
+      "type": "number",
+      "minimum": 0
+     }
+    },
+    "required": [
+     "event"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "robot/supervisor/status": {
+   "mode": "in",
+   "qos": 0,
+   "retain": true,
+   "publishers": [],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "state": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "state"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "robot/link": {
+   "mode": "in",
+   "qos": 1,
+   "retain": true,
+   "publishers": [],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "ros_bridge": {
+      "type": "string",
+      "enum": [
+       "up",
+       "down"
+      ]
+     },
+     "esp32": {
+      "type": "string",
+      "enum": [
+       "unknown",
+       "seen",
+       "stale"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "ros_bridge"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "vitals/state": {
+   "mode": "both",
+   "qos": 1,
+   "retain": true,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "state": {
+      "type": "string",
+      "enum": [
+       "idle",
+       "measuring",
+       "done",
+       "unavailable"
+      ]
+     },
+     "started_at": {
+      "type": "string"
+     },
+     "timeout_s": {
+      "type": "integer",
+      "minimum": 1
+     }
+    },
+    "required": [
+     "state"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "vitals/result": {
+   "mode": "in",
+   "qos": 1,
+   "retain": false,
+   "publishers": [],
+   "subscribers": [
+    "kiosk",
+    "service"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "state": {
+      "type": "string",
+      "enum": [
+       "valide",
+       "indisponible",
+       "en cours"
+      ]
+     },
+     "values": {
+      "type": "object",
+      "properties": {
+       "temperature_c": {
+        "type": [
+         "number",
+         "null"
+        ],
+        "minimum": 25,
+        "maximum": 45
+       },
+       "heart_rate_bpm": {
+        "type": [
+         "integer",
+         "null"
+        ],
+        "minimum": 40,
+        "maximum": 200
+       },
+       "spo2_percent": {
+        "type": "null"
+       }
+      },
+      "required": [
+       "temperature_c",
+       "heart_rate_bpm",
+       "spo2_percent"
+      ],
+      "additionalProperties": false
+     },
+     "reason": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "state",
+     "values"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "sys/config": {
+   "mode": "in",
+   "qos": 1,
+   "retain": true,
+   "publishers": [],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "registry_hash": {
+      "type": "string"
+     },
+     "tts_defaults": {
+      "type": "object"
+     },
+     "thresholds": {
+      "type": "object"
+     }
+    },
+    "required": [
+     "registry_hash"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "sys/health": {
+   "mode": "both",
+   "qos": 0,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "battery": {
+      "type": "number"
+     },
+     "cpu": {
+      "type": "number"
+     },
+     "mem": {
+      "type": "number"
+     },
+     "models": {
+      "type": "object"
+     }
+    },
+    "required": [],
+    "additionalProperties": true
+   }
+  },
+  "sys/error": {
+   "mode": "both",
+   "qos": 1,
+   "retain": false,
+   "publishers": [
+    "kiosk"
+   ],
+   "subscribers": [
+    "kiosk",
+    "service",
+    "monitor"
+   ],
+   "payload": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "message": {
+      "type": "string"
+     },
+     "topic": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "code"
+    ],
+    "additionalProperties": true
+   }
+  }
+ },
+ "action_args": {
+  "app.home": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "app.back": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "app.help": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "voice.read_screen": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "voice.repeat": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "voice.stop_speaking": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "voice.mic_off": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "robot.stop": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "splash.start": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "home.open_category": {
+   "type": "object",
+   "properties": {
+    "category": {
+     "type": "string",
+     "enum": [
+      "ORIENTATION",
+      "INFORMATION"
+     ]
+    }
+   },
+   "required": [
+    "category"
+   ],
+   "additionalProperties": false
+  },
+  "consult.start": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "orientation.select": {
+   "type": "object",
+   "properties": {
+    "destination": {
+     "type": "string",
+     "enum": [
+      "PHARMACY",
+      "LABORATORY",
+      "RECEPTION"
+     ]
+    }
+   },
+   "required": [
+    "destination"
+   ],
+   "additionalProperties": false
+  },
+  "orientation.confirm": {
+   "type": "object",
+   "properties": {
+    "destination": {
+     "type": "string",
+     "enum": [
+      "PHARMACY",
+      "LABORATORY",
+      "RECEPTION"
+     ]
+    }
+   },
+   "required": [
+    "destination"
+   ],
+   "additionalProperties": false
+  },
+  "orientation.decline": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "mission.dismiss": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "info.open": {
+   "type": "object",
+   "properties": {
+    "topic": {
+     "type": "string",
+     "enum": [
+      "HIV",
+      "MALARIA",
+      "DIABETES",
+      "HYPERTENSION",
+      "TUBERCULOSIS",
+      "MENSTRUAL_HEALTH"
+     ]
+    }
+   },
+   "required": [
+    "topic"
+   ],
+   "additionalProperties": false
+  },
+  "info.read_all": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "info.read_section": {
+   "type": "object",
+   "properties": {
+    "section": {
+     "type": [
+      "integer",
+      "string"
+     ]
+    }
+   },
+   "required": [
+    "section"
+   ],
+   "additionalProperties": false
+  },
+  "info.next_section": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "info.prev_section": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "info.pause": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "info.resume": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "info.show_source": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.reason.select": {
+   "type": "object",
+   "properties": {
+    "reason": {
+     "type": "string",
+     "enum": [
+      "consultation_generale",
+      "suivi_medical",
+      "autre_motif"
+     ]
+    }
+   },
+   "required": [
+    "reason"
+   ],
+   "additionalProperties": false
+  },
+  "consult.next": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.session.select": {
+   "type": "object",
+   "properties": {
+    "doctor": {
+     "type": "string",
+     "enum": [
+      "A",
+      "B",
+      "C",
+      "D"
+     ]
+    },
+    "period": {
+     "type": "string",
+     "enum": [
+      "MAT",
+      "AM"
+     ]
+    }
+   },
+   "required": [
+    "doctor",
+    "period"
+   ],
+   "additionalProperties": false
+  },
+  "consult.field.dictate": {
+   "type": "object",
+   "properties": {
+    "field": {
+     "type": "string",
+     "enum": [
+      "name",
+      "phone"
+     ]
+    }
+   },
+   "required": [
+    "field"
+   ],
+   "additionalProperties": false
+  },
+  "consult.field.set": {
+   "type": "object",
+   "properties": {
+    "field": {
+     "type": "string",
+     "enum": [
+      "name",
+      "phone"
+     ]
+    },
+    "value": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "field",
+    "value"
+   ],
+   "additionalProperties": false
+  },
+  "consult.field.clear": {
+   "type": "object",
+   "properties": {
+    "field": {
+     "type": "string",
+     "enum": [
+      "name",
+      "phone"
+     ]
+    }
+   },
+   "required": [
+    "field"
+   ],
+   "additionalProperties": false
+  },
+  "consult.vitals.start": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.vitals.skip": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.vitals.cancel": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.review.confirm": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.review.modify": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.cancel": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.ticket.read": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "consult.finish": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "confirm.yes": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "confirm.no": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "error.retry": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  },
+  "error.dismiss": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "action_risk_default": "R0",
+ "action_risk_overrides": {
+  "robot.stop": "R3",
+  "orientation.confirm": "R2",
+  "consult.review.confirm": "R1"
+ },
+ "rest": {
+  "POST /api/request": {
+   "method": "POST",
+   "path": "/api/request",
+   "request": {
+    "type": "object",
+    "properties": {
+     "category": {
+      "type": "string",
+      "enum": [
+       "ORIENTATION",
+       "INFORMATION",
+       "CONSULTATION"
+      ]
+     },
+     "item": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "category",
+     "item"
+    ],
+    "additionalProperties": false
+   },
+   "responses": {
+    "200": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": true
+      },
+      "request": {
+       "type": "object"
+      },
+      "title": {
+       "type": "string"
+      },
+      "message": {
+       "type": "string"
+      },
+      "published": {
+       "const": true
+      }
+     },
+     "required": [
+      "ok",
+      "published"
+     ],
+     "additionalProperties": true
+    },
+    "400": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": false
+      },
+      "error": {
+       "type": "string"
+      },
+      "code": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "error"
+     ],
+     "additionalProperties": true
+    },
+    "503": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": false
+      },
+      "error": {
+       "type": "string"
+      },
+      "published": {
+       "const": false
+      }
+     },
+     "required": [
+      "ok",
+      "published"
+     ],
+     "additionalProperties": true
+    }
+   }
+  },
+  "POST /api/navigation/cancel": {
+   "method": "POST",
+   "path": "/api/navigation/cancel",
+   "request": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": true
+   },
+   "responses": {
+    "200": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": true
+      },
+      "published": {
+       "const": true
+      },
+      "message": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "published"
+     ],
+     "additionalProperties": true
+    },
+    "503": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": false
+      },
+      "published": {
+       "const": false
+      },
+      "error": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "published"
+     ],
+     "additionalProperties": true
+    }
+   }
+  },
+  "GET /api/consultation/sessions": {
+   "method": "GET",
+   "path": "/api/consultation/sessions",
+   "request": {
+    "query": {
+     "date": "YYYY-MM-DD"
+    }
+   },
+   "responses": {
+    "200": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": true
+      },
+      "date": {
+       "type": "string"
+      },
+      "sessions": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "doctor_code": {
+          "type": "string",
+          "enum": [
+           "A",
+           "B",
+           "C",
+           "D"
+          ]
+         },
+         "period": {
+          "type": "string",
+          "enum": [
+           "MAT",
+           "AM"
+          ]
+         },
+         "waiting_count": {
+          "type": "integer",
+          "minimum": 0
+         }
+        },
+        "required": [
+         "doctor_code",
+         "period",
+         "waiting_count"
+        ],
+        "additionalProperties": true
+       }
+      }
+     },
+     "required": [
+      "ok",
+      "date",
+      "sessions"
+     ],
+     "additionalProperties": true
+    },
+    "400": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": false
+      },
+      "error": {
+       "type": "string"
+      },
+      "code": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "error"
+     ],
+     "additionalProperties": true
+    },
+    "500": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": false
+      },
+      "error": {
+       "type": "string"
+      },
+      "code": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "error"
+     ],
+     "additionalProperties": true
+    }
+   }
+  },
+  "POST /api/consultation/appointments": {
+   "method": "POST",
+   "path": "/api/consultation/appointments",
+   "request": {
+    "type": "object",
+    "properties": {
+     "patient_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+     },
+     "contact": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+     },
+     "reason_code": {
+      "type": "string",
+      "enum": [
+       "consultation_generale",
+       "suivi_medical",
+       "autre_motif"
+      ]
+     },
+     "requested_date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     },
+     "doctor_code": {
+      "type": "string",
+      "enum": [
+       "A",
+       "B",
+       "C",
+       "D"
+      ]
+     },
+     "period": {
+      "type": "string",
+      "enum": [
+       "MAT",
+       "AM"
+      ]
+     },
+     "temperature_c": {
+      "type": [
+       "number",
+       "null"
+      ],
+      "minimum": 25,
+      "maximum": 45
+     },
+     "heart_rate_bpm": {
+      "type": [
+       "integer",
+       "null"
+      ],
+      "minimum": 40,
+      "maximum": 200
+     },
+     "spo2_percent": {
+      "type": "null"
+     }
+    },
+    "required": [
+     "patient_name",
+     "contact",
+     "reason_code",
+     "requested_date",
+     "doctor_code",
+     "period"
+    ],
+    "additionalProperties": true
+   },
+   "responses": {
+    "201": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": true
+      },
+      "ticket_number": {
+       "type": "integer"
+      },
+      "ticket_label": {
+       "type": "string",
+       "pattern": "^[A-D]-(MAT|AM)-\\d+$"
+      }
+     },
+     "required": [
+      "ok",
+      "ticket_number",
+      "ticket_label"
+     ],
+     "additionalProperties": true
+    },
+    "400": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": false
+      },
+      "error": {
+       "type": "string"
+      },
+      "code": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "error"
+     ],
+     "additionalProperties": true
+    },
+    "409": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": false
+      },
+      "code": {
+       "type": "string",
+       "enum": [
+        "duplicate_phone",
+        "slot_taken"
+       ]
+      },
+      "error": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "code",
+      "error"
+     ],
+     "additionalProperties": true
+    },
+    "500": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": false
+      },
+      "error": {
+       "type": "string"
+      },
+      "code": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "error"
+     ],
+     "additionalProperties": true
+    }
+   }
+  },
+  "POST /api/vitals/acquire": {
+   "method": "POST",
+   "path": "/api/vitals/acquire",
+   "request": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": true
+   },
+   "responses": {
+    "200": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": true
+      },
+      "state": {
+       "type": "string",
+       "enum": [
+        "valide",
+        "indisponible",
+        "en cours"
+       ]
+      },
+      "values": {
+       "type": "object",
+       "properties": {
+        "temperature_c": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "heart_rate_bpm": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "spo2_percent": {
+         "type": "null"
+        }
+       },
+       "required": [
+        "temperature_c",
+        "heart_rate_bpm",
+        "spo2_percent"
+       ],
+       "additionalProperties": true
+      },
+      "measured_at": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "checked_at": {
+       "type": "string"
+      },
+      "reason": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "required": [
+      "ok",
+      "state",
+      "values"
+     ],
+     "additionalProperties": true
+    }
+   }
+  },
+  "GET /api/catalog": {
+   "method": "GET",
+   "path": "/api/catalog",
+   "request": {},
+   "responses": {
+    "200": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": true
+      },
+      "categories": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "key": {
+          "type": "string",
+          "enum": [
+           "ORIENTATION",
+           "INFORMATION",
+           "CONSULTATION"
+          ]
+         },
+         "label": {
+          "type": "string"
+         },
+         "items": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "key": {
+             "type": "string"
+            },
+            "label": {
+             "type": "string"
+            },
+            "available": {
+             "type": "boolean"
+            },
+            "info": {
+             "type": "object",
+             "properties": {
+              "sections": {
+               "type": "array",
+               "minItems": 1,
+               "items": {
+                "type": "object",
+                "properties": {
+                 "heading": {
+                  "type": "string"
+                 },
+                 "paragraphs": {
+                  "type": "array",
+                  "items": {
+                   "type": "string"
+                  }
+                 },
+                 "bullets": {
+                  "type": "array",
+                  "items": {
+                   "type": "string"
+                  }
+                 }
+                },
+                "required": [
+                 "heading"
+                ],
+                "additionalProperties": true
+               }
+              },
+              "source": {
+               "type": "string"
+              },
+              "source_url": {
+               "type": "string"
+              }
+             },
+             "required": [
+              "sections"
+             ],
+             "additionalProperties": true
+            }
+           },
+           "required": [
+            "key",
+            "label",
+            "available"
+           ],
+           "additionalProperties": true
+          }
+         }
+        },
+        "required": [
+         "key",
+         "label",
+         "items"
+        ],
+        "additionalProperties": true
+       }
+      },
+      "disclaimer": {
+       "type": "string"
+      },
+      "hash": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "ok",
+      "categories",
+      "disclaimer",
+      "hash"
+     ],
+     "additionalProperties": true
+    }
+   }
+  },
+  "GET /api/voice/registry": {
+   "method": "GET",
+   "path": "/api/voice/registry",
+   "request": {},
+   "responses": {
+    "200": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": true
+      },
+      "version": {
+       "type": "integer"
+      },
+      "lang": {
+       "type": "string"
+      },
+      "hash": {
+       "type": "string"
+      },
+      "actions": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string",
+          "enum": [
+           "app.back",
+           "app.help",
+           "app.home",
+           "confirm.no",
+           "confirm.yes",
+           "consult.cancel",
+           "consult.field.clear",
+           "consult.field.dictate",
+           "consult.field.set",
+           "consult.finish",
+           "consult.next",
+           "consult.reason.select",
+           "consult.review.confirm",
+           "consult.review.modify",
+           "consult.session.select",
+           "consult.start",
+           "consult.ticket.read",
+           "consult.vitals.cancel",
+           "consult.vitals.skip",
+           "consult.vitals.start",
+           "error.dismiss",
+           "error.retry",
+           "home.open_category",
+           "info.next_section",
+           "info.open",
+           "info.pause",
+           "info.prev_section",
+           "info.read_all",
+           "info.read_section",
+           "info.resume",
+           "info.show_source",
+           "mission.dismiss",
+           "orientation.confirm",
+           "orientation.decline",
+           "orientation.select",
+           "robot.stop",
+           "splash.start",
+           "voice.mic_off",
+           "voice.read_screen",
+           "voice.repeat",
+           "voice.stop_speaking"
+          ]
+         },
+         "scope": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "risk": {
+          "type": "string",
+          "enum": [
+           "R0",
+           "R1",
+           "R2",
+           "R3"
+          ]
+         },
+         "voice_fr": {
+          "type": [
+           "array",
+           "object"
+          ]
+         },
+         "requires_confirmation": {
+          "type": "boolean"
+         }
+        },
+        "required": [
+         "id",
+         "scope",
+         "risk",
+         "voice_fr"
+        ],
+        "additionalProperties": true
+       }
+      }
+     },
+     "required": [
+      "ok",
+      "version",
+      "lang",
+      "hash",
+      "actions"
+     ],
+     "additionalProperties": true
+    }
+   }
+  },
+  "GET /api/health": {
+   "method": "GET",
+   "path": "/api/health",
+   "request": {},
+   "responses": {
+    "200": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "const": true
+      },
+      "version": {
+       "type": "string"
+      },
+      "registry_hash": {
+       "type": "string"
+      },
+      "db": {
+       "type": "string",
+       "enum": [
+        "ok",
+        "error"
+       ]
+      },
+      "ros_bridge": {
+       "type": "string",
+       "enum": [
+        "up",
+        "down"
+       ]
+      },
+      "hub": {
+       "type": "object",
+       "properties": {
+        "clients": {
+         "type": "integer",
+         "minimum": 0
+        }
+       },
+       "required": [
+        "clients"
+       ],
+       "additionalProperties": true
+      }
+     },
+     "required": [
+      "ok",
+      "version",
+      "registry_hash",
+      "db",
+      "ros_bridge",
+      "hub"
+     ],
+     "additionalProperties": true
+    }
+   }
+  },
+  "GET /models/manifest.json": {
+   "method": "GET",
+   "path": "/models/manifest.json",
+   "request": {},
+   "responses": {
+    "200": {
+     "type": "object",
+     "properties": {
+      "version": {
+       "type": "integer"
+      },
+      "files": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "role": {
+          "type": "string",
+          "enum": [
+           "vad",
+           "stt_command",
+           "stt_dictation",
+           "tts"
+          ]
+         },
+         "name": {
+          "type": "string"
+         },
+         "path": {
+          "type": "string"
+         },
+         "bytes": {
+          "type": "integer",
+          "minimum": 1
+         },
+         "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+         },
+         "required": {
+          "type": "boolean"
+         }
+        },
+        "required": [
+         "role",
+         "name",
+         "path",
+         "bytes",
+         "sha256",
+         "required"
+        ],
+        "additionalProperties": true
+       }
+      }
+     },
+     "required": [
+      "version",
+      "files"
+     ],
+     "additionalProperties": true
+    }
+   }
+  }
+ },
+ "permissions": {
+  "kiosk": {
+   "publish": [
+    "voice/vad",
+    "voice/mic/control",
+    "voice/stt/state",
+    "voice/stt/partial",
+    "voice/stt/final",
+    "voice/stt/error",
+    "voice/tts/request",
+    "voice/tts/control",
+    "voice/tts/state",
+    "voice/intent/resolved",
+    "voice/intent/unresolved",
+    "ui/state",
+    "ui/action/request",
+    "ui/action/result",
+    "ui/confirm/request",
+    "ui/confirm/answer",
+    "vitals/state",
+    "sys/health",
+    "sys/error"
+   ],
+   "subscribe": [
+    "voice/vad",
+    "voice/mic/control",
+    "voice/stt/state",
+    "voice/stt/partial",
+    "voice/stt/final",
+    "voice/stt/error",
+    "voice/tts/request",
+    "voice/tts/control",
+    "voice/tts/state",
+    "voice/intent/resolved",
+    "voice/intent/unresolved",
+    "voice/intent/suggest",
+    "ui/state",
+    "ui/action/request",
+    "ui/action/result",
+    "ui/confirm/request",
+    "ui/confirm/answer",
+    "robot/hmi/status",
+    "robot/mission/status",
+    "robot/safety",
+    "robot/supervisor/status",
+    "robot/link",
+    "vitals/state",
+    "vitals/result",
+    "sys/config",
+    "sys/health",
+    "sys/error"
+   ]
+  },
+  "service": {
+   "publish": [
+    "voice/mic/control",
+    "voice/tts/request",
+    "voice/tts/control",
+    "voice/intent/suggest",
+    "ui/action/request"
+   ],
+   "subscribe": [
+    "voice/stt/state",
+    "voice/stt/partial",
+    "voice/stt/final",
+    "voice/stt/error",
+    "voice/tts/state",
+    "voice/intent/resolved",
+    "voice/intent/unresolved",
+    "ui/state",
+    "ui/action/request",
+    "ui/action/result",
+    "robot/hmi/status",
+    "robot/mission/status",
+    "robot/safety",
+    "robot/supervisor/status",
+    "robot/link",
+    "vitals/state",
+    "vitals/result",
+    "sys/config",
+    "sys/health",
+    "sys/error"
+   ]
+  },
+  "monitor": {
+   "publish": [],
+   "subscribe": [
+    "voice/stt/state",
+    "voice/stt/error",
+    "voice/tts/state",
+    "voice/intent/resolved",
+    "voice/intent/unresolved",
+    "ui/state",
+    "ui/action/request",
+    "ui/action/result",
+    "robot/hmi/status",
+    "robot/mission/status",
+    "robot/safety",
+    "robot/supervisor/status",
+    "robot/link",
+    "vitals/state",
+    "sys/config",
+    "sys/health",
+    "sys/error"
+   ]
+  }
+ },
+ "vectors": {
+  "messages": [
+   {
+    "name": "hello kiosk",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "hello",
+     "device_id": "tab-01",
+     "role": "kiosk",
+     "app_version": "0.1.0",
+     "registry_hash": "sha256:abc",
+     "last_seq": 0,
+     "token": "t0k"
+    }
+   },
+   {
+    "name": "welcome",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "welcome",
+     "session": "s-1",
+     "heartbeat_s": 5,
+     "max_msg_bytes": 65536,
+     "registry_stale": false,
+     "server_time": 1789398000000,
+     "granted": {
+      "publish": [
+       "ui/#"
+      ],
+      "subscribe": [
+       "robot/#"
+      ]
+     },
+     "replay": 0
+    }
+   },
+   {
+    "name": "ack",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "ack",
+     "corr": "01JD0000000000000000000001"
+    }
+   },
+   {
+    "name": "ping",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "ping",
+     "id": "p1",
+     "ts": 1
+    }
+   },
+   {
+    "name": "sub",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "sub",
+     "id": "s1",
+     "topic": "robot/#"
+    }
+   },
+   {
+    "name": "error forbidden",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "error",
+     "code": "forbidden_topic",
+     "message": "role kiosk cannot publish robot/#"
+    }
+   },
+   {
+    "name": "stt partial",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000002",
+     "ts": 1789398001234,
+     "seq": 2,
+     "qos": 0,
+     "topic": "voice/stt/partial",
+     "payload": {
+      "utt": "u-1",
+      "text": "emmène-moi",
+      "lang": "fr"
+     }
+    }
+   },
+   {
+    "name": "stt final",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000003",
+     "ts": 1789398001234,
+     "seq": 3,
+     "qos": 1,
+     "topic": "voice/stt/final",
+     "payload": {
+      "utt": "u-1",
+      "text": "emmène-moi à la pharmacie",
+      "lang": "fr",
+      "conf": 0.93,
+      "duration_ms": 1900,
+      "engine": "sherpa",
+      "model": "zip-fr",
+      "mode": "command",
+      "sensitive": false
+     }
+    }
+   },
+   {
+    "name": "intent resolved",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000004",
+     "ts": 1789398001234,
+     "seq": 4,
+     "qos": 1,
+     "corr": "u-1",
+     "topic": "voice/intent/resolved",
+     "payload": {
+      "utt": "u-1",
+      "action_id": "orientation.select",
+      "args": {
+       "destination": "PHARMACY"
+      },
+      "score": 0.96,
+      "source": "grammar",
+      "epoch": 12,
+      "needs_confirm": false
+     }
+    }
+   },
+   {
+    "name": "action request voice",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000005",
+     "ts": 1789398001234,
+     "seq": 5,
+     "qos": 1,
+     "topic": "ui/action/request",
+     "payload": {
+      "action_id": "orientation.select",
+      "args": {
+       "destination": "PHARMACY"
+      },
+      "origin": "voice",
+      "corr": "c-77",
+      "epoch": 12
+     }
+    }
+   },
+   {
+    "name": "action robot.stop",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000006",
+     "ts": 1789398001234,
+     "seq": 6,
+     "qos": 1,
+     "topic": "ui/action/request",
+     "payload": {
+      "action_id": "robot.stop",
+      "args": {},
+      "origin": "touch",
+      "corr": "c-78",
+      "epoch": 12
+     }
+    }
+   },
+   {
+    "name": "action result stale",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000007",
+     "ts": 1789398001234,
+     "seq": 7,
+     "qos": 1,
+     "topic": "ui/action/result",
+     "payload": {
+      "corr": "c-77",
+      "ok": false,
+      "code": "stale",
+      "error": "écran changé"
+     }
+    }
+   },
+   {
+    "name": "ui state",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000008",
+     "ts": 1789398001234,
+     "seq": 8,
+     "qos": 1,
+     "retain": true,
+     "topic": "ui/state",
+     "payload": {
+      "screen": "orientation.menu",
+      "epoch": 12,
+      "mission_active": false,
+      "actions": [
+       "app.back",
+       "orientation.select",
+       "robot.stop"
+      ],
+      "dynamic": {
+       "orientation.select": {
+        "destination": [
+         "PHARMACY",
+         "LABORATORY",
+         "RECEPTION"
+        ]
+       }
+      },
+      "sensitive_fields": []
+     }
+    }
+   },
+   {
+    "name": "tts request server",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000009",
+     "ts": 1789398001234,
+     "seq": 9,
+     "qos": 1,
+     "topic": "voice/tts/request",
+     "payload": {
+      "utt": "srv-5",
+      "text": "Votre rendez-vous est confirmé.",
+      "lang": "fr",
+      "priority": 2,
+      "interrupt": "queue",
+      "source": "service:agenda",
+      "ttl_ms": 15000
+     }
+    }
+   },
+   {
+    "name": "tts state sentence",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000010",
+     "ts": 1789398001234,
+     "seq": 10,
+     "qos": 1,
+     "retain": true,
+     "topic": "voice/tts/state",
+     "payload": {
+      "utt": "srv-5",
+      "state": "sentence",
+      "index": 0
+     }
+    }
+   },
+   {
+    "name": "mission running",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000011",
+     "ts": 1789398001234,
+     "seq": 11,
+     "qos": 1,
+     "retain": true,
+     "topic": "robot/mission/status",
+     "payload": {
+      "code": "RUNNING"
+     }
+    }
+   },
+   {
+    "name": "mission refused",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000012",
+     "ts": 1789398001234,
+     "seq": 12,
+     "qos": 1,
+     "retain": true,
+     "topic": "robot/mission/status",
+     "payload": {
+      "code": "START_REJECTED",
+      "reason": "SENSORS_NOT_READY"
+     }
+    }
+   },
+   {
+    "name": "mission blocked",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000013",
+     "ts": 1789398001234,
+     "seq": 13,
+     "qos": 1,
+     "retain": true,
+     "topic": "robot/mission/status",
+     "payload": {
+      "code": "BLOCKED"
+     }
+    }
+   },
+   {
+    "name": "mission timeout",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000014",
+     "ts": 1789398001234,
+     "seq": 14,
+     "qos": 1,
+     "retain": true,
+     "topic": "robot/mission/status",
+     "payload": {
+      "code": "MISSION_TIMEOUT"
+     }
+    }
+   },
+   {
+    "name": "hmi validated",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000015",
+     "ts": 1789398001234,
+     "seq": 15,
+     "qos": 1,
+     "retain": true,
+     "topic": "robot/hmi/status",
+     "payload": {
+      "state": "VALIDATED",
+      "category": "ORIENTATION",
+      "item": "PHARMACY"
+     }
+    }
+   },
+   {
+    "name": "hmi rejected",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000016",
+     "ts": 1789398001234,
+     "seq": 16,
+     "qos": 1,
+     "retain": true,
+     "topic": "robot/hmi/status",
+     "payload": {
+      "state": "REJECTED",
+      "reason": "UNKNOWN_OR_UNAVAILABLE_ITEM"
+     }
+    }
+   },
+   {
+    "name": "safety obstacle",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000017",
+     "ts": 1789398001234,
+     "seq": 17,
+     "qos": 1,
+     "topic": "robot/safety",
+     "payload": {
+      "event": "OBSTACLE",
+      "cm": 14.5
+     }
+    }
+   },
+   {
+    "name": "robot link",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000018",
+     "ts": 1789398001234,
+     "seq": 18,
+     "qos": 1,
+     "retain": true,
+     "topic": "robot/link",
+     "payload": {
+      "ros_bridge": "up",
+      "esp32": "seen"
+     }
+    }
+   },
+   {
+    "name": "vitals valid",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000019",
+     "ts": 1789398001234,
+     "seq": 19,
+     "qos": 1,
+     "topic": "vitals/result",
+     "payload": {
+      "state": "valide",
+      "values": {
+       "temperature_c": 36.6,
+       "heart_rate_bpm": 72,
+       "spo2_percent": null
+      },
+      "reason": null
+     }
+    }
+   },
+   {
+    "name": "vitals unavailable",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000020",
+     "ts": 1789398001234,
+     "seq": 20,
+     "qos": 1,
+     "topic": "vitals/result",
+     "payload": {
+      "state": "indisponible",
+      "values": {
+       "temperature_c": null,
+       "heart_rate_bpm": null,
+       "spo2_percent": null
+      },
+      "reason": "Capteurs non connectés"
+     }
+    }
+   },
+   {
+    "name": "sys config",
+    "valid": true,
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000021",
+     "ts": 1789398001234,
+     "seq": 21,
+     "qos": 1,
+     "retain": true,
+     "topic": "sys/config",
+     "payload": {
+      "registry_hash": "sha256:abc"
+     }
+    }
+   },
+   {
+    "name": "pub sans seq",
+    "valid": false,
+    "why": "seq requis",
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "x1",
+     "ts": 1,
+     "qos": 1,
+     "topic": "voice/stt/final",
+     "payload": {}
+    }
+   },
+   {
+    "name": "version inconnue",
+    "valid": false,
+    "why": "v doit valoir 1",
+    "message": {
+     "v": 2,
+     "type": "ping"
+    }
+   },
+   {
+    "name": "stt final sans conf",
+    "valid": false,
+    "why": "conf requis",
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000030",
+     "ts": 1789398001234,
+     "seq": 30,
+     "qos": 1,
+     "topic": "voice/stt/final",
+     "payload": {
+      "utt": "u",
+      "text": "a",
+      "lang": "fr",
+      "mode": "command",
+      "sensitive": false
+     }
+    }
+   },
+   {
+    "name": "stt conf hors plage",
+    "valid": false,
+    "why": "conf <= 1",
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000031",
+     "ts": 1789398001234,
+     "seq": 31,
+     "qos": 1,
+     "topic": "voice/stt/final",
+     "payload": {
+      "utt": "u",
+      "text": "a",
+      "lang": "fr",
+      "conf": 1.4,
+      "mode": "command",
+      "sensitive": false
+     }
+    }
+   },
+   {
+    "name": "tts priorité 5",
+    "valid": false,
+    "why": "priority 0..3",
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000032",
+     "ts": 1789398001234,
+     "seq": 32,
+     "qos": 1,
+     "topic": "voice/tts/request",
+     "payload": {
+      "utt": "u",
+      "text": "a",
+      "lang": "fr",
+      "priority": 5,
+      "interrupt": "queue",
+      "source": "x"
+     }
+    }
+   },
+   {
+    "name": "action inconnue",
+    "valid": false,
+    "why": "action_id hors registre (aucune commande moteur)",
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000033",
+     "ts": 1789398001234,
+     "seq": 33,
+     "qos": 1,
+     "topic": "ui/action/request",
+     "payload": {
+      "action_id": "robot.forward",
+      "args": {},
+      "origin": "voice",
+      "corr": "c",
+      "epoch": 1
+     }
+    }
+   },
+   {
+    "name": "vitals spo2 non nulle",
+    "valid": false,
+    "why": "SpO2 doit rester null",
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000034",
+     "ts": 1789398001234,
+     "seq": 34,
+     "qos": 1,
+     "topic": "vitals/result",
+     "payload": {
+      "state": "valide",
+      "values": {
+       "temperature_c": 36.6,
+       "heart_rate_bpm": 72,
+       "spo2_percent": 97
+      },
+      "reason": null
+     }
+    }
+   },
+   {
+    "name": "mission code inconnu",
+    "valid": false,
+    "why": "ARRIVED n'existe pas (pas de notion d'arrivée)",
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000035",
+     "ts": 1789398001234,
+     "seq": 35,
+     "qos": 1,
+     "topic": "robot/mission/status",
+     "payload": {
+      "code": "ARRIVED"
+     }
+    }
+   },
+   {
+    "name": "hello sans token",
+    "valid": false,
+    "why": "token requis",
+    "message": {
+     "v": 1,
+     "type": "hello",
+     "device_id": "d",
+     "role": "kiosk",
+     "app_version": "1"
+    }
+   },
+   {
+    "name": "action sans origin",
+    "valid": false,
+    "why": "origin requis",
+    "message": {
+     "v": 1,
+     "type": "pub",
+     "id": "01JD0000000000000000000036",
+     "ts": 1789398001234,
+     "seq": 36,
+     "qos": 1,
+     "topic": "ui/action/request",
+     "payload": {
+      "action_id": "app.home",
+      "args": {},
+      "corr": "c",
+      "epoch": 1
+     }
+    }
+   }
+  ],
+  "action_args": [
+   {
+    "action_id": "orientation.select",
+    "args": {
+     "destination": "PHARMACY"
+    },
+    "valid": true
+   },
+   {
+    "action_id": "orientation.select",
+    "args": {
+     "destination": "CAFETERIA"
+    },
+    "valid": false
+   },
+   {
+    "action_id": "orientation.select",
+    "args": {},
+    "valid": false
+   },
+   {
+    "action_id": "robot.stop",
+    "args": {},
+    "valid": true
+   },
+   {
+    "action_id": "robot.stop",
+    "args": {
+     "speed": 3
+    },
+    "valid": false
+   },
+   {
+    "action_id": "consult.session.select",
+    "args": {
+     "doctor": "B",
+     "period": "AM"
+    },
+    "valid": true
+   },
+   {
+    "action_id": "consult.session.select",
+    "args": {
+     "doctor": "E",
+     "period": "AM"
+    },
+    "valid": false
+   },
+   {
+    "action_id": "info.open",
+    "args": {
+     "topic": "TUBERCULOSIS"
+    },
+    "valid": true
+   },
+   {
+    "action_id": "consult.field.set",
+    "args": {
+     "field": "phone",
+     "value": "0341234567"
+    },
+    "valid": true
+   }
+  ],
+  "permissions": [
+   {
+    "role": "kiosk",
+    "op": "publish",
+    "topic": "voice/stt/final",
+    "allowed": true
+   },
+   {
+    "role": "kiosk",
+    "op": "publish",
+    "topic": "robot/mission/status",
+    "allowed": false
+   },
+   {
+    "role": "kiosk",
+    "op": "publish",
+    "topic": "robot/safety",
+    "allowed": false
+   },
+   {
+    "role": "kiosk",
+    "op": "subscribe",
+    "topic": "robot/mission/status",
+    "allowed": true
+   },
+   {
+    "role": "service",
+    "op": "publish",
+    "topic": "voice/tts/request",
+    "allowed": true
+   },
+   {
+    "role": "service",
+    "op": "publish",
+    "topic": "voice/stt/final",
+    "allowed": false
+   },
+   {
+    "role": "service",
+    "op": "publish",
+    "topic": "voice/intent/suggest",
+    "allowed": true
+   },
+   {
+    "role": "monitor",
+    "op": "publish",
+    "topic": "ui/state",
+    "allowed": false
+   },
+   {
+    "role": "monitor",
+    "op": "subscribe",
+    "topic": "ui/state",
+    "allowed": true
+   },
+   {
+    "role": "kiosk",
+    "op": "publish",
+    "topic": "vitals/result",
+    "allowed": false
+   }
+  ]
+ }
+}

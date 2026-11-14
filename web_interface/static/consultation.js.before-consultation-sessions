@@ -1,0 +1,382 @@
+(function () {
+  "use strict";
+
+  const TITLES = {
+    1: "Date et créneau",
+    2: "Vos informations",
+    3: "Signes vitaux",
+    4: "Vérification",
+    5: "Rendez-vous enregistré",
+  };
+  const PILL = {
+    "en attente": ["En attente", "pill-wait"],
+    "en cours": ["En cours", "pill-run"],
+    "valide": ["Valide", "pill-ok"],
+    "indisponible": ["Indisponible", "pill-off"],
+  };
+  const VITALS = [
+    ["temp", "temperature_c", "°C"],
+    ["hr", "heart_rate_bpm", "bpm"],
+    ["spo2", "spo2_percent", "%"],
+  ];
+
+  function freshState() {
+    return {
+      step: 1, date: "", slot: null, slots: [], vitals: null,
+      submitting: false, vitalsRunning: false, slotRequest: 0,
+    };
+  }
+  let state = freshState();
+
+  const byId = id => document.getElementById(id);
+
+  function setMessage(el, text, kind) {
+    el.textContent = text;
+    el.className = "feedback" + (kind === "info" ? " info" : "");
+  }
+
+  function pad(n) { return String(n).padStart(2, "0"); }
+
+  function todayISO() {
+    const d = new Date();
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  function toMinutes(hhmm) {
+    const parts = hhmm.split(":");
+    return Number(parts[0]) * 60 + Number(parts[1]);
+  }
+
+  function isPast(slot) {
+    if (state.date !== todayISO()) return false;
+    const now = new Date();
+    return toMinutes(slot.start) <= now.getHours() * 60 + now.getMinutes();
+  }
+
+  function formatTime(hhmm) { return hhmm.replace(":", " h "); }
+
+  function formatSlot(slot) {
+    return formatTime(slot.start) + " – " + formatTime(slot.end);
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso + "T00:00:00");
+    return d.toLocaleDateString("fr-FR", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+    });
+  }
+
+  function goStep(n) {
+    state.step = n;
+    document.querySelectorAll(".consult-step").forEach(el => {
+      el.classList.toggle("active", Number(el.dataset.step) === n);
+    });
+    byId("consult-title").textContent = TITLES[n];
+    const progress = byId("consult-progress");
+    progress.hidden = n > 4;
+    progress.textContent = "Étape " + n + " sur 4";
+    window.scrollTo(0, 0);
+  }
+
+  function fillList(dl, rows) {
+    dl.replaceChildren();
+    rows.forEach(row => {
+      const dt = document.createElement("dt");
+      dt.textContent = row[0];
+      const dd = document.createElement("dd");
+      dd.textContent = row[1];
+      dl.append(dt, dd);
+    });
+  }
+
+  // Étape 1 : créneaux
+  function renderSlots() {
+    const list = byId("slot-list");
+    list.replaceChildren();
+    state.slots.forEach(slot => {
+      const past = isPast(slot);
+      const free = slot.available && !past;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "slot-card";
+      button.disabled = !free;
+      button.setAttribute("aria-pressed", "false");
+
+      const time = document.createElement("span");
+      time.className = "slot-time";
+      time.textContent = formatSlot(slot);
+      const doctor = document.createElement("span");
+      doctor.className = "slot-doctor";
+      doctor.textContent = slot.doctor;
+      const label = document.createElement("span");
+      label.className = "slot-state";
+      label.textContent = free ? "Disponible" : (past ? "Heure passée" : "Indisponible");
+      button.append(time, doctor, label);
+
+      button.addEventListener("click", () => {
+        state.slot = slot;
+        list.querySelectorAll(".slot-card").forEach(c => {
+          c.classList.remove("selected");
+          c.setAttribute("aria-pressed", "false");
+        });
+        button.classList.add("selected");
+        button.setAttribute("aria-pressed", "true");
+        byId("step1-next").disabled = false;
+        setMessage(byId("slot-feedback"), "", "info");
+      });
+      list.appendChild(button);
+    });
+  }
+
+  async function loadSlots(notice) {
+    const feedback = byId("slot-feedback");
+    const request = ++state.slotRequest;
+    state.slot = null;
+    byId("step1-next").disabled = true;
+    byId("slot-list").replaceChildren();
+
+    if (!state.date || state.date < todayISO()) {
+      setMessage(feedback, "Choisissez une date à partir d'aujourd'hui.", "error");
+      return;
+    }
+    setMessage(feedback, "Chargement des créneaux…", "info");
+
+    try {
+      const response = await fetch("/api/slots?date=" + encodeURIComponent(state.date));
+      const data = await response.json();
+      if (request !== state.slotRequest) return;
+      if (!response.ok || !data.ok) {
+        setMessage(feedback, data.error || "Impossible de charger les créneaux.", "error");
+        return;
+      }
+      state.slots = data.slots;
+      renderSlots();
+      const anyFree = state.slots.some(s => s.available && !isPast(s));
+      if (notice) {
+        setMessage(feedback, notice, "error");
+      } else if (!anyFree) {
+        setMessage(feedback, "Aucun créneau disponible ce jour-là. Choisissez une autre date.", "error");
+      } else {
+        setMessage(feedback, "", "info");
+      }
+    } catch (err) {
+      if (request !== state.slotRequest) return;
+      setMessage(feedback, "Le serveur HIAR ne répond pas. Réessayez.", "error");
+    }
+  }
+
+  // Étape 2 : informations
+  function readInfo() {
+    return {
+      name: byId("consult-name").value.trim(),
+      contact: byId("consult-contact").value.trim(),
+      reason: byId("consult-reason").value.trim(),
+    };
+  }
+
+  function validateInfo() {
+    const info = readInfo();
+    const feedback = byId("info-feedback");
+    if (!info.name) { setMessage(feedback, "Saisissez votre nom complet.", "error"); return false; }
+    if (info.contact.replace(/\D/g, "").length < 8) {
+      setMessage(feedback, "Saisissez un numéro de téléphone valide.", "error");
+      return false;
+    }
+    if (!info.reason) { setMessage(feedback, "Indiquez le motif de la consultation.", "error"); return false; }
+    setMessage(feedback, "", "info");
+    return true;
+  }
+
+  // Étape 3 : signes vitaux (valeurs affichées seulement si l'état est « valide »)
+  function setVitals(stateName, values) {
+    const pill = PILL[stateName] || PILL["indisponible"];
+    VITALS.forEach(item => {
+      const pillEl = byId("vital-" + item[0] + "-pill");
+      pillEl.textContent = pill[0];
+      pillEl.className = "pill " + pill[1];
+      const raw = values ? values[item[1]] : null;
+      const show = stateName === "valide" && typeof raw === "number" && isFinite(raw);
+      byId("vital-" + item[0] + "-value").textContent = show ? raw + " " + item[2] : "—";
+    });
+  }
+
+  async function acquireVitals() {
+    if (state.vitalsRunning) return;
+    state.vitalsRunning = true;
+    const button = byId("vitals-start");
+    const message = byId("vitals-message");
+    button.disabled = true;
+    setVitals("en cours");
+    setMessage(message, "Mesure en cours…", "info");
+
+    try {
+      const response = await fetch("/api/vitals/acquire", {method: "POST"});
+      const data = await response.json();
+      if (!response.ok || !data.ok || !PILL[data.state]) {
+        state.vitals = null;
+        setVitals("indisponible");
+        setMessage(message, "La mesure est indisponible pour le moment.", "error");
+        return;
+      }
+      state.vitals = data;
+      setVitals(data.state, data.values);
+      if (data.state === "indisponible") {
+        setMessage(message, data.reason || "Mesure indisponible.", "error");
+      } else {
+        setMessage(message, "", "info");
+      }
+    } catch (err) {
+      state.vitals = null;
+      setVitals("indisponible");
+      setMessage(message, "Le serveur HIAR ne répond pas.", "error");
+    } finally {
+      state.vitalsRunning = false;
+      button.disabled = false;
+    }
+  }
+
+  // Étape 4 : vérification
+  function vitalsSummary() {
+    if (!state.vitals || state.vitals.state !== "valide") return "Non mesurés";
+    return VITALS.map(item => {
+      const raw = state.vitals.values[item[1]];
+      return typeof raw === "number" ? raw + " " + item[2] : "—";
+    }).join(" / ");
+  }
+
+  function buildRecap() {
+    const info = readInfo();
+    fillList(byId("recap"), [
+      ["Date", formatDate(state.date)],
+      ["Créneau", formatSlot(state.slot)],
+      ["Médecin", state.slot.doctor],
+      ["Nom", info.name],
+      ["Téléphone", info.contact],
+      ["Motif", info.reason],
+      ["Signes vitaux", vitalsSummary()],
+    ]);
+    setMessage(byId("confirm-feedback"), "", "info");
+  }
+
+  function showSuccess(data) {
+    const queueBlock = byId("queue-block");
+    let message = data.message || "Votre demande est enregistrée.";
+    if (data.queue_number !== null && data.queue_number !== undefined) {
+      byId("success-queue").textContent = String(data.queue_number);
+      queueBlock.hidden = false;
+    } else {
+      queueBlock.hidden = true;
+      message += "\nVotre numéro de file vous sera communiqué par le personnel.";
+    }
+    byId("success-message").textContent = message;
+    fillList(byId("success-recap"), [
+      ["Référence", String(data.appointment_id)],
+      ["Date", formatDate(state.date)],
+      ["Créneau", formatSlot(state.slot)],
+      ["Médecin", data.doctor || state.slot.doctor],
+    ]);
+    goStep(5);
+  }
+
+  async function submitAppointment() {
+    if (state.submitting) return;
+    state.submitting = true;
+    const button = byId("step4-confirm");
+    const feedback = byId("confirm-feedback");
+    button.disabled = true;
+    setMessage(feedback, "Enregistrement en cours…", "info");
+
+    const info = readInfo();
+    const payload = {
+      patient_name: info.name,
+      contact: info.contact,
+      reason: info.reason,
+      requested_date: state.date,
+      requested_time: state.slot.start,
+      slot_id: state.slot.id,
+      temperature_c: state.vitals && state.vitals.state === "valide"
+        && typeof state.vitals.values.temperature_c === "number"
+        ? state.vitals.values.temperature_c : null,
+      heart_rate_bpm: state.vitals && state.vitals.state === "valide"
+        && typeof state.vitals.values.heart_rate_bpm === "number"
+        ? state.vitals.values.heart_rate_bpm : null,
+      spo2_percent: state.vitals && state.vitals.state === "valide"
+        && typeof state.vitals.values.spo2_percent === "number"
+        ? state.vitals.values.spo2_percent : null,
+    };
+
+    try {
+      const response = await fetch("/api/appointments", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      });
+      let data = null;
+      try { data = await response.json(); } catch (e) { data = null; }
+
+      if (response.status === 201 && data && data.ok) {
+        showSuccess(data);
+        return;
+      }
+
+      const code = data && data.code;
+      if (code === "slot_taken" || code === "invalid_slot") {
+        goStep(1);
+        await loadSlots(code === "slot_taken"
+          ? "Ce créneau vient d'être pris. Choisissez-en un autre."
+          : "Créneau invalide. Choisissez-en un autre.");
+      } else if (code === "invalid_phone") {
+        goStep(2);
+        setMessage(byId("info-feedback"), (data && data.error) || "Numéro de téléphone invalide.", "error");
+      } else if (code === "duplicate_phone") {
+        setMessage(feedback, "Ce numéro a déjà un rendez-vous ce jour-là.", "error");
+      } else {
+        setMessage(feedback, (data && data.error) || "Impossible d'enregistrer la demande.", "error");
+      }
+    } catch (err) {
+      setMessage(
+        feedback,
+        "Le serveur HIAR ne répond pas. Réessayez. Si le message « numéro déjà utilisé » "
+          + "apparaît, votre demande a bien été enregistrée.",
+        "error"
+      );
+    } finally {
+      state.submitting = false;
+      button.disabled = false;
+    }
+  }
+
+  // Point d'entrée appelé par hmi.js
+  window.startConsultation = function () {
+    state = freshState();
+    byId("consult-name").value = "";
+    byId("consult-contact").value = "";
+    byId("consult-reason").value = "";
+    setMessage(byId("info-feedback"), "", "info");
+    setMessage(byId("vitals-message"), "", "info");
+    setVitals("en attente");
+
+    const today = todayISO();
+    const dateInput = byId("consult-date");
+    dateInput.min = today;
+    dateInput.value = today;
+    state.date = today;
+
+    goStep(1);
+    show("appointment-screen");
+    loadSlots();
+  };
+
+  byId("consult-date").addEventListener("change", event => {
+    state.date = event.target.value;
+    loadSlots();
+  });
+  byId("step1-next").addEventListener("click", () => { if (state.slot) goStep(2); });
+  byId("step2-back").addEventListener("click", () => goStep(1));
+  byId("step2-next").addEventListener("click", () => { if (validateInfo()) goStep(3); });
+  byId("vitals-start").addEventListener("click", acquireVitals);
+  byId("step3-back").addEventListener("click", () => goStep(2));
+  byId("step3-next").addEventListener("click", () => { buildRecap(); goStep(4); });
+  byId("step4-back").addEventListener("click", () => goStep(1));
+  byId("step4-confirm").addEventListener("click", submitAppointment);
+})();

@@ -1,0 +1,1015 @@
+{
+  "version": 1,
+  "contract_version": "1.0.0",
+  "lang": "fr",
+  "actions": [
+    {
+      "id": "app.home",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "*"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "menu principal",
+        "écran d accueil",
+        "retour au menu",
+        "accueil"
+      ]
+    },
+    {
+      "id": "app.back",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "*"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "retour",
+        "précédent",
+        "revenir"
+      ]
+    },
+    {
+      "id": "app.help",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "*"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "aide",
+        "que puis-je dire",
+        "quelles commandes",
+        "aidez-moi"
+      ]
+    },
+    {
+      "id": "voice.read_screen",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "*"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "lis l écran",
+        "qu est-ce que je peux faire",
+        "lis"
+      ]
+    },
+    {
+      "id": "voice.repeat",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "*"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "répète",
+        "répétez",
+        "pardon"
+      ]
+    },
+    {
+      "id": "voice.stop_speaking",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "*"
+      ],
+      "priority": "high",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "silence",
+        "tais-toi",
+        "arrête de parler",
+        "chut"
+      ]
+    },
+    {
+      "id": "voice.mic_off",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "*"
+      ],
+      "priority": "high",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "arrête d écouter",
+        "coupe le micro",
+        "micro désactivé"
+      ]
+    },
+    {
+      "id": "robot.stop",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R3",
+      "scope": [
+        "*"
+      ],
+      "priority": "max",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "stop",
+        "arrête",
+        "arrête-toi",
+        "halte",
+        "arrêt d urgence",
+        "arret"
+      ]
+    },
+    {
+      "id": "splash.start",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "splash"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "commencer",
+        "bonjour",
+        "démarrer",
+        "salut"
+      ]
+    },
+    {
+      "id": "home.open_category",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "ORIENTATION",
+              "INFORMATION"
+            ]
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "home"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": {
+        "ORIENTATION": [
+          "orientation",
+          "m orienter",
+          "où aller",
+          "service orientation"
+        ],
+        "INFORMATION": [
+          "renseignements",
+          "informations",
+          "fiches santé",
+          "info"
+        ]
+      }
+    },
+    {
+      "id": "consult.start",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "home",
+        "consultation"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "consultation",
+        "rendez-vous",
+        "prendre rendez-vous",
+        "voir un médecin",
+        "docteur"
+      ]
+    },
+    {
+      "id": "orientation.select",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "type": "string",
+            "enum": [
+              "PHARMACY",
+              "LABORATORY",
+              "RECEPTION"
+            ]
+          }
+        },
+        "required": [
+          "destination"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "home",
+        "orientation"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": {
+        "PHARMACY": [
+          "pharmacie",
+          "médicaments",
+          "aller à la pharmacie"
+        ],
+        "LABORATORY": [
+          "laboratoire",
+          "labo",
+          "analyses",
+          "prise de sang"
+        ],
+        "RECEPTION": [
+          "réception",
+          "accueil général",
+          "bureau d accueil"
+        ]
+      }
+    },
+    {
+      "id": "orientation.confirm",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "type": "string",
+            "enum": [
+              "PHARMACY",
+              "LABORATORY",
+              "RECEPTION"
+            ]
+          }
+        },
+        "required": [
+          "destination"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R2",
+      "scope": [
+        "orientation.confirm"
+      ],
+      "priority": "high",
+      "requires_confirmation": true,
+      "voice_fr": [
+        "oui",
+        "je confirme",
+        "d accord",
+        "c est bon",
+        "confirmer"
+      ]
+    },
+    {
+      "id": "orientation.decline",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "orientation.confirm"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "non",
+        "annuler",
+        "pas maintenant",
+        "refuser"
+      ]
+    },
+    {
+      "id": "mission.dismiss",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "mission"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "fermer",
+        "terminé",
+        "c est fini"
+      ]
+    },
+    {
+      "id": "info.open",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "enum": [
+              "HIV",
+              "MALARIA",
+              "DIABETES",
+              "HYPERTENSION",
+              "TUBERCULOSIS",
+              "MENSTRUAL_HEALTH"
+            ]
+          }
+        },
+        "required": [
+          "topic"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "home",
+        "information"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": {
+        "HIV": [
+          "vih",
+          "sida",
+          "fiche sida"
+        ],
+        "MALARIA": [
+          "paludisme",
+          "malaria",
+          "moustique"
+        ],
+        "DIABETES": [
+          "diabète",
+          "sucre",
+          "glycémie"
+        ],
+        "HYPERTENSION": [
+          "hypertension",
+          "tension",
+          "pression artérielle"
+        ],
+        "TUBERCULOSIS": [
+          "tuberculose",
+          "poumons"
+        ],
+        "MENSTRUAL_HEALTH": [
+          "règles",
+          "menstruation",
+          "santé menstruelle"
+        ]
+      }
+    },
+    {
+      "id": "info.read_all",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "info.detail"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "lis la fiche",
+        "lis tout",
+        "lecture"
+      ]
+    },
+    {
+      "id": "info.read_section",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "section"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "info.detail"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "lis la section",
+        "lis les symptômes",
+        "lis la prévention"
+      ]
+    },
+    {
+      "id": "info.next_section",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "info.detail"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "section suivante",
+        "suivant"
+      ]
+    },
+    {
+      "id": "info.prev_section",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "info.detail"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "section précédente",
+        "précédent"
+      ]
+    },
+    {
+      "id": "info.pause",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "info.detail"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "pause",
+        "mets en pause"
+      ]
+    },
+    {
+      "id": "info.resume",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "info.detail"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "continue",
+        "reprends",
+        "reprendre la lecture"
+      ]
+    },
+    {
+      "id": "info.show_source",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "info.detail"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "source",
+        "d où vient cette information",
+        "source oms"
+      ]
+    },
+    {
+      "id": "consult.reason.select",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "consultation_generale",
+              "suivi_medical",
+              "autre_motif"
+            ]
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.1"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": {
+        "consultation_generale": [
+          "consultation générale",
+          "générale",
+          "visite générale"
+        ],
+        "suivi_medical": [
+          "suivi médical",
+          "suivi",
+          "contrôle"
+        ],
+        "autre_motif": [
+          "autre motif",
+          "autre",
+          "divers"
+        ]
+      }
+    },
+    {
+      "id": "consult.next",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.*"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "continuer",
+        "suivant",
+        "étape suivante"
+      ]
+    },
+    {
+      "id": "consult.session.select",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "doctor": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ]
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "MAT",
+              "AM"
+            ]
+          }
+        },
+        "required": [
+          "doctor",
+          "period"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.2"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "médecin",
+        "docteur",
+        "ce matin",
+        "cet après-midi"
+      ]
+    },
+    {
+      "id": "consult.field.dictate",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "name",
+              "phone"
+            ]
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.3"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "dicter mon nom",
+        "je donne mon numéro",
+        "dicter"
+      ]
+    },
+    {
+      "id": "consult.field.set",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "name",
+              "phone"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.3"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "je m appelle",
+        "mon numéro est"
+      ]
+    },
+    {
+      "id": "consult.field.clear",
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "name",
+              "phone"
+            ]
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.3"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "effacer",
+        "efface le nom",
+        "recommencer"
+      ]
+    },
+    {
+      "id": "consult.vitals.start",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.4"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "lance la mesure",
+        "mesurer",
+        "prendre mes mesures"
+      ]
+    },
+    {
+      "id": "consult.vitals.skip",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.4"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "passer",
+        "continuer sans mesure",
+        "ignorer les mesures"
+      ]
+    },
+    {
+      "id": "consult.vitals.cancel",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.4"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "annuler la mesure",
+        "arrêter la mesure"
+      ]
+    },
+    {
+      "id": "consult.review.confirm",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R1",
+      "scope": [
+        "consult.5"
+      ],
+      "priority": "high",
+      "requires_confirmation": true,
+      "voice_fr": [
+        "je confirme",
+        "confirmer mon rendez-vous",
+        "valider"
+      ]
+    },
+    {
+      "id": "consult.review.modify",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.5"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "modifier",
+        "corriger",
+        "changer"
+      ]
+    },
+    {
+      "id": "consult.cancel",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.*"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "annuler la consultation",
+        "abandonner"
+      ]
+    },
+    {
+      "id": "consult.ticket.read",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.ticket"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "quel est mon numéro",
+        "lis mon ticket"
+      ]
+    },
+    {
+      "id": "consult.finish",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "consult.ticket"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "terminer",
+        "c est tout",
+        "quitter"
+      ]
+    },
+    {
+      "id": "confirm.yes",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "modal.confirm"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "oui",
+        "d accord",
+        "valider"
+      ]
+    },
+    {
+      "id": "confirm.no",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "modal.confirm"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "non",
+        "annuler",
+        "retour"
+      ]
+    },
+    {
+      "id": "error.retry",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "modal.error"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "réessayer",
+        "recommencer"
+      ]
+    },
+    {
+      "id": "error.dismiss",
+      "args_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "risk": "R0",
+      "scope": [
+        "modal.error"
+      ],
+      "priority": "normal",
+      "requires_confirmation": false,
+      "voice_fr": [
+        "fermer",
+        "compris",
+        "d accord"
+      ]
+    }
+  ]
+}

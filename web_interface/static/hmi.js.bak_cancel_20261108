@@ -1,0 +1,206 @@
+const DEBUG = new URLSearchParams(location.search).has("debug");
+let lastMenu = "home";
+
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+const INFO_HEADINGS = new Set([
+  "COMPRENDRE", "TRANSMISSION", "CE QUI NE TRANSMET PAS LE VIH",
+  "SIGNES ET SYMPTÔMES POSSIBLES", "SYMPTÔMES POSSIBLES",
+  "FORMES GRAVES", "PRÉVENTION", "PRÉVENTION ET PRÉCAUTIONS",
+  "DÉPISTAGE ET PRISE EN CHARGE", "PRÉCAUTIONS", "QUAND CONSULTER",
+  "SOURCE", "À RETENIR", "SIGNES ET SYMPTÔMES",
+  "DÉPISTAGE", "PRÉVENTION ET SUIVI", "URGENCE",
+  "MANIFESTATIONS HABITUELLES", "HYGIÈNE ET PRÉCAUTIONS",
+  "ACCOMPAGNEMENT"
+]);
+
+function renderInformation(container, rawText) {
+  container.replaceChildren();
+
+  const blocks = String(rawText || "").trim().split(/\n\s*\n/).filter(Boolean);
+
+  for (const block of blocks) {
+    const lines = block.split("\n");
+    const heading = lines.shift().trim();
+    const body = lines.join("\n").trim();
+
+    if (!INFO_HEADINGS.has(heading.toLocaleUpperCase("fr-FR"))) {
+      const note = document.createElement("aside");
+      note.className = "info-disclaimer";
+      note.textContent = block.trim();
+      container.appendChild(note);
+      continue;
+    }
+
+    const section = document.createElement("section");
+    section.className = "info-section";
+
+    const title = document.createElement("h3");
+    title.textContent = heading;
+    section.appendChild(title);
+
+    if (heading.toLocaleUpperCase("fr-FR") === "SOURCE") {
+      const urlMatch = body.match(/https:\/\/[^\s]+/);
+      const sourceText = urlMatch
+        ? body.replace(urlMatch[0], "").trim()
+        : body;
+
+      const source = document.createElement("p");
+      source.textContent = sourceText;
+      section.appendChild(source);
+
+      if (urlMatch) {
+        const link = document.createElement("a");
+        link.href = urlMatch[0];
+        link.textContent = "Consulter la fiche de l’OMS";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.className = "info-source-link";
+        section.appendChild(link);
+      }
+    } else {
+      const content = document.createElement("div");
+      content.className = "info-section-content";
+      let list = null;
+      let paragraph = [];
+
+      const flushParagraph = () => {
+        if (!paragraph.length) return;
+        const p = document.createElement("p");
+        p.textContent = paragraph.join(" ");
+        content.appendChild(p);
+        paragraph = [];
+      };
+
+      for (const line of body.split("\n")) {
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith("• ")) {
+          flushParagraph();
+          if (!list) {
+            list = document.createElement("ul");
+            content.appendChild(list);
+          }
+          const li = document.createElement("li");
+          li.textContent = trimmed.slice(2);
+          list.appendChild(li);
+        } else if (trimmed) {
+          list = null;
+          paragraph.push(trimmed);
+        }
+      }
+
+      flushParagraph();
+      section.appendChild(content);
+    }
+
+    container.appendChild(section);
+  }
+}
+
+function showConfirm(title, text, debug, variant = "") {
+  const screen = document.getElementById("confirm");
+  const message = document.getElementById("confirm-text");
+  const isInformation = variant === "INFORMATION";
+
+  screen.classList.toggle("is-information", isInformation);
+  document.getElementById("confirm-title").textContent = title;
+
+  if (isInformation) {
+    renderInformation(message, text);
+  } else {
+    message.replaceChildren();
+    message.textContent = text;
+  }
+
+  document.getElementById("confirm-debug").textContent = debug || "";
+  show("confirm");
+}
+
+// Boutons de navigation (accueil, retour, annuler)
+document.querySelectorAll("[data-goto]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const target = btn.dataset.goto;
+    if (target.startsWith("menu-")) lastMenu = target;
+    show(target);
+  });
+});
+
+// Retour depuis la confirmation : revient au dernier sous-menu
+document.getElementById("confirm-back").addEventListener("click", () => show(lastMenu));
+
+// Formulaire de rendez-vous : SQLite, sans publication ROS2.
+const appointmentForm = document.getElementById("appointment-form");
+const appointmentFeedback = document.getElementById("appointment-feedback") || {};
+const appointmentSubmit = document.getElementById("appointment-submit");
+
+if (appointmentForm) appointmentForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!appointmentForm.reportValidity()) return;
+
+  const payload = Object.fromEntries(new FormData(appointmentForm).entries());
+  appointmentSubmit.disabled = true;
+  appointmentFeedback.textContent = "Enregistrement de votre demande…";
+
+  try {
+    const response = await fetch("/api/appointments", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+
+    if (response.ok && data.ok) {
+      appointmentForm.reset();
+      showConfirm(
+        "Demande enregistrée",
+        data.message + "\nRéférence : " + data.appointment_id
+          + "\nStatut : En attente de confirmation."
+      );
+    } else {
+      appointmentFeedback.textContent =
+        data.error || "Impossible d'enregistrer la demande.";
+    }
+  } catch (err) {
+    appointmentFeedback.textContent =
+      "Le serveur HIAR ne répond pas. Réessayez plus tard.";
+  } finally {
+    appointmentSubmit.disabled = false;
+  }
+});
+
+// Choix d'un élément (service, destination, sujet)
+document.querySelectorAll("[data-item]").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const label = btn.dataset.label;
+    if (btn.dataset.available !== "true") {
+      showConfirm("En préparation", label + " n'est pas encore disponible.");
+      return;
+    }
+    if (btn.dataset.category === "CONSULTATION"
+        && btn.dataset.item === "APPOINTMENT") {
+      appointmentFeedback.textContent = "";
+      window.startConsultation();
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/request", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({category: btn.dataset.category, item: btn.dataset.item}),
+      });
+      const data = await response.json();
+      if (data.ok) {
+        showConfirm(data.title, data.message, DEBUG ? JSON.stringify(data.request) : "", btn.dataset.category);
+      } else {
+        showConfirm("Erreur", data.error);
+      }
+    } catch (err) {
+      showConfirm("Erreur", "Le serveur HIAR ne répond pas.");
+    }
+  });
+});

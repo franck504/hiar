@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#12304A">
+  <title>HIAR — Espace médecin</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='hiar-tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='staff.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="HIAR — Accueil"><svg class="brand-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect x="4" y="4" width="40" height="40" rx="13" fill="none" stroke="currentColor" stroke-width="2.5"/>
+      <rect x="11" y="13" width="26" height="21" rx="7" fill="none" stroke="currentColor" stroke-width="2.2"/>
+      <circle cx="19" cy="22" r="2.3" fill="currentColor"/>
+      <circle cx="29" cy="22" r="2.3" fill="currentColor"/>
+      <path d="M18 29 Q24 34 30 29" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M24 13 V8 M20 8 H28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </svg></a>
+    <span class="topbar-title">Espace médecin</span>
+    <div id="doctor-topbar-actions" class="staff-topbar-actions" hidden>
+      <button type="button" id="refresh-btn"
+              class="btn btn-outline icon-btn staff-refresh-icon"
+              aria-label="Actualiser la file" title="Actualiser la file">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20 7v5h-5M4 17v-5h5M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"
+                fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button type="button" id="logout-btn"
+              class="btn btn-outline icon-btn staff-logout-icon"
+              aria-label="Déconnexion" title="Déconnexion">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M10 17l5-5-5-5M15 12H3M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"
+                fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section id="login-panel" class="panel">
+      <h1>Connexion du médecin</h1>
+      <p class="muted">Accès réservé au médecin, avec son jeton personnel.</p>
+      <form id="login-form">
+        <label for="token">Jeton médecin</label>
+        <input id="token" type="password" autocomplete="off"
+               autocapitalize="none" spellcheck="false" required>
+        <p id="login-feedback" class="feedback"
+           role="status" aria-live="polite"></p>
+        <button type="submit" class="btn">Accéder à ma file</button>
+      </form>
+    </section>
+
+    <section id="queue-panel" class="panel" hidden>
+      <div class="toolbar">
+        <div>
+          <h1 id="queue-title">Ma file</h1>
+          <p class="muted" id="queue-date"></p>
+        </div>
+
+      </div>
+
+      <div id="sessions" class="toolbar-actions"></div>
+      <p id="queue-feedback" class="feedback"
+         role="status" aria-live="polite"></p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticket</th><th>Période</th><th>Patient</th>
+              <th>Motif</th><th>Statut</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="queue-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='doctor.js') }}" defer></script>
+</body>
+</html>

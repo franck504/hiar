@@ -1,0 +1,229 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import pytest
+
+import appointments_store
+import consultation_sessions_store as sessions
+
+
+TZ = ZoneInfo("Indian/Antananarivo")
+DAY = "2099-01-05"
+
+
+@pytest.fixture
+def session_db(tmp_path, monkeypatch):
+    path = tmp_path / "sessions.sqlite3"
+    monkeypatch.setenv("HIAR_APPOINTMENTS_DB", str(path))
+
+    con = appointments_store.get_connection()
+    con.execute("""
+        CREATE TABLE appointments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_name TEXT NOT NULL,
+            contact TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            requested_date TEXT NOT NULL,
+            requested_time TEXT NOT NULL,
+            status TEXT,
+            created_at TEXT NOT NULL,
+            pass_number INTEGER
+        )
+    """)
+    con.commit()
+    con.close()
+
+    appointments_store.init_sessions_db()
+    return path
+
+
+def moment(hour, minute=0):
+    return datetime(2099, 1, 5, hour, minute, tzinfo=TZ)
+
+
+def open_session(doctor, period, now):
+    sessions.set_doctor_session(
+        DAY, doctor, period, True, now=now
+    )
+
+
+def register(phone, doctor, period, now):
+    return sessions.create_session_appointment(
+        patient_name="Patient synthétique",
+        contact=phone,
+        reason_code="consultation_generale",
+        requested_date=DAY,
+        doctor_code=doctor,
+        period=period,
+        now=now,
+    )
+
+
+def test_ticket_numbering_is_independent_by_session(session_db):
+    morning = moment(9)
+    afternoon = moment(14)
+
+    open_session("A", "MAT", morning)
+    open_session("B", "MAT", morning)
+    open_session("A", "AM", afternoon)
+
+    a_mat = register("0340000001", "A", "MAT", morning)
+    b_mat = register("0340000002", "B", "MAT", morning)
+    a_am = register("0340000003", "A", "AM", afternoon)
+
+    assert a_mat["ticket_label"] == "A-MAT-1"
+    assert b_mat["ticket_label"] == "B-MAT-1"
+    assert a_am["ticket_label"] == "A-AM-1"
+
+    second = register("0340000004", "A", "MAT", morning)
+    assert second["ticket_label"] == "A-MAT-2"
+
+
+def test_same_phone_cannot_register_with_another_doctor(session_db):
+    now = moment(9)
+    open_session("A", "MAT", now)
+    open_session("B", "MAT", now)
+
+    register("0340000001", "A", "MAT", now)
+
+    with pytest.raises(appointments_store.BookingError) as error:
+        register("0340000001", "B", "MAT", now)
+
+    assert error.value.code == "duplicate_phone"
+
+
+def test_cancelled_ticket_is_not_reused(session_db):
+    now = moment(9)
+    open_session("A", "MAT", now)
+
+    first = register("0340000001", "A", "MAT", now)
+
+    with appointments_store.get_connection() as con:
+        con.execute(
+            "UPDATE appointments SET status = 'annulé' WHERE id = ?",
+            (first["appointment_id"],),
+        )
+
+    second = register("0340000002", "A", "MAT", now)
+    assert first["ticket_number"] == 1
+    assert second["ticket_number"] == 2
+
+
+def test_closed_session_and_expired_cutoff_are_refused(session_db):
+    now = moment(9)
+    sessions.set_doctor_session(DAY, "A", "MAT", False, now=now)
+
+    with pytest.raises(appointments_store.BookingError) as closed:
+        register("0340000001", "A", "MAT", now)
+
+    assert closed.value.code == "session_closed"
+
+    open_session("A", "MAT", now)
+
+    with pytest.raises(appointments_store.BookingError) as expired:
+        register("0340000002", "A", "MAT", moment(11, 30))
+
+    assert expired.value.code == "registration_closed"
+
+
+def test_session_closed_during_form_fill_is_refused(session_db):
+    now = moment(9)
+    open_session("A", "MAT", now)
+
+    # Le patient a commencé le formulaire, puis le médecin ferme sa session.
+    sessions.set_doctor_session(DAY, "A", "MAT", False, now=now)
+
+    with pytest.raises(appointments_store.BookingError) as error:
+        register("0340000005", "A", "MAT", now)
+
+    assert error.value.code == "session_closed"
+
+
+def test_registration_succeeds_without_sensor_values(session_db):
+    now = moment(9)
+    open_session("A", "MAT", now)
+
+    result = register("0340000006", "A", "MAT", now)
+
+    with appointments_store.get_connection() as con:
+        row = con.execute(
+            """
+            SELECT temperature_c, heart_rate_bpm, spo2_percent
+            FROM appointments WHERE id = ?
+            """,
+            (result["appointment_id"],),
+        ).fetchone()
+
+    assert row["temperature_c"] is None
+    assert row["heart_rate_bpm"] is None
+    assert row["spo2_percent"] is None
+
+
+def test_doctor_can_follow_normal_status_transitions(session_db):
+    now = moment(9)
+    open_session("A", "MAT", now)
+    ticket = register("0340000010", "A", "MAT", now)
+
+    appointment_id = ticket["appointment_id"]
+
+    assert sessions.update_session_appointment_status(
+        appointment_id, "appelé", doctor_code="A"
+    )
+    assert sessions.update_session_appointment_status(
+        appointment_id, "terminé", doctor_code="A"
+    )
+
+
+def test_doctor_cannot_modify_another_doctors_ticket(session_db):
+    now = moment(9)
+    open_session("A", "MAT", now)
+    ticket = register("0340000011", "A", "MAT", now)
+
+    assert not sessions.update_session_appointment_status(
+        ticket["appointment_id"], "appelé", doctor_code="B"
+    )
+
+    with appointments_store.get_connection() as con:
+        row = con.execute(
+            "SELECT status FROM appointments WHERE id = ?",
+            (ticket["appointment_id"],),
+        ).fetchone()
+
+    assert row["status"] == "en attente"
+
+
+@pytest.mark.parametrize("status", ["annulé", "non reçu"])
+def test_doctor_can_cancel_or_mark_patient_not_received(
+    session_db, status
+):
+    now = moment(9)
+    open_session("A", "MAT", now)
+    ticket = register("0340000012", "A", "MAT", now)
+
+    assert sessions.update_session_appointment_status(
+        ticket["appointment_id"], status, doctor_code="A"
+    )
+
+
+def test_final_status_requires_exceptional_correction_to_change(
+    session_db,
+):
+    now = moment(9)
+    open_session("A", "MAT", now)
+    ticket = register("0340000013", "A", "MAT", now)
+
+    assert sessions.update_session_appointment_status(
+        ticket["appointment_id"], "annulé", doctor_code="A"
+    )
+
+    with pytest.raises(ValueError, match="Transition de statut interdite"):
+        sessions.update_session_appointment_status(
+            ticket["appointment_id"], "appelé", doctor_code="A"
+        )
+
+    assert sessions.update_session_appointment_status(
+        ticket["appointment_id"],
+        "appelé",
+        doctor_code="A",
+        exceptional_correction=True,
+    )
