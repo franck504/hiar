@@ -34,14 +34,26 @@ Robot assistant hospitalier autonome destiné à améliorer l'accueil, l'orienta
 
 ## Démarrage Rapide
 
+### Sur le Raspberry Pi 4 (Cerveau du robot) :
 ```bash
-# 1. Démarrer le pont central WebSocket ROS 2
+cd ~/hospital_assistant_robot
+
+# Charger l'environnement ROS 2 Humble
+source /opt/ros/humble/setup.bash
+
+# Démarrer le pont WebSocket IHM & Serveur Vocal (Port 5000)
 PYTHONPATH=src/hospital_robot python3 src/hospital_robot/hospital_robot/hmi_websocket_bridge_node.py
 
-# 2. Rediriger le port 5000 vers le smartphone connecté en USB
+# Ou lancer l'ensemble des nœuds ROS 2 (Navigation, Superviseur, Série ESP32)
+# ros2 launch hospital_robot hospital_robot_launch.py
+```
+
+### Sur le poste de développement (avec smartphone USB) :
+```bash
+# 1. Rediriger le port 5000 vers le smartphone connecté en USB
 adb reverse tcp:5000 tcp:5000
 
-# 3. Lancer l'application Flutter
+# 2. Lancer l'application Flutter
 cd hiar_mobile && flutter run
 ```
 
@@ -49,78 +61,59 @@ cd hiar_mobile && flutter run
 
 ## Technologies Utilisées
 
-- **ROS 2 Humble** & Python (asyncio, websockets)
-- **Flutter 3.x / Dart** (Application Kiosk Android, STT, TTS)
+- **ROS 2 Humble** & Python 3 (asyncio, websockets, rclpy)
+- **Flutter 3.x / Dart** (Application Kiosk Android paysage, STT, TTS)
 - **ESP32 & Arduino C++** (Capteurs vitaux, capteurs IR, ultrason, pont en H L298N)
-- **Raspberry Pi 4** (Calcul embarqué)
+- **Raspberry Pi 4** (Calcul embarqué et nœuds ROS 2)
+
+---
+
+## Firmware ESP32 — Intégration Matérielle Complète
+
+Le firmware unifié pour le microcontrôleur ESP32 se trouve dans :  
+📂 `firmware/esp32/HIAR_ESP32_integration_vitals/HIAR_ESP32_integration_vitals.ino`
+
+Il rassemble l'ensemble des fonctionnalités matérielles du robot :
+1. **Contrôle de motricité (Pont en H L298N)** : `FORWARD`, `BACKWARD`, `LEFT`, `RIGHT`, `STOP`.
+2. **Détection d'obstacles (HC-SR04)** : télémétrie ultrasonique temps réel (`DIST,<cm>`).
+3. **Suivi de ligne / détection de sol (Capteurs IR analogiques)** : entrées analogiques calibrées (`IR,LEFT,<0/1>`, `IR,RIGHT,<0/1>`).
+4. **Acquisition biomédicale (Signes vitaux)** :
+   * **Température corporelle** : sonde Dallas 1-Wire DS18B20 (`temperature_c`).
+   * **Fréquence cardiaque & Saturation en oxygène** : capteur optique I2C MAX30102 (`heart_rate_bpm`, `spo2_percent`).
+   * **Déclenchement par commande série** : `MEASURE\n` ➔ renvoie la trame `RESULT,temperature_c=...,heart_rate_bpm=...,spo2_percent=...` (ou `NA` si aucun doigt n'est posé).
+
+### Brochage Matériel ESP32
+
+| Composant | Fonction / Broche | GPIO ESP32 | Notes |
+|---|---|---:|---|
+| **L298N** | ENA (Vitesse Moteur G) | **25** | PWM |
+| **L298N** | IN1 (Sens Moteur G) | **26** | Digital OUT |
+| **L298N** | IN2 (Sens Moteur G) | **27** | Digital OUT |
+| **L298N** | IN3 (Sens Moteur D) | **14** | Digital OUT |
+| **L298N** | IN4 (Sens Moteur D) | **18** | Digital OUT |
+| **L298N** | ENB (Vitesse Moteur D) | **19** | PWM |
+| **IR Gauche** | Sortie analogique AO | **32** | ADC1 |
+| **IR Droit** | Sortie analogique AO | **33** | ADC1 |
+| **HC-SR04** | TRIG (Émission) | **13** | Digital OUT |
+| **HC-SR04** | ECHO (Réception) | **34** | Entrée pure (Input-only) |
+| **DS18B20** | DATA (Bus 1-Wire) | **23** *(ou 4)* | Avec résistance pull-up 4.7 kΩ |
+| **MAX30102** | SDA (Données I2C) | **21** | Bus I2C standard |
+| **MAX30102** | SCL (Horloge I2C) | **22** | Bus I2C standard |
+
+---
+
+## Chaîne de Données des Signes Vitaux (Zéro Valeur Fictive)
+
+Pour garantir une intégrité médicale rigoureuse, aucune donnée fictive n'est affichée ni annoncée :
+1. **Application Mobile** : Les constantes sont initialisées à `null`. L'écran affiche des tirets **`"—"`** par défaut, et le récapitulatif indique *« Constantes : Non mesurées »*.
+2. **Déclenchement** : Par bouton tactile ou par commande vocale (🎤 « *Mesurer mes constantes* »).
+3. **Transmission ROS 2** : Requête sur `/vitals/request` ➔ Ordre série `MEASURE` vers l'ESP32.
+4. **Traitement (`vitals_data_parser.py`)** :
+   * Si les capteurs détectent le doigt : les valeurs réelles sont validées, transmises au mobile et annoncées par la voix du robot.
+   * Si aucun doigt n'est posé ou en cas d'erreur (`NA` ou timeout) : aucune valeur fictive n'est transmise, le mobile conserve `"—"`, et le robot annonce : *« La mesure des constantes n'a pas pu aboutir. Veuillez repositionner votre doigt sur le capteur. »*.
 
 ---
 
 ## Auteur
 
 **Cecilia RAZAKAHARISOA** — Projet de Master 2
-
----
-
-## Checkpoint technique — Adaptation matérielle du firmware ESP32
-
-### État au 04 novembre 2026
-
-**Référence stable**
-- `HIAR_ESP32_V08_stable.ino` : dernier firmware testé et vérifié.
-- V0.8 est conservé sans modification.
-- Son brochage et ses entrées IR numériques ne correspondent pas au nouveau câblage.
-
-**Nouvelle version de développement**
-- Fichier : `firmware/esp32/HIAR_ESP32_adaptation_materielle_dev/HIAR_ESP32_adaptation_materielle_dev.ino`
-- Créé à partir d'une copie de V0.8.
-- Aucun téléversement ni test physique de cette adaptation effectué à ce stade.
-
-### Nouveau brochage matériel
-
-| Fonction | GPIO ESP32 |
-|---|---:|
-| L298N ENA | 25 |
-| L298N IN1 | 26 |
-| L298N IN2 | 27 |
-| L298N IN3 | 14 |
-| L298N IN4 | 18 |
-| L298N ENB | 19 |
-| IR gauche analogique AO | 32 |
-| IR droit analogique AO | 33 |
-| HC-SR04 TRIG | 13 |
-| HC-SR04 ECHO | 34 |
-| DS18B20 DATA | 4 |
-| MAX30102 SDA | 21 |
-| MAX30102 SCL | 22 |
-
-### Intégration ROS 2
-
-Le nœud `esp32_interface` utilise :
-- Liaison série à 115200 bauds.
-- Commandes moteurs : `FORWARD`, `BACKWARD`, `LEFT`, `RIGHT`, `STOP`.
-- Distance : `DIST,<cm>`.
-- Infrarouges : `IR,LEFT,0/1` et `IR,RIGHT,0/1`.
-- États IR attendus par la navigation : `1 = CLEAR`, `0 = OBSTACLE`.
-
-Les capteurs IR analogiques devront être calibrés sur le matériel, puis convertis en états binaires compatibles avec ROS 2.
-
-### Travaux restant à réaliser
-
-- Adapter le firmware au nouveau brochage.
-- Développer la lecture analogique et la calibration des deux IR.
-- Vérifier la mesure ultrasonique et les sécurités moteurs.
-- Intégrer les signes vitaux DS18B20 et MAX30102 dans le protocole série commun.
-- Vérifier la compatibilité du protocole avec `esp32_interface`.
-- Compiler avec Arduino IDE.
-- Effectuer les essais matériels progressifs, puis l'intégration ROS 2.
-
-### Points de vigilance
-
-- Ne pas téléverser V0.8 avec le nouveau câblage.
-- Vérifier la résistance pull-up du DS18B20 sur GPIO4.
-- Conserver une protection contre les obstacles et une commande STOP prioritaire.
-- Ne pas considérer la compilation ou les tests logiciels comme une preuve de fonctionnement physique.
-- L'alimentation 12 V des moteurs reste déconnectée pendant la préparation.
-
-**Statut :** adaptation matérielle en développement, dérivée de V0.8. La version officielle V0.9 reste à identifier.

@@ -197,12 +197,17 @@ La sécurité des personnes en milieu hospitalier est prioritaire :
 
 ### 5.6 Consultation Médicale & Prise de Constantes Vitales
 Parcours guidé en 6 étapes :
-1. Accueil et présentation de la consultation.
-2. Choix du motif (Suivi médical, Consultation générale, Bilan).
-3. Consignes de mesure des signes vitaux.
-4. Acquisition capteurs (Température corporelle, Fréquence cardiaque, Saturation SpO2).
-5. Récapitulatif visuel des mesures.
-6. Impression / Affichage du ticket de consultation (ex : `Ticket A-MAT-3`).
+1. **Accueil et présentation** : Explication de la démarche de pré-consultation.
+2. **Choix du motif** : Sélection tactile ou vocale (Suivi médical, Consultation générale).
+3. **Consignes et identification** : Saisie ou vérification du nom et du téléphone.
+4. **Acquisition des constantes biomédicales** (Capteurs physiques DS18B20 et MAX30102) :
+   * **État initial** : Aucune valeur fictive n'est affichée ; l'écran présente des tirets **`"—"`**.
+   * **Déclenchement** : Touchez le bouton *« Lancer une nouvelle mesure »* ou dites simplement à voix haute : « *Mesurer mes constantes* » ou « *Prendre ma température* ».
+   * **Pendant la mesure** : Le robot invite vocalement : *« Veuillez poser votre index sur le capteur de constantes et rester immobile. »* Un indicateur de chargement tourne pendant l'acquisition des données série (10-15s).
+   * **En cas de succès** : Les vraies valeurs s'affichent instantanément et le robot les annonce : *« Mesure des constantes terminée. Température : 36 virgule 8 degrés. Pouls : 72 battements par minute. Oxygénation : 98 pour cent. »*
+   * **Si aucun doigt n'est posé ou en cas d'erreur (`NA` ou timeout)** : Les tirets **`"—"`** restent en place (zéro valeur inventée) et le robot avertit vocalement : *« La mesure des constantes n'a pas pu aboutir. Veuillez repositionner votre doigt sur le capteur. »*
+5. **Récapitulatif visuel des mesures** : Synthèse complète du rendez-vous (patient, motif, médecin). Si les constantes n'ont pas été prises, la ligne indique explicitement : `Constantes : Non mesurées`.
+6. **Délivrance du ticket patient** : Affichage du numéro d'ordre (ex : `Ticket A-MAT-3`).
 
 ---
 
