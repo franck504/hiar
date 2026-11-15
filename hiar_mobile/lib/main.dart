@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -53,6 +54,8 @@ class _HiarAppState extends State<HiarApp> {
 
   String? _lastSentSttText;
   DateTime? _lastSentSttTime;
+  Timer? _sttDebounceTimer;
+  String? _pendingSttText;
 
   void _sendSttFinalDebounced(String text) {
     final clean = text.trim();
@@ -67,6 +70,7 @@ class _HiarAppState extends State<HiarApp> {
     }
     _lastSentSttText = clean;
     _lastSentSttTime = now;
+    debugPrint("🎤 HubClient: Envoi STT vers serveur: « $clean »");
     _hub.publishSttFinal(clean);
   }
 
@@ -147,15 +151,28 @@ class _HiarAppState extends State<HiarApp> {
         });
 
         // 1. Si on est sur l'écran d'accueil initial (Splash Screen) et qu'une voix est détectée :
-        // L'écran s'ouvre automatiquement sans avoir besoin de taper !
         if (_currentScreen == 'splash') {
           _goToScreen('home');
         }
 
-        // 2. N'envoyer au Raspberry Pi 4 que la transcription finale stabilisée (évite les doublons partiels)
+        // 2. Si le moteur vocal signale une fin de phrase (isFinal) : envoi immédiat
         if (isFinal) {
+          _sttDebounceTimer?.cancel();
+          _pendingSttText = null;
           _sendSttFinalDebounced(text);
+          return;
         }
+
+        // 3. Pour la dictée continue Android (où isFinal peut tarder ou ne pas être émis) :
+        // Dès que l'utilisateur marque une courte pause (550 ms), on transmet la phrase !
+        _pendingSttText = text;
+        _sttDebounceTimer?.cancel();
+        _sttDebounceTimer = Timer(const Duration(milliseconds: 550), () {
+          if (_pendingSttText != null && _pendingSttText!.trim().isNotEmpty) {
+            _sendSttFinalDebounced(_pendingSttText!);
+            _pendingSttText = null;
+          }
+        });
       };
 
       voice.onStateChanged = (state, message) {
