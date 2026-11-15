@@ -101,11 +101,15 @@ class _HiarAppState extends State<HiarApp> {
       });
     };
 
-    // Connexion au Hub WebSocket (restaure l'IP sauvegardée ou utilise 10.42.0.1)
+    // Connexion au Hub WebSocket (restaure l'IP et le port sauvegardés)
     final prefs = await SharedPreferences.getInstance();
     final savedIp = prefs.getString('server_ip');
+    final savedPort = prefs.getInt('server_port');
     if (savedIp != null && savedIp.isNotEmpty) {
       _hub.serverIp = savedIp;
+    }
+    if (savedPort != null && savedPort > 0) {
+      _hub.serverPort = savedPort;
     }
     _hub.connect();
 
@@ -554,46 +558,147 @@ class _HiarAppState extends State<HiarApp> {
     );
   }
 
-  /// Boîte de dialogue pour configurer l'IP du Raspberry Pi 4 lors des essais
+  void _toggleMic() {
+    final voice = VoiceService.instance;
+    if (_voiceState == VoiceState.listening) {
+      voice.stopPermanentListening();
+      setState(() {
+        _voiceState = VoiceState.idle;
+        _voiceStatus = "Micro en pause (touchez pour réactiver)";
+      });
+    } else {
+      voice.startPermanentListening();
+      setState(() {
+        _voiceState = VoiceState.listening;
+        _voiceStatus = "À votre écoute…";
+      });
+    }
+  }
+
+  /// Boîte de dialogue pour configurer l'IP et le port du Raspberry Pi 4
   void _showServerConfigDialog() {
-    final controller = TextEditingController(text: _hub.serverIp);
+    final ipController = TextEditingController(text: _hub.serverIp);
+    final portController = TextEditingController(text: _hub.serverPort.toString());
+
     showDialog(
-      context: context,
+      context: _navKey.currentContext ?? context,
       builder: (ctx) => AlertDialog(
         scrollable: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Connexion au Raspberry Pi 4"),
+        title: Row(
+          children: [
+            const Icon(Icons.settings_outlined, color: HiarColors.azur, size: 24),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                "Paramètres du serveur",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: HiarColors.marine),
+              ),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Adresse IP du Hub WebSocket :"),
-            const SizedBox(height: 10),
+            // Indicateur de statut actuel
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: _isRobotConnected ? HiarColors.okBg : HiarColors.errBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _isRobotConnected ? HiarColors.ok.withOpacity(0.3) : HiarColors.err.withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isRobotConnected ? Icons.check_circle : Icons.error_outline,
+                    color: _isRobotConnected ? HiarColors.ok : HiarColors.err,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isRobotConnected
+                          ? "Connecté : ws://${_hub.serverIp}:${_hub.serverPort}/ws"
+                          : "Déconnecté (${_hub.serverIp}:${_hub.serverPort})",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _isRobotConnected ? HiarColors.marine : HiarColors.err,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              "Adresse IP locale du robot :",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: HiarColors.marine),
+            ),
+            const SizedBox(height: 6),
             TextField(
-              controller: controller,
-              decoration: const InputDecoration(
+              controller: ipController,
+              keyboardType: TextInputType.text,
+              decoration: InputDecoration(
                 hintText: "10.42.0.1 ou 192.168.0.x",
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.lan_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "Port WebSocket :",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: HiarColors.marine),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: portController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                hintText: "5000",
+                prefixIcon: const Icon(Icons.numbers_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
             ),
             const SizedBox(height: 12),
-            const Text("Raccourcis rapides :", style: TextStyle(fontSize: 12, color: HiarColors.text2)),
+            const Text(
+              "Raccourcis rapides :",
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HiarColors.text2),
+            ),
             const SizedBox(height: 6),
             Wrap(
               spacing: 8,
               runSpacing: 6,
               children: [
                 ActionChip(
+                  avatar: const Icon(Icons.usb, size: 16),
                   label: const Text("127.0.0.1 (USB ADB)"),
-                  onPressed: () => controller.text = "127.0.0.1",
+                  onPressed: () {
+                    ipController.text = "127.0.0.1";
+                    portController.text = "5000";
+                  },
                 ),
                 ActionChip(
+                  avatar: const Icon(Icons.wifi_tethering, size: 16),
+                  label: const Text("10.42.0.1 (Hotspot Pi)"),
+                  onPressed: () {
+                    ipController.text = "10.42.0.1";
+                    portController.text = "5000";
+                  },
+                ),
+                ActionChip(
+                  avatar: const Icon(Icons.wifi, size: 16),
                   label: const Text("192.168.0.105 (Wi-Fi)"),
-                  onPressed: () => controller.text = "192.168.0.105",
-                ),
-                ActionChip(
-                  label: const Text("10.42.0.1 (Pi 4 AP)"),
-                  onPressed: () => controller.text = "10.42.0.1",
+                  onPressed: () {
+                    ipController.text = "192.168.0.105";
+                    portController.text = "5000";
+                  },
                 ),
               ],
             ),
@@ -602,20 +707,38 @@ class _HiarAppState extends State<HiarApp> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Annuler"),
+            child: const Text("Annuler", style: TextStyle(color: HiarColors.text2)),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: HiarColors.azur,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            icon: const Icon(Icons.sync, size: 18),
+            label: const Text("Enregistrer & Connecter"),
             onPressed: () async {
-              final newIp = controller.text.trim();
+              final newIp = ipController.text.trim();
+              final newPort = int.tryParse(portController.text.trim()) ?? 5000;
               if (newIp.isNotEmpty) {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setString('server_ip', newIp);
+                await prefs.setInt('server_port', newPort);
                 _hub.disconnect();
-                _hub.connect(ip: newIp);
+                _hub.connect(ip: newIp, port: newPort);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
+                    SnackBar(
+                      content: Text("Reconnexion en cours à ws://$newIp:$newPort/ws..."),
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
               }
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text("Connecter"),
           ),
         ],
       ),
@@ -653,7 +776,8 @@ class _HiarAppState extends State<HiarApp> {
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
                 voiceTip: _currentVoiceTip,
-                onMicTap: _showServerConfigDialog,
+                onMicTap: _toggleMic,
+                onSettingsTap: _showServerConfigDialog,
                 onOpenOrientation: () {
                   _hub.publishAction('home.open_category', {'category': 'ORIENTATION'});
                   _goToScreen('orientation');
@@ -673,7 +797,8 @@ class _HiarAppState extends State<HiarApp> {
                 voiceState: _voiceState,
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
-                onMicTap: _showServerConfigDialog,
+                onMicTap: _toggleMic,
+                onSettingsTap: _showServerConfigDialog,
                 onBack: () {
                   _hub.publishAction('app.back', {});
                   _goToScreen('home');
@@ -691,7 +816,8 @@ class _HiarAppState extends State<HiarApp> {
                 voiceState: _voiceState,
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
-                onMicTap: _showServerConfigDialog,
+                onMicTap: _toggleMic,
+                onSettingsTap: _showServerConfigDialog,
                 dynamicFields: _dynamicFields,
                 onStopRobot: () {
                   _hub.publishAction('robot.stop', {});
@@ -708,7 +834,8 @@ class _HiarAppState extends State<HiarApp> {
                 voiceState: _voiceState,
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
-                onMicTap: _showServerConfigDialog,
+                onMicTap: _toggleMic,
+                onSettingsTap: _showServerConfigDialog,
                 onBack: () {
                   _hub.publishAction('app.back', {});
                   _goToScreen('home');
@@ -726,7 +853,8 @@ class _HiarAppState extends State<HiarApp> {
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
                 voiceTip: _currentVoiceTip,
-                onMicTap: _showServerConfigDialog,
+                onMicTap: _toggleMic,
+                onSettingsTap: _showServerConfigDialog,
                 isRobotConnected: _isRobotConnected,
                 onStepChanged: (newStep) {
                   _consultationStep = newStep;

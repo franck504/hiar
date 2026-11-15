@@ -11,6 +11,7 @@ class HomeScreen extends StatelessWidget {
   final String voiceStatus;
   final String? recognizedText;
   final VoidCallback? onMicTap;
+  final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
   final String? voiceTip;
 
@@ -23,6 +24,7 @@ class HomeScreen extends StatelessWidget {
     this.voiceStatus = "Touchez le micro ou parlez",
     this.recognizedText,
     this.onMicTap,
+    this.onSettingsTap,
     this.isRobotConnected = true,
     this.voiceTip,
   });
@@ -37,6 +39,7 @@ class HomeScreen extends StatelessWidget {
       recognizedText: recognizedText,
       voiceTip: voiceTip ?? "Dites « Orientation », « Renseignements » ou « Consultation »",
       onMicTap: onMicTap,
+      onSettingsTap: onSettingsTap,
       isRobotConnected: isRobotConnected,
       body: Center(
         child: SingleChildScrollView(

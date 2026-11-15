@@ -10,6 +10,7 @@ class OrientationScreen extends StatelessWidget {
   final String voiceStatus;
   final String? recognizedText;
   final VoidCallback? onMicTap;
+  final VoidCallback? onSettingsTap;
 
   final bool isRobotConnected;
 
@@ -21,6 +22,7 @@ class OrientationScreen extends StatelessWidget {
     this.voiceStatus = "Où souhaitez-vous aller ?",
     this.recognizedText,
     this.onMicTap,
+    this.onSettingsTap,
     this.isRobotConnected = true,
   });
 
@@ -34,6 +36,7 @@ class OrientationScreen extends StatelessWidget {
       recognizedText: recognizedText,
       voiceTip: "Dites : « Pharmacie », « Laboratoire » ou « Réception »",
       onMicTap: onMicTap,
+      onSettingsTap: onSettingsTap,
       isRobotConnected: isRobotConnected,
       body: Center(
         child: SingleChildScrollView(

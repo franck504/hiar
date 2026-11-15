@@ -12,6 +12,7 @@ class ConsultationScreen extends StatefulWidget {
   final String? recognizedText;
   final String? voiceTip;
   final VoidCallback? onMicTap;
+  final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
   final ValueChanged<int>? onStepChanged;
   final VoidCallback? onRequestMeasure;
@@ -27,6 +28,7 @@ class ConsultationScreen extends StatefulWidget {
     this.recognizedText,
     this.voiceTip,
     this.onMicTap,
+    this.onSettingsTap,
     this.isRobotConnected = true,
     this.onStepChanged,
     this.onRequestMeasure,
@@ -161,6 +163,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       recognizedText: widget.recognizedText,
       voiceTip: widget.voiceTip ?? defaultTips[_currentStep],
       onMicTap: widget.onMicTap,
+      onSettingsTap: widget.onSettingsTap,
       isRobotConnected: widget.isRobotConnected,
       body: _buildStepContent(),
       bottomBar: Row(
@@ -551,6 +554,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       recognizedText: widget.recognizedText,
       voiceTip: "Dites : « Terminer » ou « Accueil »",
       onMicTap: widget.onMicTap,
+      onSettingsTap: widget.onSettingsTap,
       isRobotConnected: widget.isRobotConnected,
       body: Center(
         child: SingleChildScrollView(

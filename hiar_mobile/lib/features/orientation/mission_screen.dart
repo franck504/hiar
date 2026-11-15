@@ -12,6 +12,7 @@ class MissionScreen extends StatelessWidget {
   final String voiceStatus;
   final String? recognizedText;
   final VoidCallback? onMicTap;
+  final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
   final Map<String, dynamic>? dynamicFields;
 
@@ -25,6 +26,7 @@ class MissionScreen extends StatelessWidget {
     this.voiceStatus = "Accompagnement en cours",
     this.recognizedText,
     this.onMicTap,
+    this.onSettingsTap,
     this.isRobotConnected = true,
     this.dynamicFields,
   });
@@ -42,6 +44,7 @@ class MissionScreen extends StatelessWidget {
       recognizedText: recognizedText,
       voiceTip: isStopped ? "Dites « Terminer »" : "Dites « Stop » pour arrêter le robot",
       onMicTap: onMicTap,
+      onSettingsTap: onSettingsTap,
       isRobotConnected: isRobotConnected,
       body: Center(
         child: ConstrainedBox(

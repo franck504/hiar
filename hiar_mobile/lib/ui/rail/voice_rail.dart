@@ -13,6 +13,7 @@ class VoiceRail extends StatelessWidget {
   final VoidCallback? onMicTap;
   final VoidCallback? onSilenceTap;
   final VoidCallback? onStopRobotTap;
+  final VoidCallback? onSettingsTap;
 
   const VoiceRail({
     super.key,
@@ -24,6 +25,7 @@ class VoiceRail extends StatelessWidget {
     this.onMicTap,
     this.onSilenceTap,
     this.onStopRobotTap,
+    this.onSettingsTap,
   });
 
   @override
@@ -128,36 +130,61 @@ class VoiceRail extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // 5. Bas de rail : Silence vocal & statut liaison
+          // 5. Bas de rail : Statut liaison robot & Bouton Paramètres
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Indicateur robot
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isRobotConnected ? HiarColors.ok : HiarColors.err,
-                    ),
+              // Indicateur robot (cliquable pour ouvrir les paramètres si configuré)
+              InkWell(
+                onTap: onSettingsTap,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isRobotConnected ? HiarColors.ok : HiarColors.err,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isRobotConnected ? "Robot prêt" : "Robot hors ligne",
+                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    isRobotConnected ? "Robot prêt" : "Robot hors ligne",
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
-                  ),
-                ],
+                ),
               ),
 
-              // Bouton Silence (voix)
-              if (voiceState == VoiceState.speaking && onSilenceTap != null)
-                IconButton(
-                  icon: const Icon(Icons.volume_off, color: Colors.white70, size: 20),
-                  tooltip: "Couper la voix",
-                  onPressed: onSilenceTap,
-                ),
+              // Actions droites : Silence vocal et Petit bouton de paramètres (IP)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (voiceState == VoiceState.speaking && onSilenceTap != null) ...[
+                    IconButton(
+                      icon: const Icon(Icons.volume_off, color: Colors.white70, size: 18),
+                      tooltip: "Couper la voix",
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: onSilenceTap,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (onSettingsTap != null)
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined, color: Colors.white70, size: 20),
+                      tooltip: "Paramètres de connexion (IP)",
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: onSettingsTap,
+                    ),
+                ],
+              ),
             ],
           ),
         ],

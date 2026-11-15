@@ -10,6 +10,7 @@ class InformationScreen extends StatelessWidget {
   final String voiceStatus;
   final String? recognizedText;
   final VoidCallback? onMicTap;
+  final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
 
   const InformationScreen({
@@ -20,6 +21,7 @@ class InformationScreen extends StatelessWidget {
     this.voiceStatus = "Choisissez un thème de santé",
     this.recognizedText,
     this.onMicTap,
+    this.onSettingsTap,
     this.isRobotConnected = true,
   });
 
@@ -78,6 +80,7 @@ class InformationScreen extends StatelessWidget {
       recognizedText: recognizedText,
       voiceTip: "Dites un thème : « VIH », « Paludisme », « Diabète »…",
       onMicTap: onMicTap,
+      onSettingsTap: onSettingsTap,
       isRobotConnected: isRobotConnected,
       body: Center(
         child: ConstrainedBox(

@@ -18,6 +18,7 @@ class LandscapeScaffold extends StatelessWidget {
   final String? voiceTip;
   final VoidCallback? onMicTap;
   final VoidCallback? onSilenceTap;
+  final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
 
   const LandscapeScaffold({
@@ -34,6 +35,7 @@ class LandscapeScaffold extends StatelessWidget {
     this.voiceTip,
     this.onMicTap,
     this.onSilenceTap,
+    this.onSettingsTap,
     this.isRobotConnected = true,
   });
 
@@ -52,6 +54,7 @@ class LandscapeScaffold extends StatelessWidget {
               voiceTip: voiceTip,
               onMicTap: onMicTap,
               onSilenceTap: onSilenceTap,
+              onSettingsTap: onSettingsTap,
               isRobotConnected: isRobotConnected,
             ),
 
