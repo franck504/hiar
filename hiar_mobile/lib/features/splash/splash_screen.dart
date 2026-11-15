@@ -9,6 +9,7 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: HiarColors.marine,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,

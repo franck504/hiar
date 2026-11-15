@@ -42,6 +42,7 @@ class LandscapeScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: HiarColors.brume,
       body: SafeArea(
         child: Row(

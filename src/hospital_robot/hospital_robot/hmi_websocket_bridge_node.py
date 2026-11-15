@@ -307,9 +307,9 @@ class HMIWebSocketBridgeNode(Node):
 
         norm_incoming = normalize_text(text)
 
-        # 0. Anti-rebond temporel (doublon Android STT émis à < 1.8s)
+        # 0. Anti-rebond temporel (doublon Android STT émis à < 2.5s)
         now = time.time()
-        if norm_incoming == self._last_stt_text and (now - self._last_stt_time) < 1.8:
+        if norm_incoming == self._last_stt_text and (now - self._last_stt_time) < 2.5:
             self.get_logger().info(f"⏩ Duplicate STT frame suppressed: '{text}' (elapsed={now - self._last_stt_time:.2f}s)")
             return
         self._last_stt_text = norm_incoming

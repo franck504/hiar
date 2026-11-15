@@ -51,6 +51,25 @@ class _HiarAppState extends State<HiarApp> {
   final Map<String, dynamic> _dynamicFields = {};
   int _consultationStep = 1;
 
+  String? _lastSentSttText;
+  DateTime? _lastSentSttTime;
+
+  void _sendSttFinalDebounced(String text) {
+    final clean = text.trim();
+    if (clean.isEmpty) return;
+    final now = DateTime.now();
+    if (_lastSentSttText != null &&
+        _lastSentSttText!.toLowerCase() == clean.toLowerCase() &&
+        _lastSentSttTime != null &&
+        now.difference(_lastSentSttTime!) < const Duration(milliseconds: 2500)) {
+      debugPrint("STT ignoré car doublon récent (< 2.5s): « $clean »");
+      return;
+    }
+    _lastSentSttText = clean;
+    _lastSentSttTime = now;
+    _hub.publishSttFinal(clean);
+  }
+
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
 
   @override
@@ -121,7 +140,7 @@ class _HiarAppState extends State<HiarApp> {
 
     if (available) {
       // DÈS QUE LE MICRO ENTEND DU TEXTE (ou VAD) :
-      voice.onRecognizedText = (text) {
+      voice.onRecognizedText = (text, isFinal) {
         if (!mounted) return;
         setState(() {
           _recognizedText = text;
@@ -133,8 +152,10 @@ class _HiarAppState extends State<HiarApp> {
           _goToScreen('home');
         }
 
-        // 2. Envoi immédiat sur le topic WebSocket "voice/stt/final" vers le Raspberry Pi 4
-        _hub.publishSttFinal(text);
+        // 2. N'envoyer au Raspberry Pi 4 que la transcription finale stabilisée (évite les doublons partiels)
+        if (isFinal) {
+          _sendSttFinalDebounced(text);
+        }
       };
 
       voice.onStateChanged = (state, message) {
@@ -575,172 +596,204 @@ class _HiarAppState extends State<HiarApp> {
     }
   }
 
-  /// Boîte de dialogue pour configurer l'IP et le port du Raspberry Pi 4
+  /// Boîte de dialogue pour configurer l'IP et le port du Raspberry Pi 4 (protégée contre l'overflow du clavier)
   void _showServerConfigDialog() {
     final ipController = TextEditingController(text: _hub.serverIp);
     final portController = TextEditingController(text: _hub.serverPort.toString());
 
     showDialog(
       context: _navKey.currentContext ?? context,
-      builder: (ctx) => AlertDialog(
-        scrollable: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.settings_outlined, color: HiarColors.azur, size: 24),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                "Paramètres du serveur",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: HiarColors.marine),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Indicateur de statut actuel
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: _isRobotConnected ? HiarColors.okBg : HiarColors.errBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: _isRobotConnected ? HiarColors.ok.withOpacity(0.3) : HiarColors.err.withOpacity(0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _isRobotConnected ? Icons.check_circle : Icons.error_outline,
-                    color: _isRobotConnected ? HiarColors.ok : HiarColors.err,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _isRobotConnected
-                          ? "Connecté : ws://${_hub.serverIp}:${_hub.serverPort}/ws"
-                          : "Déconnecté (${_hub.serverIp}:${_hub.serverPort})",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _isRobotConnected ? HiarColors.marine : HiarColors.err,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // En-tête : Titre et bouton de fermeture
+                Row(
+                  children: [
+                    const Icon(Icons.settings_outlined, color: HiarColors.azur, size: 22),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        "Paramètres du serveur",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: HiarColors.marine),
                       ),
                     ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20, color: HiarColors.text2),
+                      tooltip: "Fermer",
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Indicateur de statut actuel
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _isRobotConnected ? HiarColors.okBg : HiarColors.errBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _isRobotConnected ? HiarColors.ok.withOpacity(0.3) : HiarColors.err.withOpacity(0.3),
+                    ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              "Adresse IP locale du robot :",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: HiarColors.marine),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: ipController,
-              keyboardType: TextInputType.text,
-              decoration: InputDecoration(
-                hintText: "10.42.0.1 ou 192.168.0.x",
-                prefixIcon: const Icon(Icons.lan_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              "Port WebSocket :",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: HiarColors.marine),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: portController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                hintText: "5000",
-                prefixIcon: const Icon(Icons.numbers_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              "Raccourcis rapides :",
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HiarColors.text2),
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                ActionChip(
-                  avatar: const Icon(Icons.usb, size: 16),
-                  label: const Text("127.0.0.1 (USB ADB)"),
-                  onPressed: () {
-                    ipController.text = "127.0.0.1";
-                    portController.text = "5000";
-                  },
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isRobotConnected ? Icons.check_circle : Icons.error_outline,
+                        color: _isRobotConnected ? HiarColors.ok : HiarColors.err,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _isRobotConnected
+                              ? "Connecté : ws://${_hub.serverIp}:${_hub.serverPort}/ws"
+                              : "Déconnecté (${_hub.serverIp}:${_hub.serverPort})",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: _isRobotConnected ? HiarColors.marine : HiarColors.err,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                ActionChip(
-                  avatar: const Icon(Icons.wifi_tethering, size: 16),
-                  label: const Text("10.42.0.1 (Hotspot Pi)"),
-                  onPressed: () {
-                    ipController.text = "10.42.0.1";
-                    portController.text = "5000";
-                  },
+                const SizedBox(height: 8),
+
+                const Text(
+                  "Adresse IP locale du robot :",
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HiarColors.marine),
                 ),
-                ActionChip(
-                  avatar: const Icon(Icons.wifi, size: 16),
-                  label: const Text("192.168.0.105 (Wi-Fi)"),
-                  onPressed: () {
-                    ipController.text = "192.168.0.105";
-                    portController.text = "5000";
-                  },
+                const SizedBox(height: 4),
+                TextField(
+                  controller: ipController,
+                  keyboardType: TextInputType.text,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: "10.42.0.1 ou 192.168.0.x",
+                    prefixIcon: const Icon(Icons.lan_outlined, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                const Text(
+                  "Port WebSocket :",
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HiarColors.marine),
+                ),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: portController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: "5000",
+                    prefixIcon: const Icon(Icons.numbers_outlined, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                const Text(
+                  "Raccourcis rapides :",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: HiarColors.text2),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: const Icon(Icons.usb, size: 14),
+                      label: const Text("127.0.0.1 (USB ADB)", style: TextStyle(fontSize: 11)),
+                      onPressed: () {
+                        ipController.text = "127.0.0.1";
+                        portController.text = "5000";
+                      },
+                    ),
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: const Icon(Icons.wifi_tethering, size: 14),
+                      label: const Text("10.42.0.1 (Hotspot Pi)", style: TextStyle(fontSize: 11)),
+                      onPressed: () {
+                        ipController.text = "10.42.0.1";
+                        portController.text = "5000";
+                      },
+                    ),
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: const Icon(Icons.wifi, size: 14),
+                      label: const Text("192.168.0.105 (Wi-Fi)", style: TextStyle(fontSize: 11)),
+                      onPressed: () {
+                        ipController.text = "192.168.0.105";
+                        portController.text = "5000";
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Boutons d'action scrollables dans le même flux
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text("Annuler", style: TextStyle(color: HiarColors.text2)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: HiarColors.azur,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                      icon: const Icon(Icons.sync, size: 16),
+                      label: const Text("Enregistrer & Connecter"),
+                      onPressed: () async {
+                        final newIp = ipController.text.trim();
+                        final newPort = int.tryParse(portController.text.trim()) ?? 5000;
+                        if (newIp.isNotEmpty) {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('server_ip', newIp);
+                          await prefs.setInt('server_port', newPort);
+                          _hub.disconnect();
+                          _hub.connect(ip: newIp, port: newPort);
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
+                              SnackBar(
+                                content: Text("Reconnexion en cours à ws://$newIp:$newPort/ws..."),
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Annuler", style: TextStyle(color: HiarColors.text2)),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: HiarColors.azur,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            icon: const Icon(Icons.sync, size: 18),
-            label: const Text("Enregistrer & Connecter"),
-            onPressed: () async {
-              final newIp = ipController.text.trim();
-              final newPort = int.tryParse(portController.text.trim()) ?? 5000;
-              if (newIp.isNotEmpty) {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('server_ip', newIp);
-                await prefs.setInt('server_port', newPort);
-                _hub.disconnect();
-                _hub.connect(ip: newIp, port: newPort);
-
-                if (mounted) {
-                  ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
-                    SnackBar(
-                      content: Text("Reconnexion en cours à ws://$newIp:$newPort/ws..."),
-                      duration: const Duration(seconds: 3),
-                    ),
-                  );
-                }
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-          ),
-        ],
       ),
     );
   }

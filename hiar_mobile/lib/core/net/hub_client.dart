@@ -32,6 +32,26 @@ class HubClient {
   Function(String missionState)? onMissionStatus;
   Function(Map<String, dynamic> instruction)? onServerInstruction;
 
+  String? _lastTtsDispatched;
+  DateTime? _lastTtsDispatchedTime;
+
+  /// Diffuse un ordre TTS en filtrant les doublons rapprochés (< 2.5s)
+  void _triggerTts(String text) {
+    final clean = text.trim();
+    if (clean.isEmpty) return;
+    final now = DateTime.now();
+    if (_lastTtsDispatched != null &&
+        _lastTtsDispatched == clean &&
+        _lastTtsDispatchedTime != null &&
+        now.difference(_lastTtsDispatchedTime!) < const Duration(milliseconds: 2500)) {
+      debugPrint("HubClient: Doublon TTS ignoré: « $clean »");
+      return;
+    }
+    _lastTtsDispatched = clean;
+    _lastTtsDispatchedTime = now;
+    onTtsRequested?.call(clean);
+  }
+
   /// Démarre la connexion WebSocket vers le Raspberry Pi
   void connect({String? ip, int? port}) {
     if (ip != null) {
@@ -134,7 +154,7 @@ class HubClient {
       onServerInstruction?.call(payload);
       final text = payload['text_to_speak'] as String?;
       if (text != null && text.isNotEmpty) {
-        onTtsRequested?.call(text);
+        _triggerTts(text);
       }
     }
 
@@ -142,7 +162,7 @@ class HubClient {
     else if (topic == HiarTopics.voiceTtsRequest) {
       final text = payload['text'] as String?;
       if (text != null && text.isNotEmpty) {
-        onTtsRequested?.call(text);
+        _triggerTts(text);
       }
     }
 

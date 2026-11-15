@@ -24,11 +24,13 @@ class VoiceService {
 
   VoiceServiceState state = VoiceServiceState.uninitialized;
 
-  // Callbacks
-  Function(String text)? onRecognizedText;
+  // Callbacks : texte reconnu, et indicateur booléen isFinal
+  Function(String text, bool isFinal)? onRecognizedText;
   Function(VoiceServiceState state, String statusMessage)? onStateChanged;
 
   String? lastSpokenText;
+  String? _lastSpokenPhrase;
+  DateTime? _lastSpokenTime;
 
   Future<bool> init() async {
     try {
@@ -47,16 +49,16 @@ class VoiceService {
 
       _tts.setCompletionHandler(() {
         _isSpeaking = false;
-        // Recommencer l'écoute dès que le robot a fini de parler
+        // Petit délai (350ms) pour laisser l'audio matériel se stabiliser et éviter l'écho acoustique
         if (_isListeningPermanently) {
-          _startListeningLoop();
+          _restartListeningWithDelay(350);
         }
       });
 
       _tts.setErrorHandler((msg) {
         _isSpeaking = false;
         if (_isListeningPermanently) {
-          _startListeningLoop();
+          _restartListeningWithDelay(400);
         }
       });
 
@@ -127,7 +129,7 @@ class VoiceService {
         onResult: (result) {
           final text = result.recognizedWords.trim();
           if (text.isNotEmpty) {
-            onRecognizedText?.call(text);
+            onRecognizedText?.call(text, result.finalResult);
           }
         },
         localeId: "fr_FR",
@@ -143,15 +145,29 @@ class VoiceService {
     }
   }
 
-  /// Synthèse vocale parlée (TTS)
+  /// Synthèse vocale parlée (TTS) avec anti-doublon strict (supprime les répétitions rapprochées)
   Future<void> speak(String text) async {
-    debugPrint("VoiceService: Demande speak: « $text »");
-    lastSpokenText = text;
+    final cleanText = text.trim();
+    if (cleanText.isEmpty) return;
+
+    final now = DateTime.now();
+    if (_lastSpokenPhrase != null &&
+        _lastSpokenPhrase == cleanText &&
+        _lastSpokenTime != null &&
+        now.difference(_lastSpokenTime!) < const Duration(milliseconds: 2500)) {
+      debugPrint("VoiceService: Doublon TTS ignoré: « $cleanText » (délai < 2.5s)");
+      return;
+    }
+    _lastSpokenPhrase = cleanText;
+    _lastSpokenTime = now;
+
+    debugPrint("VoiceService: Demande speak: « $cleanText »");
+    lastSpokenText = cleanText;
     // Couper temporairement l'écoute pour éviter que le micro n'entende le haut-parleur
     if (_speech.isListening) {
       await _speech.stop();
     }
-    final res = await _tts.speak(text);
+    final res = await _tts.speak(cleanText);
     debugPrint("VoiceService: Résultat _tts.speak: $res");
   }
 
