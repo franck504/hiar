@@ -1,38 +1,66 @@
-# Hospital Assistant Robot
+# Hospital Assistant Robot (HIAR)
 
 ## Projet de Master 2
 
-Robot assistant autonome destiné à améliorer l'accueil et l'orientation des patients et visiteurs au sein d'un établissement hospitalier.
+Robot assistant hospitalier autonome destiné à améliorer l'accueil, l'orientation et l'accompagnement des patients et visiteurs au sein d'un établissement de santé.
 
-## Objectif
+📖 **Consultez le [Guide d'Utilisation Complet (docs/GUIDE_UTILISATION.md)](docs/GUIDE_UTILISATION.md)** pour le démarrage, la configuration IP dynamique et les scénarios d'interaction.  
+📡 **Consultez la [Spécification du Protocole WebSocket (docs/WEBSOCKET_PROTOCOL.md)](docs/WEBSOCKET_PROTOCOL.md)** pour l'architecture des échanges temps réel.
 
-Le robot permet notamment de :
+---
 
-- accueillir et orienter les patients et visiteurs ;
-- fournir des informations sur les différents services ;
-- accompagner l'utilisateur vers une destination ;
-- mesurer certains signes vitaux de base ;
-- recueillir l'avis des utilisateurs ;
-- interagir avec l'utilisateur via un écran tactile.
+## Fonctionnalités Principales
 
-## Technologies prévues
+- **Accueil bimodal (Voix + Tactile)** : Interaction vocale naturelle continue en français avec déduplication et filtre anti-écho acoustique.
+- **Orientation & Accompagnement direct** : Guidage physique vers les services hospitaliers (Pharmacie, Laboratoire, Réception, Radiologie) sans popup bloquante.
+- **Sécurité active hospitalière** : Bouton d'arrêt d'urgence tactile et vocal permanent (« *Stop* »), avec reprise sécurisée (« *Reprendre* ») ou clôture (« *Terminer* »).
+- **Renseignements de santé publique** : Fiches de prévention interactives et conseils sonores conformes aux directives de l'OMS (Paludisme, Hygiène des mains, Vaccination, Nutrition, Santé mentale).
+- **Consultation & Constantes vitales** : Acquisition des constantes médicales (température corporelle, fréquence cardiaque, saturation SpO2) et délivrance de ticket patient.
+- **Configuration IP dynamique** : Réglage en un clic de l'adresse IP du serveur depuis l'écran d'accueil sans aucune recompilation.
 
-- ROS 2 Humble
-- Python
-- Raspberry Pi
-- ESP32
-- Capteurs
-- Écran tactile
-- Navigation robotique
-- Impression 3D
+---
 
-## Statut
+## Architecture Logicielle
 
-🚧 Projet en cours de développement.
+* **Application Mobile Kiosk** (`hiar_mobile/`) : Application Flutter optimisée pour écran tactile paysage (tablette / smartphone monté sur le robot).
+* **Cerveau Central ROS 2** (`src/hospital_robot/`) :
+  * Pont WebSocket bidirectionnel temps réel (`hmi_websocket_bridge_node.py` sur port 5000).
+  * Analyseur d'intentions vocales NLP (`voice_intent_parser.py`).
+  * Nœuds ROS 2 pour la navigation, la supervision et la gestion des requêtes IHM.
+* **Interface Web Administrative** (`web_interface/`) : Tableau de bord de supervision, prise de rendez-vous et gestion des consultations.
+* **Firmware Bas Niveau** (`firmware/esp32/`) : Gestion temps réel des capteurs biométriques (DS18B20, MAX30102), télémétrie ultrasonique et contrôle des moteurs.
+
+---
+
+## Démarrage Rapide
+
+```bash
+# 1. Démarrer le pont central WebSocket ROS 2
+PYTHONPATH=src/hospital_robot python3 src/hospital_robot/hospital_robot/hmi_websocket_bridge_node.py
+
+# 2. Rediriger le port 5000 vers le smartphone connecté en USB
+adb reverse tcp:5000 tcp:5000
+
+# 3. Lancer l'application Flutter
+cd hiar_mobile && flutter run
+```
+
+---
+
+## Technologies Utilisées
+
+- **ROS 2 Humble** & Python (asyncio, websockets)
+- **Flutter 3.x / Dart** (Application Kiosk Android, STT, TTS)
+- **ESP32 & Arduino C++** (Capteurs vitaux, capteurs IR, ultrason, pont en H L298N)
+- **Raspberry Pi 4** (Calcul embarqué)
+
+---
 
 ## Auteur
 
-Cecilia RAZAKAHARISOA
+**Cecilia RAZAKAHARISOA** — Projet de Master 2
+
+---
 
 ## Checkpoint technique — Adaptation matérielle du firmware ESP32
 
