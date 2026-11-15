@@ -7,6 +7,7 @@ class MissionScreen extends StatelessWidget {
   final String destinationLabel;
   final String missionState; // 'STARTING', 'RUNNING', 'STOPPED', 'TIMEOUT'
   final VoidCallback onStopRobot;
+  final VoidCallback? onResumeRobot;
   final VoidCallback onFinish;
   final VoiceState voiceState;
   final String voiceStatus;
@@ -21,6 +22,7 @@ class MissionScreen extends StatelessWidget {
     required this.destinationLabel,
     this.missionState = 'RUNNING',
     required this.onStopRobot,
+    this.onResumeRobot,
     required this.onFinish,
     this.voiceState = VoiceState.idle,
     this.voiceStatus = "Accompagnement en cours",
@@ -42,7 +44,7 @@ class MissionScreen extends StatelessWidget {
       voiceState: voiceState,
       voiceStatus: voiceStatus,
       recognizedText: recognizedText,
-      voiceTip: isStopped ? "Dites « Terminer »" : "Dites « Stop » pour arrêter le robot",
+      voiceTip: isStopped ? "Dites « Reprendre » ou « Terminer »" : "Dites « Stop » pour arrêter le robot",
       onMicTap: onMicTap,
       onSettingsTap: onSettingsTap,
       isRobotConnected: isRobotConnected,
@@ -134,7 +136,7 @@ class MissionScreen extends StatelessWidget {
                 ],
                 const SizedBox(height: 14),
                 if (!isStopped)
-                  // Bouton ARRÊT d'urgence R3
+                  // Bouton ARRÊT d'urgence
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -155,25 +157,50 @@ class MissionScreen extends StatelessWidget {
                       onPressed: onStopRobot,
                     ),
                   )
-                else
+                else ...[
+                  // 1. Bouton Reprendre le guidage
                   SizedBox(
                     width: double.infinity,
                     height: 48,
-                    child: ElevatedButton(
+                    child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: HiarColors.azur,
+                        backgroundColor: HiarColors.ok,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
+                        elevation: 2,
                       ),
-                      onPressed: onFinish,
-                      child: const Text(
-                        "Terminer  (🎤 « Terminer »)",
+                      icon: const Icon(Icons.play_arrow, size: 24),
+                      label: const Text(
+                        "Reprendre le guidage  (🎤 « Reprendre »)",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                       ),
+                      onPressed: onResumeRobot,
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  // 2. Bouton Terminer la mission
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: HiarColors.marine,
+                        side: const BorderSide(color: HiarColors.border, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      icon: const Icon(Icons.home_outlined, size: 20),
+                      label: const Text(
+                        "Terminer la mission  (🎤 « Terminer »)",
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: onFinish,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -84,9 +84,12 @@ class VoiceIntentParser:
     }
 
     STOP_REGEX = r"\b(stop|arrete|arret|arrete-toi|arretez-vous|pause|bloque|urgence|danger|interromps|interrompre)\b"
+    RESUME_REGEX = r"\b(reprendre|reprends|repartir|repars|reprise|en route|recommencer|recommence|continuer le guidage|poursuivre le guidage|resume)\b"
+    FINISH_REGEX = r"\b(terminer|termine|fin de mission|mission terminee|c'est bon|c est bon|on est arrive|on est arrives|dismiss)\b"
+    START_REGEX = r"\b(commencer|commence|debuter|debute|demarrer|demarre|start)\b"
     VITALS_REGEX = r"\b(constantes?|signes? vitaux|pouls|temperature|frequence cardiaque|oxymetre|oxymetrie|saturation|tensiometre)\b"
     CONSULTATION_REGEX = r"\b(rendez-vous|rdv|consultation|consulter|medecin|docteur|visite medicale|prendre rdv)\b"
-    HOME_REGEX = r"\b(retour a l accueil|menu principal|accueil principal|quitter|fermer|retour accueil)\b"
+    HOME_REGEX = r"\b(retour.*accueil|page d'accueil|ecran d'accueil|aller.*accueil|revenir.*accueil|retour au menu|menu principal|ecran principal|revenir au debut|accueil principal|quitter|fermer|retour accueil)\b|^accueil$|^menu$|^retour$"
 
     GREETING_REGEX = r"\b(bonjour|salut|bonsoir|coucou|hello|hey|allo)\b"
     THANKS_REGEX = r"\b(merci|merci beaucoup|remercie|parfait merci|super merci)\b"
@@ -127,7 +130,33 @@ class VoiceIntentParser:
                 ros_command="STOP",
             )
 
-        # 2. POLITESSE : MERCI
+        # 2. REPRENDRE LE GUIDAGE
+        if re.search(self.RESUME_REGEX, norm):
+            return ParsedIntent(
+                intent_type="RESUME",
+                confidence=confidence,
+                label="Reprendre",
+                ros_command="RESUME",
+            )
+
+        # 3. TERMINER LA MISSION OU RETOUR ACCUEIL
+        if re.search(self.FINISH_REGEX, norm):
+            return ParsedIntent(
+                intent_type="FINISH",
+                confidence=confidence,
+                label="Terminer",
+                ros_command="HOME",
+            )
+
+        # 4. COMMENCER (Depuis l'écran de veille)
+        if re.search(self.START_REGEX, norm):
+            return ParsedIntent(
+                intent_type="START",
+                confidence=confidence,
+                label="Commencer",
+            )
+
+        # 5. POLITESSE : MERCI
         if re.search(self.THANKS_REGEX, norm):
             return ParsedIntent(
                 intent_type="THANKS",
@@ -135,7 +164,7 @@ class VoiceIntentParser:
                 label="Remerciement",
             )
 
-        # 3. POLITESSE : BONJOUR
+        # 6. POLITESSE : BONJOUR
         if re.search(self.GREETING_REGEX, norm):
             return ParsedIntent(
                 intent_type="GREETING",
@@ -143,7 +172,7 @@ class VoiceIntentParser:
                 label="Salutation",
             )
 
-        # 4. RETOUR ACCUEIL
+        # 7. RETOUR ACCUEIL
         if re.search(self.HOME_REGEX, norm):
             return ParsedIntent(
                 intent_type="HOME",
@@ -266,7 +295,7 @@ class VoiceIntentParser:
         if intent.intent_type == "STOP":
             return {
                 "origin": "voice",
-                "text_to_speak": "Arrêt du robot.",
+                "text_to_speak": "Arrêt du robot. Vous pouvez reprendre ou terminer le guidage.",
                 "speech_priority": "interrupt",
                 "instruction_ui": {
                     "screen": "mission",
@@ -281,7 +310,60 @@ class VoiceIntentParser:
                     "face_expression": "emergency",
                     "status_label": "ROBOT ARRÊTÉ",
                 },
-                "voice_hints": ["Reprendre", "Accueil"],
+                "voice_hints": ["Reprendre", "Terminer", "Accueil"],
+            }
+
+        if intent.intent_type == "RESUME":
+            return {
+                "origin": "voice",
+                "text_to_speak": "Reprise du guidage. Suivez-moi.",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "mission",
+                    "action": "resume",
+                    "require_confirmation": False,
+                },
+                "value_to_show": {
+                    "field_id": "mission_state",
+                    "value": "RUNNING",
+                },
+                "robot_status": {
+                    "face_expression": "happy",
+                    "status_label": "En route",
+                },
+                "voice_hints": ["Stop", "Terminer"],
+            }
+
+        if intent.intent_type == "FINISH":
+            return {
+                "origin": "voice",
+                "text_to_speak": "Mission terminée. N'hésitez pas si vous avez besoin d'autre chose.",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "home",
+                    "require_confirmation": False,
+                },
+                "robot_status": {
+                    "face_expression": "happy",
+                    "status_label": "Robot prêt",
+                },
+                "voice_hints": ["Orientation", "Renseignements", "Consultation"],
+            }
+
+        if intent.intent_type == "START":
+            return {
+                "origin": "voice",
+                "text_to_speak": "Bonjour ! Choisissez un service ou dites-moi ce que vous souhaitez.",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "home",
+                    "require_confirmation": False,
+                },
+                "voice_hints": ["Pharmacie", "Laboratoire", "Consultation", "Constantes"],
+                "robot_status": {
+                    "face_expression": "happy",
+                    "status_label": "Robot prêt",
+                },
             }
 
         if intent.intent_type == "GREETING":

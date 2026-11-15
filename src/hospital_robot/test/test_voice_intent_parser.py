@@ -44,6 +44,72 @@ def test_stop_intent_detected(parser, phrase):
 
 
 # ============================================================
+# TESTS DE REPRISE DE GUIDAGE (RESUME)
+# ============================================================
+
+@pytest.mark.parametrize("phrase", [
+    "Reprendre",
+    "Reprends",
+    "Repartir",
+    "Repars",
+    "En route",
+    "Continuer le guidage",
+    "Resume",
+])
+def test_resume_intent_detected(parser, phrase):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "RESUME"
+    assert intent.ros_command == "RESUME"
+
+    instruction = parser.build_instruction(intent, phrase)
+    assert instruction["speech_priority"] == "normal"
+    assert instruction["instruction_ui"]["screen"] == "mission"
+    assert instruction["instruction_ui"]["action"] == "resume"
+    assert instruction["value_to_show"]["value"] == "RUNNING"
+
+
+# ============================================================
+# TESTS DE FIN DE MISSION (FINISH)
+# ============================================================
+
+@pytest.mark.parametrize("phrase", [
+    "Terminer",
+    "Termine",
+    "Fin de mission",
+    "Mission terminée",
+    "C'est bon",
+    "On est arrivé",
+    "Dismiss",
+])
+def test_finish_intent_detected(parser, phrase):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "FINISH"
+    assert intent.ros_command == "HOME"
+
+    instruction = parser.build_instruction(intent, phrase)
+    assert instruction["instruction_ui"]["screen"] == "home"
+
+
+# ============================================================
+# TESTS DE DÉMARRAGE (START)
+# ============================================================
+
+@pytest.mark.parametrize("phrase", [
+    "Commencer",
+    "Commence",
+    "Débuter",
+    "Démarrer",
+    "Start",
+])
+def test_start_intent_detected(parser, phrase):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "START"
+
+    instruction = parser.build_instruction(intent, phrase)
+    assert instruction["instruction_ui"]["screen"] == "home"
+
+
+# ============================================================
 # TESTS D'ORIENTATION (Services hospitaliers)
 # ============================================================
 

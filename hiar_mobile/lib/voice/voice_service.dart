@@ -21,6 +21,7 @@ class VoiceService {
   bool _isSpeechAvailable = false;
   bool _isListeningPermanently = false;
   bool _isSpeaking = false;
+  bool get isSpeaking => _isSpeaking;
 
   VoiceServiceState state = VoiceServiceState.uninitialized;
 
@@ -49,16 +50,16 @@ class VoiceService {
 
       _tts.setCompletionHandler(() {
         _isSpeaking = false;
-        // Petit délai (350ms) pour laisser l'audio matériel se stabiliser et éviter l'écho acoustique
+        // Délai de 800ms pour laisser l'audio matériel se stabiliser et éliminer l'écho acoustique
         if (_isListeningPermanently) {
-          _restartListeningWithDelay(350);
+          _restartListeningWithDelay(800);
         }
       });
 
       _tts.setErrorHandler((msg) {
         _isSpeaking = false;
         if (_isListeningPermanently) {
-          _restartListeningWithDelay(400);
+          _restartListeningWithDelay(800);
         }
       });
 
@@ -127,6 +128,7 @@ class VoiceService {
     try {
       await _speech.listen(
         onResult: (result) {
+          if (_isSpeaking) return;
           final text = result.recognizedWords.trim();
           if (text.isNotEmpty) {
             onRecognizedText?.call(text, result.finalResult);
@@ -161,11 +163,16 @@ class VoiceService {
     _lastSpokenPhrase = cleanText;
     _lastSpokenTime = now;
 
+    // Bloquer immédiatement l'écoute pour éviter tout écho acoustique du haut-parleur
+    _isSpeaking = true;
+    _restartTimer?.cancel();
+    state = VoiceServiceState.speaking;
+    onStateChanged?.call(state, "HIAR parle…");
+
     debugPrint("VoiceService: Demande speak: « $cleanText »");
     lastSpokenText = cleanText;
-    // Couper temporairement l'écoute pour éviter que le micro n'entende le haut-parleur
     if (_speech.isListening) {
-      await _speech.stop();
+      await _speech.cancel();
     }
     final res = await _tts.speak(cleanText);
     debugPrint("VoiceService: Résultat _tts.speak: $res");

@@ -60,6 +60,22 @@ class _HiarAppState extends State<HiarApp> {
   void _sendSttFinalDebounced(String text) {
     final clean = text.trim();
     if (clean.isEmpty) return;
+
+    final voice = VoiceService.instance;
+    if (voice.isSpeaking) {
+      debugPrint("STT ignoré car TTS en cours d'élocution: « $clean »");
+      return;
+    }
+
+    // Protection anti-écho : ignorer si le micro a capté ce que le TTS vient de prononcer
+    final lastSpoken = voice.lastSpokenText?.toLowerCase() ?? "";
+    final cleanLower = clean.toLowerCase();
+    if (lastSpoken.isNotEmpty &&
+        (lastSpoken.contains(cleanLower) || cleanLower.contains(lastSpoken) || (lastSpoken.contains("suivez-moi") && cleanLower.contains("suivez-moi")))) {
+      debugPrint("STT ignoré car écho acoustique du robot: « $clean »");
+      return;
+    }
+
     final now = DateTime.now();
     if (_lastSentSttText != null &&
         _lastSentSttText!.toLowerCase() == clean.toLowerCase() &&
@@ -146,6 +162,7 @@ class _HiarAppState extends State<HiarApp> {
       // DÈS QUE LE MICRO ENTEND DU TEXTE (ou VAD) :
       voice.onRecognizedText = (text, isFinal) {
         if (!mounted) return;
+        if (voice.isSpeaking) return;
         setState(() {
           _recognizedText = text;
         });
@@ -256,20 +273,16 @@ class _HiarAppState extends State<HiarApp> {
       case 'orientation.select':
         final dest = args['destination']?.toString() ?? 'PHARMACY';
         final label = dest == 'PHARMACY' ? 'Pharmacie' : (dest == 'LABORATORY' ? 'Laboratoire' : 'Réception');
-        final isVoice = args['origin'] == 'voice' || args['by_voice'] == true;
-        if (isVoice) {
-          // Commande vocale : AUCUNE pop-up de confirmation !
-          _selectedDestination = label;
-          _closeDialogIfOpen();
-          _goToScreen('mission');
-        } else {
-          // Clic tactile : boîte de dialogue de confirmation
-          _showConfirmationDialog(label);
-        }
+        // Guidage direct : AUCUNE pop-up de confirmation superflue !
+        _selectedDestination = label;
+        _missionState = 'RUNNING';
+        _closeDialogIfOpen();
+        _goToScreen('mission');
         break;
 
       case 'orientation.confirm':
         _closeDialogIfOpen();
+        _missionState = 'RUNNING';
         _goToScreen('mission');
         break;
 
@@ -278,8 +291,19 @@ class _HiarAppState extends State<HiarApp> {
         _closeDialogIfOpen();
         break;
 
+      case 'robot.resume':
+      case 'mission.resume':
+        _triggerResume();
+        break;
+
       case 'robot.stop':
         _triggerStop();
+        break;
+
+      case 'mission.dismiss':
+      case 'mission.finish':
+        _closeDialogIfOpen();
+        _goToScreen('home');
         break;
 
       case 'app.back':
@@ -344,6 +368,8 @@ class _HiarAppState extends State<HiarApp> {
     if (ui != null) {
       if (ui['action'] == 'stop') {
         _triggerStop();
+      } else if (ui['action'] == 'resume') {
+        _triggerResume();
       } else if (ui['action'] == 'next') {
         setState(() {
           if (_consultationStep < 6) _consultationStep++;
@@ -530,58 +556,6 @@ class _HiarAppState extends State<HiarApp> {
     }
   }
 
-  void _showConfirmationDialog(String label) {
-    _selectedDestination = label;
-
-    showDialog(
-      context: _navKey.currentContext ?? context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        scrollable: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.navigation, color: HiarColors.azur),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                "Accompagnement : $label",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          "Confirmez-vous que vous souhaitez aller à : $label ?\n\n(Ordre validé par le Raspberry Pi)",
-          style: const TextStyle(fontSize: 16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _hub.publishAction('orientation.decline', {});
-            },
-            child: const Text("Annuler", style: TextStyle(color: HiarColors.text2)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: HiarColors.azur,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _hub.publishAction('orientation.confirm', {'destination': label});
-              _goToScreen('mission');
-            },
-            child: const Text("Confirmer"),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _triggerStop() {
     setState(() {
       _missionState = 'STOPPED';
@@ -592,6 +566,20 @@ class _HiarAppState extends State<HiarApp> {
         content: Text("ARRÊT D'URGENCE DU ROBOT !"),
         backgroundColor: HiarColors.err,
         duration: Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _triggerResume() {
+    setState(() {
+      _missionState = 'RUNNING';
+      _voiceStatus = "Accompagnement en cours";
+    });
+    ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
+      const SnackBar(
+        content: Text("REPRISE DU GUIDAGE !"),
+        backgroundColor: HiarColors.ok,
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -874,8 +862,10 @@ class _HiarAppState extends State<HiarApp> {
                   _goToScreen('home');
                 },
                 onDestinationSelected: (key, label) {
+                  _selectedDestination = label;
+                  _missionState = 'RUNNING';
                   _hub.publishAction('orientation.select', {'destination': key});
-                  _showConfirmationDialog(label);
+                  _goToScreen('mission');
                 },
               );
             case 'mission':
@@ -892,6 +882,10 @@ class _HiarAppState extends State<HiarApp> {
                 onStopRobot: () {
                   _hub.publishAction('robot.stop', {});
                   _triggerStop();
+                },
+                onResumeRobot: () {
+                  _hub.publishAction('robot.resume', {});
+                  _triggerResume();
                 },
                 onFinish: () {
                   _hub.publishAction('mission.dismiss', {});

@@ -377,6 +377,15 @@ class HMIWebSocketBridgeNode(Node):
         elif action_id in {"robot.stop", "mission.stop", "navigation.cancel"}:
             self._publish_navigation_command("STOP")
 
+        elif action_id in {"robot.resume", "mission.resume"}:
+            self._publish_navigation_command("RESUME")
+
+        elif action_id in {"mission.dismiss", "mission.finish"}:
+            self._publish_navigation_command("HOME")
+
+        elif action_id == "splash.start":
+            self._publish_hmi_request({"category": "SYSTEM", "command": "START"})
+
         elif action_id == "info.select":
             topic = args.get("topic", "").upper()
             if topic:
