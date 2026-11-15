@@ -370,7 +370,7 @@ class HMIWebSocketBridgeNode(Node):
             if dest:
                 self._publish_hmi_request({"category": "ORIENTATION", "destination": dest})
 
-        elif action_id in {"vitals.acquire", "vitals.measure"}:
+        elif action_id in {"vitals.acquire", "vitals.measure", "consult.measure_vitals"}:
             req_id = str(uuid.uuid4())
             self._publish_vitals_request(req_id)
 
