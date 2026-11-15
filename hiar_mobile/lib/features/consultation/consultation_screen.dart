@@ -52,9 +52,9 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   // Signes vitaux dynamiques (mis à jour par le Raspberry Pi 4 / ROS 2)
   bool _vitalsRunning = false;
-  double? _temperatureC = 36.6;
-  int? _heartRateBpm = 72;
-  int? _spo2Percent = 98;
+  double? _temperatureC;
+  int? _heartRateBpm;
+  int? _spo2Percent;
 
   // Ticket généré
   String? _ticketLabel;
@@ -104,7 +104,13 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       _selectedReason = fields['selected_reason'].toString();
     }
     if (fields.containsKey('vitals_state')) {
-      _vitalsRunning = fields['vitals_state'] == 'measuring';
+      final state = fields['vitals_state'].toString();
+      _vitalsRunning = state == 'measuring';
+      if (state == 'reset' || state == 'cleared') {
+        _temperatureC = null;
+        _heartRateBpm = null;
+        _spo2Percent = null;
+      }
     }
   }
 
@@ -524,6 +530,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               if (_temperatureC != null) _buildReviewRow("Température :", "${_temperatureC!.toStringAsFixed(1)} °C"),
               if (_heartRateBpm != null) _buildReviewRow("Pouls :", "$_heartRateBpm BPM"),
               if (_spo2Percent != null) _buildReviewRow("SpO2 :", "$_spo2Percent %"),
+              if (_temperatureC == null && _heartRateBpm == null && _spo2Percent == null)
+                _buildReviewRow("Constantes :", "Non mesurées"),
             ],
           ),
         ),

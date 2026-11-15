@@ -35,7 +35,7 @@ def test_staff_page_is_served_without_patient_data(client):
     assert "Motif secret" not in html
 
 
-def test_staff_api_logs_unauthorized_access_without_token(capsys, client):
+def test_staff_api_logs_unauthorized_access_without_token(caplog, client):
     secret = "do-not-log-this-token"
 
     response = client.get(
@@ -43,10 +43,9 @@ def test_staff_api_logs_unauthorized_access_without_token(capsys, client):
         headers={"X-Staff-Token": secret},
     )
 
-    captured = capsys.readouterr()
     assert response.status_code == 401
-    assert "Refus d'accès : GET /api/appointments — HTTP 401" in captured.err
-    assert secret not in captured.err
+    assert "Refus d'accès : GET /api/appointments — HTTP 401" in caplog.text
+    assert secret not in caplog.text
 
 def test_staff_api_requires_token(client):
     assert _book(client).status_code == 201
