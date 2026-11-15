@@ -39,4 +39,24 @@ void main() {
     expect(find.text('78 BPM'), findsOneWidget);
     expect(find.text('99 %'), findsOneWidget);
   });
+
+  testWidgets('ConsultationScreen resets vitals to "—" when measuring starts with "--"', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConsultationScreen(
+          initialStep: 4,
+          dynamicFields: const {
+            'temperature': '-- °C',
+            'heart_rate': '-- bpm',
+            'spo2': '-- %',
+            'vitals_state': 'measuring',
+          },
+          onCancel: () {},
+          onFinish: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('—'), findsNWidgets(3));
+  });
 }

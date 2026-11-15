@@ -102,3 +102,15 @@ def test_build_vitals_instruction_error():
     assert instruction["instruction_ui"]["step"] == 4
     assert instruction["value_to_show"]["value"] == "error"
     assert "Délai dépassé" in instruction["text_to_speak"]
+
+
+def test_build_vitals_instruction_no_valid_measure():
+    parsed = {"ok": False, "error": "NO_VALID_MEASURE"}
+    instruction = build_vitals_instruction(parsed)
+
+    assert instruction["instruction_ui"]["screen"] == "consultation"
+    assert instruction["instruction_ui"]["step"] == 4
+    assert instruction["value_to_show"]["value"] == "error"
+    assert "fields" not in instruction
+    assert "n'a pas pu aboutir" in instruction["text_to_speak"]
+

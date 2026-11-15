@@ -79,17 +79,44 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   void _syncFields() {
     final fields = widget.dynamicFields;
-    if (fields.containsKey('temperature') && fields['temperature'] != null) {
-      final raw = fields['temperature'].toString().split(' ').first;
-      _temperatureC = double.tryParse(raw) ?? _temperatureC;
+    if (fields.containsKey('temperature')) {
+      final val = fields['temperature'];
+      if (val == null) {
+        _temperatureC = null;
+      } else {
+        final raw = val.toString().split(' ').first.trim();
+        if (raw == '--' || raw == '—' || raw.toUpperCase() == 'NA') {
+          _temperatureC = null;
+        } else {
+          _temperatureC = double.tryParse(raw) ?? _temperatureC;
+        }
+      }
     }
-    if (fields.containsKey('heart_rate') && fields['heart_rate'] != null) {
-      final raw = fields['heart_rate'].toString().split(' ').first;
-      _heartRateBpm = int.tryParse(raw) ?? _heartRateBpm;
+    if (fields.containsKey('heart_rate')) {
+      final val = fields['heart_rate'];
+      if (val == null) {
+        _heartRateBpm = null;
+      } else {
+        final raw = val.toString().split(' ').first.trim();
+        if (raw == '--' || raw == '—' || raw.toUpperCase() == 'NA') {
+          _heartRateBpm = null;
+        } else {
+          _heartRateBpm = int.tryParse(raw) ?? _heartRateBpm;
+        }
+      }
     }
-    if (fields.containsKey('spo2') && fields['spo2'] != null) {
-      final raw = fields['spo2'].toString().split(' ').first;
-      _spo2Percent = int.tryParse(raw) ?? _spo2Percent;
+    if (fields.containsKey('spo2')) {
+      final val = fields['spo2'];
+      if (val == null) {
+        _spo2Percent = null;
+      } else {
+        final raw = val.toString().split(' ').first.trim();
+        if (raw == '--' || raw == '—' || raw.toUpperCase() == 'NA') {
+          _spo2Percent = null;
+        } else {
+          _spo2Percent = int.tryParse(raw) ?? _spo2Percent;
+        }
+      }
     }
     if (fields.containsKey('patient_name') && fields['patient_name'] != null) {
       _nameController.text = fields['patient_name'].toString();
