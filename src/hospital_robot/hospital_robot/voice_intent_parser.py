@@ -5,9 +5,22 @@ en actions normalisées pour ROS 2 et en instructions UI/TTS pour le mobile.
 """
 
 from dataclasses import dataclass, field
+import logging
 import re
 import unicodedata
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("hospital_robot.voice_intent_parser")
+
+try:
+    from hospital_robot.llm_intent_engine import LLMConfig, LLMIntentEngine, LLMResponse
+except ImportError:
+    try:
+        from llm_intent_engine import LLMConfig, LLMIntentEngine, LLMResponse
+    except ImportError:
+        LLMConfig = None  # type: ignore
+        LLMIntentEngine = None  # type: ignore
+        LLMResponse = None  # type: ignore
 
 
 def normalize_text(text: str) -> str:
@@ -118,7 +131,27 @@ class VoiceIntentParser:
         r"il y a des?)$"
     )
 
-    def parse(self, raw_text: str, confidence: float = 1.0) -> ParsedIntent:
+    def __init__(
+        self,
+        enable_llm: bool = True,
+        llm_config: Optional[Any] = None,
+        llm_engine: Optional[Any] = None,
+    ):
+        """Initialise le parseur d'intentions avec support optionnel d'un LLM."""
+        self.enable_llm = enable_llm
+        if llm_engine is not None:
+            self.llm_engine = llm_engine
+        elif enable_llm and LLMIntentEngine is not None:
+            self.llm_engine = LLMIntentEngine(config=llm_config)
+        else:
+            self.llm_engine = None
+
+    def parse(
+        self,
+        raw_text: str,
+        confidence: float = 1.0,
+        use_llm: bool = True,
+    ) -> ParsedIntent:
         """Analyse le texte brut et renvoie une intention typée."""
         norm = normalize_text(raw_text)
 
@@ -295,12 +328,133 @@ class VoiceIntentParser:
                 ros_request={"category": "CONSULTATION", "action": "APPOINTMENT"},
             )
 
-        # 13. INCONNU / NON ACTIONNABLE
+        # 13. INCONNU PAR MOTS-CLÉS DÉTERMINISTES -> TENTATIVE D'INFÉRENCE LLM
+        if use_llm and self.enable_llm and self.llm_engine and self.llm_engine.is_available():
+            try:
+                llm_res = self.llm_engine.infer(raw_text)
+                if llm_res and llm_res.success and llm_res.intent != "UNKNOWN":
+                    intent = self._convert_llm_response(llm_res, confidence, raw_text)
+                    if intent:
+                        return intent
+            except Exception as e:
+                logger.warning(f"Error during LLM fallback inference: {e}")
+
+        # 14. INCONNU / NON ACTIONNABLE DÉFINITIF
         return ParsedIntent(
             intent_type="UNKNOWN",
             confidence=confidence,
             details={"original_text": raw_text},
         )
+
+    def _convert_llm_response(
+        self,
+        res: Any,
+        confidence: float,
+        raw_text: str,
+    ) -> Optional[ParsedIntent]:
+        """Convertit un LLMResponse en ParsedIntent compatible ROS 2."""
+        target = res.target
+        intent_type = res.intent
+
+        if intent_type == "ORIENTATION":
+            dest_key = target if (target and target in self.DEPARTMENTS) else "PHARMACY"
+            label = self.DEPARTMENTS.get(dest_key, {}).get("label", dest_key)
+            return ParsedIntent(
+                intent_type="ORIENTATION",
+                confidence=confidence,
+                category="ORIENTATION",
+                target_field="destination",
+                target_value=dest_key,
+                label=label,
+                ros_request={"category": "ORIENTATION", "destination": dest_key},
+                details={
+                    "llm_text_to_speak": res.text_to_speak,
+                    "llm_generated": True,
+                    "screen": res.screen or "orientation",
+                    "original_text": raw_text,
+                },
+            )
+
+        if intent_type == "INFORMATION":
+            topic_key = target if (target and target in self.TOPICS) else "MALARIA"
+            label = self.TOPICS.get(topic_key, {}).get("label", topic_key)
+            return ParsedIntent(
+                intent_type="INFORMATION",
+                confidence=confidence,
+                category="INFORMATION",
+                target_field="topic",
+                target_value=topic_key,
+                label=label,
+                ros_request={"category": "INFORMATION", "topic": topic_key},
+                details={
+                    "llm_text_to_speak": res.text_to_speak,
+                    "llm_generated": True,
+                    "screen": res.screen or "information",
+                    "original_text": raw_text,
+                },
+            )
+
+        if intent_type == "VITALS":
+            return ParsedIntent(
+                intent_type="VITALS",
+                confidence=confidence,
+                category="CONSULTATION",
+                target_field="action",
+                target_value="VITAL_SIGNS",
+                label="Signes vitaux",
+                ros_request={"category": "CONSULTATION", "action": "VITAL_SIGNS"},
+                details={
+                    "llm_text_to_speak": res.text_to_speak,
+                    "llm_generated": True,
+                    "screen": res.screen or "consultation",
+                    "original_text": raw_text,
+                },
+            )
+
+        if intent_type == "CONSULTATION":
+            return ParsedIntent(
+                intent_type="CONSULTATION",
+                confidence=confidence,
+                category="CONSULTATION",
+                target_field="action",
+                target_value="APPOINTMENT",
+                label="Consultation",
+                ros_request={"category": "CONSULTATION", "action": "APPOINTMENT"},
+                details={
+                    "llm_text_to_speak": res.text_to_speak,
+                    "llm_generated": True,
+                    "screen": res.screen or "consultation",
+                    "original_text": raw_text,
+                },
+            )
+
+        if intent_type == "GREETING":
+            return ParsedIntent(
+                intent_type="GREETING",
+                confidence=confidence,
+                label="Bonjour",
+                details={
+                    "llm_text_to_speak": res.text_to_speak,
+                    "llm_generated": True,
+                    "screen": res.screen or "home",
+                    "original_text": raw_text,
+                },
+            )
+
+        if intent_type == "HOME":
+            return ParsedIntent(
+                intent_type="HOME",
+                confidence=confidence,
+                label="Accueil",
+                details={
+                    "llm_text_to_speak": res.text_to_speak,
+                    "llm_generated": True,
+                    "screen": res.screen or "home",
+                    "original_text": raw_text,
+                },
+            )
+
+        return None
 
     def build_instruction(self, intent: ParsedIntent, raw_text: str = "") -> Dict:
         """Construit le payload conforme au topic 'server/instruction'."""
@@ -382,9 +536,10 @@ class VoiceIntentParser:
             }
 
         if intent.intent_type == "GREETING":
+            speech = intent.details.get("llm_text_to_speak") or "Bonjour ! Je suis le robot hospitalier HIAR. Que puis-je faire pour vous ?"
             return {
                 "origin": "voice",
-                "text_to_speak": "Bonjour ! Je suis le robot hospitalier HIAR. Que puis-je faire pour vous ?",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "home",
@@ -398,9 +553,10 @@ class VoiceIntentParser:
             }
 
         if intent.intent_type == "THANKS":
+            speech = intent.details.get("llm_text_to_speak") or "Je vous en prie ! N'hésitez pas si vous avez une autre question."
             return {
                 "origin": "voice",
-                "text_to_speak": "Je vous en prie ! N'hésitez pas si vous avez une autre question.",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "voice_hints": ["Accueil", "Pharmacie", "Consultation"],
                 "robot_status": {
@@ -411,9 +567,10 @@ class VoiceIntentParser:
 
         if intent.intent_type == "ORIENTATION":
             dest_label = intent.label or "votre destination"
+            speech = intent.details.get("llm_text_to_speak") or f"Très bien, suivez-moi vers {dest_label}."
             return {
                 "origin": "voice",
-                "text_to_speak": f"Très bien, suivez-moi vers {dest_label}.",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "mission",
@@ -433,9 +590,10 @@ class VoiceIntentParser:
             }
 
         if intent.intent_type == "VITALS":
+            speech = intent.details.get("llm_text_to_speak") or "Veuillez poser votre index sur le capteur de constantes et rester immobile."
             return {
                 "origin": "voice",
-                "text_to_speak": "Veuillez poser votre index sur le capteur de constantes et rester immobile.",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "consultation",
@@ -460,9 +618,10 @@ class VoiceIntentParser:
 
         if intent.intent_type == "INFORMATION":
             topic_label = intent.label or "ce sujet"
+            speech = intent.details.get("llm_text_to_speak") or f"Voici les informations de prévention de l'Organisation Mondiale de la Santé concernant {topic_label}."
             return {
                 "origin": "voice",
-                "text_to_speak": f"Voici les informations de prévention de l'Organisation Mondiale de la Santé concernant {topic_label}.",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "information",
@@ -477,9 +636,10 @@ class VoiceIntentParser:
             }
 
         if intent.intent_type == "INFORMATION_GENERAL":
+            speech = intent.details.get("llm_text_to_speak") or "Voici les fiches d'information et de prévention de l'Organisation Mondiale de la Santé."
             return {
                 "origin": "voice",
-                "text_to_speak": "Voici les fiches d'information et de prévention de l'Organisation Mondiale de la Santé.",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "information",
@@ -494,9 +654,10 @@ class VoiceIntentParser:
 
         if intent.intent_type == "CONSULTATION_REASON":
             reason_label = intent.label or "Consultation"
+            speech = intent.details.get("llm_text_to_speak") or f"Motif sélectionné : {reason_label}."
             return {
                 "origin": "voice",
-                "text_to_speak": f"Motif sélectionné : {reason_label}.",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "consultation",
@@ -553,9 +714,10 @@ class VoiceIntentParser:
             }
 
         if intent.intent_type == "CONSULTATION":
+            speech = intent.details.get("llm_text_to_speak") or "Voici le module de consultation et de prise de rendez-vous."
             return {
                 "origin": "voice",
-                "text_to_speak": "Voici le module de consultation et de prise de rendez-vous.",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "consultation",
@@ -570,9 +732,10 @@ class VoiceIntentParser:
             }
 
         if intent.intent_type == "HOME":
+            speech = intent.details.get("llm_text_to_speak") or "Retour à l'accueil."
             return {
                 "origin": "voice",
-                "text_to_speak": "Retour à l'accueil.",
+                "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "home",
@@ -586,9 +749,10 @@ class VoiceIntentParser:
             }
 
         # UNKNOWN fallback
+        speech = intent.details.get("llm_text_to_speak") or "Je n'ai pas bien compris votre demande. Vous pouvez me demander la pharmacie, le laboratoire, mesurer vos constantes ou des informations de santé."
         return {
             "origin": "voice",
-            "text_to_speak": "Je n'ai pas bien compris votre demande. Vous pouvez me demander la pharmacie, le laboratoire, mesurer vos constantes ou des informations de santé.",
+            "text_to_speak": speech,
             "speech_priority": "normal",
             "voice_hints": ["Pharmacie", "Laboratoire", "Constantes", "Paludisme"],
             "robot_status": {

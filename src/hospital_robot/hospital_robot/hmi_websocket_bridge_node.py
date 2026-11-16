@@ -66,9 +66,14 @@ except ImportError:
 try:
     from hospital_robot.voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from hospital_robot.vitals_data_parser import build_vitals_instruction, parse_vitals_frame
+    from hospital_robot.llm_intent_engine import LLMConfig
 except ImportError:
     from voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from vitals_data_parser import build_vitals_instruction, parse_vitals_frame
+    try:
+        from llm_intent_engine import LLMConfig
+    except ImportError:
+        LLMConfig = None  # type: ignore
 
 import websockets
 try:
@@ -106,14 +111,40 @@ class HMIWebSocketBridgeNode(Node):
         if ROS_AVAILABLE:
             self.declare_parameter("websocket_host", "0.0.0.0")
             self.declare_parameter("websocket_port", 5000)
+            self.declare_parameter("enable_llm", True)
+            self.declare_parameter("llm_backend", "ollama")
+            self.declare_parameter("llm_host", "http://127.0.0.1:11434")
+            self.declare_parameter("llm_model", "qwen2.5:0.5b")
+            self.declare_parameter("llm_timeout", 2.5)
+
             self.host = host or str(self.get_parameter("websocket_host").value)
             self.port = port or int(self.get_parameter("websocket_port").value)
+            enable_llm = bool(self.get_parameter("enable_llm").value)
+            llm_backend = str(self.get_parameter("llm_backend").value)
+            llm_host = str(self.get_parameter("llm_host").value)
+            llm_model = str(self.get_parameter("llm_model").value)
+            llm_timeout = float(self.get_parameter("llm_timeout").value)
         else:
             self.host = host or "0.0.0.0"
             self.port = port or 5000
+            enable_llm = True
+            llm_backend = "ollama"
+            llm_host = "http://127.0.0.1:11434"
+            llm_model = "qwen2.5:0.5b"
+            llm_timeout = 2.5
 
-        # Composants de traitement métier
-        self.intent_parser = VoiceIntentParser()
+        # Composants de traitement métier (Parseur hybride Déterministe + LLM)
+        if LLMConfig is not None:
+            llm_cfg = LLMConfig(
+                enabled=enable_llm,
+                backend=llm_backend,
+                host=llm_host,
+                model_name=llm_model,
+                timeout_sec=llm_timeout,
+            )
+            self.intent_parser = VoiceIntentParser(enable_llm=enable_llm, llm_config=llm_cfg)
+        else:
+            self.intent_parser = VoiceIntentParser()
         self._last_stt_text = ""
         self._last_stt_time = 0.0
 
