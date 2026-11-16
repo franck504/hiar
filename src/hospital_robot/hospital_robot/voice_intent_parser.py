@@ -537,7 +537,9 @@ class VoiceIntentParser:
             }
 
         if intent.intent_type == "GREETING":
-            speech = intent.details.get("llm_text_to_speak") or "Bonjour ! Je suis le robot hospitalier HIAR. Que puis-je faire pour vous ?"
+            speech = intent.details.get("llm_text_to_speak")
+            if not speech or any(w in speech.lower() for w in ["pas compris", "pas votre demande", "pas compris votre", "préciser", "veuillez préciser"]):
+                speech = "Bonjour ! Je suis le robot hospitalier HIAR. Que puis-je faire pour vous ?"
             return {
                 "origin": "voice",
                 "text_to_speak": speech,
