@@ -118,8 +118,8 @@ class HMIWebSocketBridgeNode(Node):
         self._last_stt_time = 0.0
 
         # Clients WebSocket connectés
-        self.clients: Set[WSConnection] = set()
-        self._clients_lock = threading.Lock()
+        self.ws_clients: Set[WSConnection] = set()
+        self._ws_clients_lock = threading.Lock()
 
         # Gestion Asyncio & Serveur
         self.loop: Optional[asyncio.AbstractEventLoop] = None
@@ -202,13 +202,13 @@ class HMIWebSocketBridgeNode(Node):
         """Arrête proprement le serveur WebSocket et la boucle asyncio."""
         self._stop_event.set()
         if self.loop and self.loop.is_running():
-            with self._clients_lock:
-                for ws in list(self.clients):
+            with self._ws_clients_lock:
+                for ws in list(self.ws_clients):
                     try:
                         asyncio.run_coroutine_threadsafe(ws.close(), self.loop)
                     except Exception:
                         pass
-                self.clients.clear()
+                self.ws_clients.clear()
 
             self.loop.call_soon_threadsafe(self.loop.stop)
 
@@ -222,8 +222,8 @@ class HMIWebSocketBridgeNode(Node):
 
     async def _handle_client(self, websocket: WSConnection):
         """Gère une connexion client mobile active."""
-        with self._clients_lock:
-            self.clients.add(websocket)
+        with self._ws_clients_lock:
+            self.ws_clients.add(websocket)
         self.get_logger().info(f"Client connected: {websocket.remote_address}")
 
         try:
@@ -247,8 +247,8 @@ class HMIWebSocketBridgeNode(Node):
         except Exception as exc:
             self.get_logger().warning(f"Error handling client: {exc}")
         finally:
-            with self._clients_lock:
-                self.clients.discard(websocket)
+            with self._ws_clients_lock:
+                self.ws_clients.discard(websocket)
             self.get_logger().info("Client disconnected.")
 
     async def _process_incoming_frame(
@@ -478,8 +478,8 @@ class HMIWebSocketBridgeNode(Node):
 
     async def broadcast(self, topic: str, payload: dict):
         """Diffuse un message à tous les smartphones connectés (coroutine)."""
-        with self._clients_lock:
-            clients_snapshot = list(self.clients)
+        with self._ws_clients_lock:
+            clients_snapshot = list(self.ws_clients)
 
         if not clients_snapshot:
             return
