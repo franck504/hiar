@@ -109,30 +109,69 @@ class VoiceService {
   void _restartListeningWithDelay([int delayMs = 600]) {
     _restartTimer?.cancel();
     _restartTimer = Timer(Duration(milliseconds: delayMs), () {
-      if (_isListeningPermanently && !_isSpeaking && !_speech.isListening) {
+      if (_isListeningPermanently && !_speech.isListening) {
         _startListeningLoop();
       }
     });
   }
 
+  /// Détecte si le texte capté par le micro provient du haut-parleur du robot
+  bool _isAcousticEcho(String recognized, String spoken) {
+    final r = recognized.toLowerCase().trim();
+    final s = spoken.toLowerCase().trim();
+    if (r.isEmpty || s.isEmpty) return false;
+
+    // Si le texte reconnu est inclus dans ce que le robot dit, c'est l'écho de sa propre voix
+    if (s.contains(r)) {
+      return true;
+    }
+
+    final rWords = r.split(RegExp(r'\s+')).where((w) => w.length >= 3).toList();
+    final sWords = s.split(RegExp(r'\s+')).where((w) => w.length >= 3).toSet();
+    if (rWords.isEmpty) return false;
+
+    int matchCount = 0;
+    for (final w in rWords) {
+      if (sWords.contains(w)) matchCount++;
+    }
+
+    // Si 60% ou plus des mots reconnus correspondent à la phrase du robot
+    return (matchCount / rWords.length) >= 0.6;
+  }
+
   Future<void> _startListeningLoop() async {
-    if (!_isSpeechAvailable || _isSpeaking) return;
+    if (!_isSpeechAvailable) return;
 
     if (_speech.isListening) {
       return;
     }
 
-    state = VoiceServiceState.listening;
-    onStateChanged?.call(state, "J'écoute en continu…");
+    state = _isSpeaking ? VoiceServiceState.speaking : VoiceServiceState.listening;
+    if (!_isSpeaking) {
+      onStateChanged?.call(state, "J'écoute en continu…");
+    }
 
     try {
       await _speech.listen(
-        onResult: (result) {
-          if (_isSpeaking) return;
+        onResult: (result) async {
           final text = result.recognizedWords.trim();
-          if (text.isNotEmpty) {
-            onRecognizedText?.call(text, result.finalResult);
+          if (text.isEmpty) return;
+
+          // Si le robot est en train de parler :
+          if (_isSpeaking) {
+            // Vérifier s'il s'agit d'un écho acoustique du haut-parleur
+            if (_isAcousticEcho(text, lastSpokenText ?? "")) {
+              debugPrint("VoiceService: Écho acoustique du robot ignoré: « $text »");
+              return;
+            }
+
+            // L'utilisateur est en train de parler (Barge-In) !
+            // ARRÊT IMMÉDIAT DE LA PAROLE DU ROBOT
+            debugPrint("VoiceService: ⚡ Barge-in détecté ! L'utilisateur parle (« $text ») -> Coupure TTS immédiate.");
+            await stopSpeaking();
           }
+
+          onRecognizedText?.call(text, result.finalResult);
         },
         localeId: "fr_FR",
         listenFor: const Duration(minutes: 10),
@@ -143,7 +182,7 @@ class VoiceService {
       );
     } catch (e) {
       debugPrint("Speech listen error: $e");
-      _restartListeningWithDelay(2000);
+      _restartListeningWithDelay(1500);
     }
   }
 
@@ -163,7 +202,6 @@ class VoiceService {
     _lastSpokenPhrase = cleanText;
     _lastSpokenTime = now;
 
-    // Bloquer immédiatement l'écoute pour éviter tout écho acoustique du haut-parleur
     _isSpeaking = true;
     _restartTimer?.cancel();
     state = VoiceServiceState.speaking;
@@ -171,18 +209,23 @@ class VoiceService {
 
     debugPrint("VoiceService: Demande speak: « $cleanText »");
     lastSpokenText = cleanText;
-    if (_speech.isListening) {
-      await _speech.cancel();
+
+    // S'assurer que le micro reste ouvert pour permettre à l'utilisateur de couper la parole (Barge-In)
+    if (!_speech.isListening && _isListeningPermanently) {
+      _startListeningLoop();
     }
+
     final res = await _tts.speak(cleanText);
     debugPrint("VoiceService: Résultat _tts.speak: $res");
   }
 
-  /// Interrompt la parole (Silence)
+  /// Interrompt la parole (Silence immédiat)
   Future<void> stopSpeaking() async {
     await _tts.stop();
     _isSpeaking = false;
-    if (_isListeningPermanently) {
+    state = VoiceServiceState.listening;
+    onStateChanged?.call(state, "J'écoute en continu…");
+    if (_isListeningPermanently && !_speech.isListening) {
       _startListeningLoop();
     }
   }

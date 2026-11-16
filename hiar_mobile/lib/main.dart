@@ -63,8 +63,7 @@ class _HiarAppState extends State<HiarApp> {
 
     final voice = VoiceService.instance;
     if (voice.isSpeaking) {
-      debugPrint("STT ignoré car TTS en cours d'élocution: « $clean »");
-      return;
+      voice.stopSpeaking();
     }
 
     // Protection anti-écho : ignorer si le micro a capté ce que le TTS vient de prononcer
@@ -162,7 +161,9 @@ class _HiarAppState extends State<HiarApp> {
       // DÈS QUE LE MICRO ENTEND DU TEXTE (ou VAD) :
       voice.onRecognizedText = (text, isFinal) {
         if (!mounted) return;
-        if (voice.isSpeaking) return;
+        if (voice.isSpeaking) {
+          voice.stopSpeaking();
+        }
         setState(() {
           _recognizedText = text;
         });
@@ -540,6 +541,7 @@ class _HiarAppState extends State<HiarApp> {
   }
 
   void _goToScreen(String screen) {
+    VoiceService.instance.stopSpeaking();
     setState(() {
       _currentScreen = screen;
       _recognizedText = null;
