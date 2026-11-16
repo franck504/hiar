@@ -30,6 +30,8 @@ class VoiceService {
   Function(VoiceServiceState state, String statusMessage)? onStateChanged;
 
   String? lastSpokenText;
+  DateTime? lastSpokenEndTime;
+  final List<String> _recentSpokenTexts = [];
   String? _lastSpokenPhrase;
   DateTime? _lastSpokenTime;
 
@@ -50,16 +52,21 @@ class VoiceService {
 
       _tts.setCompletionHandler(() {
         _isSpeaking = false;
-        // Délai de 800ms pour laisser l'audio matériel se stabiliser et éliminer l'écho acoustique
-        if (_isListeningPermanently) {
-          _restartListeningWithDelay(800);
+        lastSpokenEndTime = DateTime.now();
+        state = VoiceServiceState.listening;
+        onStateChanged?.call(state, "J'écoute en continu…");
+        if (_isListeningPermanently && !_speech.isListening) {
+          _restartListeningWithDelay(200);
         }
       });
 
       _tts.setErrorHandler((msg) {
         _isSpeaking = false;
-        if (_isListeningPermanently) {
-          _restartListeningWithDelay(800);
+        lastSpokenEndTime = DateTime.now();
+        state = VoiceServiceState.listening;
+        onStateChanged?.call(state, "J'écoute en continu…");
+        if (_isListeningPermanently && !_speech.isListening) {
+          _restartListeningWithDelay(200);
         }
       });
 
@@ -115,28 +122,78 @@ class VoiceService {
     });
   }
 
-  /// Détecte si le texte capté par le micro provient du haut-parleur du robot
-  bool _isAcousticEcho(String recognized, String spoken) {
-    final r = recognized.toLowerCase().trim();
-    final s = spoken.toLowerCase().trim();
-    if (r.isEmpty || s.isEmpty) return false;
+  /// Normalise un texte (minuscules, sans ponctuation, espaces régularisés)
+  static String normalizeText(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replaceAll(RegExp(r"[^\w\sàâäéèêëîïôöùûüçœæÀÂÄÉÈÊËÎÏÔÖÙÛÜÇŒÆ]", caseSensitive: false), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
 
-    // Si le texte reconnu est inclus dans ce que le robot dit, c'est l'écho de sa propre voix
-    if (s.contains(r)) {
-      return true;
+  /// Détecte si le texte capté par le micro provient du haut-parleur du robot (écho acoustique).
+  ///
+  /// L'écho peut survenir soit pendant que le robot parle (`isSpeaking`), soit pendant
+  /// la latence de traitement audio du STT Android (jusqu'à `cooldownMs` ms après la fin du TTS).
+  bool isAcousticEcho(String recognized, {int cooldownMs = 1800}) {
+    final clean = recognized.trim();
+    if (clean.isEmpty) return false;
+
+    final now = DateTime.now();
+    final wasRecentlySpeaking = _isSpeaking ||
+        (lastSpokenEndTime != null &&
+            now.difference(lastSpokenEndTime!) < Duration(milliseconds: cooldownMs));
+
+    if (!wasRecentlySpeaking) {
+      return false;
     }
 
-    final rWords = r.split(RegExp(r'\s+')).where((w) => w.length >= 3).toList();
-    final sWords = s.split(RegExp(r'\s+')).where((w) => w.length >= 3).toSet();
-    if (rWords.isEmpty) return false;
+    final rNorm = normalizeText(clean);
+    if (rNorm.isEmpty) return false;
 
-    int matchCount = 0;
-    for (final w in rWords) {
-      if (sWords.contains(w)) matchCount++;
+    // Comparaison avec les phrases récemment émises par le robot
+    final candidates = <String>{};
+    if (lastSpokenText != null && lastSpokenText!.trim().isNotEmpty) {
+      candidates.add(lastSpokenText!.trim());
+    }
+    candidates.addAll(_recentSpokenTexts);
+
+    if (candidates.isEmpty) return false;
+
+    for (final cand in candidates) {
+      final sNorm = normalizeText(cand);
+      if (sNorm.isEmpty) continue;
+
+      // 1. Inclusion directe : le texte capté est inclus dans la phrase parlée ou vice-versa
+      if (sNorm.contains(rNorm) || rNorm.contains(sNorm)) {
+        return true;
+      }
+
+      // 2. Chevauchement de mots significatifs (mots >= 3 caractères)
+      final rWords = rNorm.split(' ').where((w) => w.length >= 3).toList();
+      final sWords = sNorm.split(' ').where((w) => w.length >= 3).toSet();
+
+      if (rWords.isNotEmpty) {
+        int matchCount = 0;
+        for (final w in rWords) {
+          if (sWords.contains(w)) matchCount++;
+        }
+
+        // Si au moins 50% des mots captés correspondent à la phrase du robot
+        final ratio = matchCount / rWords.length;
+        if (ratio >= 0.5) {
+          return true;
+        }
+
+        // Si au moins 3 mots distincts correspondent
+        if (matchCount >= 3) {
+          return true;
+        }
+      }
     }
 
-    // Si 60% ou plus des mots reconnus correspondent à la phrase du robot
-    return (matchCount / rWords.length) >= 0.6;
+    return false;
   }
 
   Future<void> _startListeningLoop() async {
@@ -157,16 +214,15 @@ class VoiceService {
           final text = result.recognizedWords.trim();
           if (text.isEmpty) return;
 
-          // Si le robot est en train de parler :
-          if (_isSpeaking) {
-            // Vérifier s'il s'agit d'un écho acoustique du haut-parleur
-            if (_isAcousticEcho(text, lastSpokenText ?? "")) {
-              debugPrint("VoiceService: Écho acoustique du robot ignoré: « $text »");
-              return;
-            }
+          // 1. Filtrage anti-écho acoustique (micro entendant le haut-parleur)
+          if (isAcousticEcho(text)) {
+            debugPrint("VoiceService: Écho acoustique du robot ignoré: « $text »");
+            return;
+          }
 
-            // L'utilisateur est en train de parler (Barge-In) !
-            // ARRÊT IMMÉDIAT DE LA PAROLE DU ROBOT
+          // 2. Si le robot parle et que ce n'est pas son écho -> L'utilisateur parle (Barge-In) !
+          // Coupure immédiate du TTS pour laisser la parole à l'utilisateur
+          if (_isSpeaking) {
             debugPrint("VoiceService: ⚡ Barge-in détecté ! L'utilisateur parle (« $text ») -> Coupure TTS immédiate.");
             await stopSpeaking();
           }
@@ -209,6 +265,10 @@ class VoiceService {
 
     debugPrint("VoiceService: Demande speak: « $cleanText »");
     lastSpokenText = cleanText;
+    _recentSpokenTexts.add(cleanText);
+    if (_recentSpokenTexts.length > 5) {
+      _recentSpokenTexts.removeAt(0);
+    }
 
     // S'assurer que le micro reste ouvert pour permettre à l'utilisateur de couper la parole (Barge-In)
     if (!_speech.isListening && _isListeningPermanently) {
@@ -223,6 +283,7 @@ class VoiceService {
   Future<void> stopSpeaking() async {
     await _tts.stop();
     _isSpeaking = false;
+    lastSpokenEndTime = DateTime.now();
     state = VoiceServiceState.listening;
     onStateChanged?.call(state, "J'écoute en continu…");
     if (_isListeningPermanently && !_speech.isListening) {

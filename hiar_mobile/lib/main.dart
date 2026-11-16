@@ -66,11 +66,8 @@ class _HiarAppState extends State<HiarApp> {
       voice.stopSpeaking();
     }
 
-    // Protection anti-écho : ignorer si le micro a capté ce que le TTS vient de prononcer
-    final lastSpoken = voice.lastSpokenText?.toLowerCase() ?? "";
-    final cleanLower = clean.toLowerCase();
-    if (lastSpoken.isNotEmpty &&
-        (lastSpoken.contains(cleanLower) || cleanLower.contains(lastSpoken) || (lastSpoken.contains("suivez-moi") && cleanLower.contains("suivez-moi")))) {
+    // Protection anti-écho robuste : ignorer si le micro a capté ce que le TTS a prononcé
+    if (voice.isAcousticEcho(clean)) {
       debugPrint("STT ignoré car écho acoustique du robot: « $clean »");
       return;
     }
@@ -161,6 +158,13 @@ class _HiarAppState extends State<HiarApp> {
       // DÈS QUE LE MICRO ENTEND DU TEXTE (ou VAD) :
       voice.onRecognizedText = (text, isFinal) {
         if (!mounted) return;
+
+        // Protection supplémentaire contre l'écho acoustique
+        if (voice.isAcousticEcho(text)) {
+          debugPrint("onRecognizedText: Écho acoustique ignoré: « $text »");
+          return;
+        }
+
         if (voice.isSpeaking) {
           voice.stopSpeaking();
         }
