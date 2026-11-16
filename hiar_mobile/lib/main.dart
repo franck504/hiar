@@ -172,7 +172,7 @@ class _HiarAppState extends State<HiarApp> {
           _goToScreen('home');
         }
 
-        // 2. Si le moteur vocal signale une fin de phrase (isFinal) : envoi immédiat
+        // 2. Si le moteur vocal signale une fin de phrase (isFinal) :
         if (isFinal) {
           _sttDebounceTimer?.cancel();
           _pendingSttText = null;
@@ -180,11 +180,23 @@ class _HiarAppState extends State<HiarApp> {
           return;
         }
 
-        // 3. Pour la dictée continue Android (où isFinal peut tarder ou ne pas être émis) :
-        // Dès que l'utilisateur marque une courte pause (550 ms), on transmet la phrase !
+        // 3. Temporisation intelligente VAD (Pause naturelle de parole) :
+        // Évite de couper la phrase trop tôt quand l'usager respire ou hésite.
         _pendingSttText = text;
         _sttDebounceTimer?.cancel();
-        _sttDebounceTimer = Timer(const Duration(milliseconds: 550), () {
+
+        final lower = text.trim().toLowerCase();
+        // Commandes courtes ou d'urgence directes : transmission ultra-rapide (500 ms)
+        final isUrgentOrShort = RegExp(r'^(stop|arrête|arret|pause|reprendre|terminer|bonjour|salut|docteur)$').hasMatch(lower);
+
+        // Amorce de phrase incomplète en suspens (ex: "je veux aller au...", "direction la...")
+        final isIncomplete = RegExp(r'(au|à|a|vers|pour|dans|le|la|les|du|de|aller|aller au|aller à|vers le|vers la|emmène|emmène-moi)$').hasMatch(lower);
+
+        final delayMs = isUrgentOrShort
+            ? 500
+            : (isIncomplete ? 2200 : 1500);
+
+        _sttDebounceTimer = Timer(Duration(milliseconds: delayMs), () {
           if (_pendingSttText != null && _pendingSttText!.trim().isNotEmpty) {
             _sendSttFinalDebounced(_pendingSttText!);
             _pendingSttText = null;

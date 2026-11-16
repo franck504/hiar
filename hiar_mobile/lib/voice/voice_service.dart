@@ -68,7 +68,7 @@ class VoiceService {
         onError: (val) {
           debugPrint('STT Error: ${val.errorMsg}');
           if (_isListeningPermanently && !_isSpeaking) {
-            final delay = val.errorMsg.contains('busy') ? 2000 : 1200;
+            final delay = val.errorMsg.contains('busy') ? 1500 : 250;
             _restartListeningWithDelay(delay);
           }
         },
@@ -76,7 +76,7 @@ class VoiceService {
           debugPrint('STT Status: $val');
           if (val == 'notListening' || val == 'done') {
             if (_isListeningPermanently && !_isSpeaking) {
-              _restartListeningWithDelay(1200);
+              _restartListeningWithDelay(150);
             }
           }
         },

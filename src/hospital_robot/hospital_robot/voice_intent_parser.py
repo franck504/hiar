@@ -107,6 +107,17 @@ class VoiceIntentParser:
         "et", "ou", "a", "au", "en", "ce", "ces", "c"
     }
 
+    INCOMPLETE_PREFIXES_REGEX = (
+        r"^(je veux( aller)?( au| a| vers)?|"
+        r"aller( au| a| vers)?|"
+        r"emmene[- ]moi( a| au| vers)?|"
+        r"direction( la| le)?|"
+        r"ou est( le| la| les)?|"
+        r"c'?etait|"
+        r"elle est( au| a)?|"
+        r"il y a des?)$"
+    )
+
     def parse(self, raw_text: str, confidence: float = 1.0) -> ParsedIntent:
         """Analyse le texte brut et renvoie une intention typée."""
         norm = normalize_text(raw_text)
@@ -115,7 +126,11 @@ class VoiceIntentParser:
             return ParsedIntent(intent_type="UNKNOWN", confidence=0.0)
 
         # 0. FRAGMENTS ISOLÉS / PAUSES DE PAROLE (ignorer silencieusement)
-        if norm in self.STOPWORDS_FRAGMENTS or len(norm) <= 2:
+        if (
+            norm in self.STOPWORDS_FRAGMENTS
+            or len(norm) <= 2
+            or re.match(self.INCOMPLETE_PREFIXES_REGEX, norm)
+        ):
             return ParsedIntent(
                 intent_type="IGNORED_FRAGMENT",
                 confidence=confidence,

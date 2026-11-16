@@ -324,7 +324,7 @@ def test_consultation_ticket_intent(parser):
 
 
 def test_ignored_fragments_do_not_trigger_tts(parser):
-    for frag in ["je", "le", "de", "un", "a"]:
+    for frag in ["je", "le", "de", "un", "a", "je veux aller au", "aller au", "emmène-moi à", "direction la"]:
         intent = parser.parse(frag)
         assert intent.intent_type == "IGNORED_FRAGMENT"
         instruction = parser.build_instruction(intent)
