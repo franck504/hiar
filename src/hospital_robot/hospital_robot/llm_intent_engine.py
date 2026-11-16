@@ -38,7 +38,7 @@ Règles de classification :
   * MALARIA (paludisme, piqûre de moustique), HIV (sida), DIABETES (diabète, glycémie, sucre), HYPERTENSION (tension artérielle), TUBERCULOSIS (tuberculose), MENSTRUAL_HEALTH (santé menstruelle).
 - VITALS : mesure des constantes, tension, température, pouls, oxymètre, saturation.
 - CONSULTATION : voir un docteur, médecin, prendre un rdv , dire des symptomes .
-- GREETING : salutation ou présentation ("bonjour", "qui es-tu ?").
+- GREETING : salutation ou présentation ("bonjour", "qui es-tu ?", "tu es qui", "qui êtes-vous", "vous êtes qui", "présente-toi").
 - HOME : retour menu, accueil, annuler.
 - UNKNOWN : incompréhensible ou hors sujet."""
 
@@ -211,7 +211,7 @@ class MockBackend(LLMBackendInterface):
                 "text_to_speak": "Préparons la prise de vos constantes vitales.",
                 "screen": "consultation",
             })
-        if any(w in norm for w in ["qui es-tu", "presente-toi", "ton nom", "bonjour"]):
+        if any(w in norm for w in ["qui es-tu", "tu es qui", "qui etes-vous", "vous etes qui", "presente-toi", "ton nom", "bonjour"]):
             return json.dumps({
                 "intent": "GREETING",
                 "target": None,
