@@ -336,6 +336,16 @@ class VoiceIntentParser:
                     intent = self._convert_llm_response(llm_res, confidence, raw_text)
                     if intent:
                         return intent
+                return ParsedIntent(
+                    intent_type="UNKNOWN",
+                    confidence=confidence,
+                    details={
+                        "original_text": raw_text,
+                        "llm_attempted": True,
+                        "latency_ms": getattr(llm_res, "latency_ms", 0.0) if llm_res else 0.0,
+                        "model": getattr(self.llm_engine.config, "model_name", "qwen2.5:0.5b"),
+                    },
+                )
             except Exception as e:
                 logger.warning(f"Error during LLM fallback inference: {e}")
 
@@ -355,6 +365,18 @@ class VoiceIntentParser:
         """Convertit un LLMResponse en ParsedIntent compatible ROS 2."""
         target = res.target
         intent_type = res.intent
+        model_name = getattr(self.llm_engine.config, "model_name", "qwen2.5:0.5b") if self.llm_engine else "qwen2.5:0.5b"
+        latency_ms = getattr(res, "latency_ms", 0.0)
+
+        def _make_details(extra_screen: Optional[str] = None):
+            return {
+                "llm_text_to_speak": res.text_to_speak,
+                "llm_generated": True,
+                "screen": res.screen or extra_screen,
+                "original_text": raw_text,
+                "latency_ms": latency_ms,
+                "model": model_name,
+            }
 
         if (target and target in self.DEPARTMENTS) or intent_type == "ORIENTATION":
             dest_key = target if (target and target in self.DEPARTMENTS) else "PHARMACY"
@@ -367,12 +389,7 @@ class VoiceIntentParser:
                 target_value=dest_key,
                 label=label,
                 ros_request={"category": "ORIENTATION", "destination": dest_key},
-                details={
-                    "llm_text_to_speak": res.text_to_speak,
-                    "llm_generated": True,
-                    "screen": res.screen or "mission",
-                    "original_text": raw_text,
-                },
+                details=_make_details("mission"),
             )
 
         if (target and target in self.TOPICS) or intent_type == "INFORMATION":
@@ -386,12 +403,7 @@ class VoiceIntentParser:
                 target_value=topic_key,
                 label=label,
                 ros_request={"category": "INFORMATION", "topic": topic_key},
-                details={
-                    "llm_text_to_speak": res.text_to_speak,
-                    "llm_generated": True,
-                    "screen": res.screen or "information",
-                    "original_text": raw_text,
-                },
+                details=_make_details("information"),
             )
 
         if intent_type == "VITALS":
@@ -403,12 +415,7 @@ class VoiceIntentParser:
                 target_value="VITAL_SIGNS",
                 label="Signes vitaux",
                 ros_request={"category": "CONSULTATION", "action": "VITAL_SIGNS"},
-                details={
-                    "llm_text_to_speak": res.text_to_speak,
-                    "llm_generated": True,
-                    "screen": res.screen or "consultation",
-                    "original_text": raw_text,
-                },
+                details=_make_details("consultation"),
             )
 
         if intent_type == "CONSULTATION":
@@ -420,12 +427,7 @@ class VoiceIntentParser:
                 target_value="APPOINTMENT",
                 label="Consultation",
                 ros_request={"category": "CONSULTATION", "action": "APPOINTMENT"},
-                details={
-                    "llm_text_to_speak": res.text_to_speak,
-                    "llm_generated": True,
-                    "screen": res.screen or "consultation",
-                    "original_text": raw_text,
-                },
+                details=_make_details("consultation"),
             )
 
         if intent_type == "GREETING":
@@ -433,12 +435,7 @@ class VoiceIntentParser:
                 intent_type="GREETING",
                 confidence=confidence,
                 label="Bonjour",
-                details={
-                    "llm_text_to_speak": res.text_to_speak,
-                    "llm_generated": True,
-                    "screen": res.screen or "home",
-                    "original_text": raw_text,
-                },
+                details=_make_details("home"),
             )
 
         if intent_type == "HOME":
@@ -446,12 +443,7 @@ class VoiceIntentParser:
                 intent_type="HOME",
                 confidence=confidence,
                 label="Accueil",
-                details={
-                    "llm_text_to_speak": res.text_to_speak,
-                    "llm_generated": True,
-                    "screen": res.screen or "home",
-                    "original_text": raw_text,
-                },
+                details=_make_details("home"),
             )
 
         return None

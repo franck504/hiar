@@ -37,7 +37,7 @@ Règles de classification :
 - INFORMATION (fiches OMS) :
   * MALARIA (paludisme, piqûre de moustique), HIV (sida), DIABETES (diabète, glycémie, sucre), HYPERTENSION (tension artérielle), TUBERCULOSIS (tuberculose), MENSTRUAL_HEALTH (santé menstruelle).
 - VITALS : mesure des constantes, tension, température, pouls, oxymètre, saturation.
-- CONSULTATION : voir un docteur, médecin, prendre un rdv.
+- CONSULTATION : voir un docteur, médecin, prendre un rdv , dire des symptomes .
 - GREETING : salutation ou présentation ("bonjour", "qui es-tu ?").
 - HOME : retour menu, accueil, annuler.
 - UNKNOWN : incompréhensible ou hors sujet."""

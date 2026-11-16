@@ -369,14 +369,15 @@ class HMIWebSocketBridgeNode(Node):
             return
 
         is_llm = bool(intent.details.get("llm_generated", False))
+        latency_ms = float(intent.details.get("latency_ms", 0.0))
+        model = str(intent.details.get("model", "qwen2.5:0.5b"))
+
         if is_llm:
-            self.get_logger().info(
-                f"🧠 [LLM Qwen 2.5] Inferred: '{intent.intent_type}' | Target: '{intent.target_value or intent.label}'"
-            )
+            engine_str = f"🧠 LLM {model} (Inférence Ollama | Latence: {latency_ms:.0f}ms)"
+        elif intent.intent_type != "UNKNOWN":
+            engine_str = "⚙️ Sécurité Déterministe (Regex Réflexe | Latence: <1ms)"
         else:
-            self.get_logger().info(
-                f"⚙️ [Deterministic Regex] Matched: '{intent.intent_type}' | Target: '{intent.target_value or intent.label}'"
-            )
+            engine_str = f"❓ Non reconnu / Hors périmètre (Inconnu | Latence: {latency_ms:.0f}ms)"
 
         # 1. Action ROS 2 Navigation Command (ex: STOP)
         if intent.ros_command:
@@ -387,30 +388,54 @@ class HMIWebSocketBridgeNode(Node):
             self._publish_hmi_request(intent.ros_request)
 
         # 3. Action ROS 2 Signes vitaux (déclenchement matériel)
+        vitals_id = None
         if intent.intent_type == "VITALS":
-            req_id = str(uuid.uuid4())
-            self._publish_vitals_request(req_id)
+            vitals_id = str(uuid.uuid4())
+            self._publish_vitals_request(vitals_id)
 
         # 4. Construction de l'instruction UI & TTS pour le mobile
         instruction = self.intent_parser.build_instruction(intent, text)
+        tts_text = ""
+        ui_screen = ""
         if instruction:
             if is_llm:
-                instruction["llm_source"] = "qwen2.5:0.5b"
-            text_to_speak = instruction.get("text_to_speak")
-            if is_llm and text_to_speak:
-                self.get_logger().info(f"🗣️ [TTS Qwen] Text to speak: « {text_to_speak} »")
+                instruction["llm_source"] = model
+            tts_text = instruction.get("text_to_speak", "")
+            ui_screen = instruction.get("instruction_ui", {}).get("screen") or instruction.get("screen", "")
 
             await self.broadcast("server/instruction", instruction)
 
             # Diffusion synchronisée sur le topic TTS dédié si texte à prononcer
-            if text_to_speak:
+            if tts_text:
                 await self.broadcast(
                     "voice/tts/request",
                     {
-                        "text": text_to_speak,
+                        "text": tts_text,
                         "priority": instruction.get("speech_priority", "normal"),
                     },
                 )
+
+        # Journalisation complète et structurée (Source -> Décision -> Récepteurs)
+        self.get_logger().info("┌────────────────────────────────────────────────────────────────────────")
+        self.get_logger().info(f"│ 🎤 [INTERACTION VOCALE]")
+        self.get_logger().info(f"│ 📥 SOURCE       : Smartphone Android (Micro STT) [Confiance: {confidence * 100:.0f}%]")
+        self.get_logger().info(f"│    Texte reçu   : « {text} »")
+        self.get_logger().info(f"│ ⚙️ DÉCISION     : {engine_str}")
+        self.get_logger().info(f"│    Intention    : {intent.intent_type} (Cible: {intent.target_value or intent.label or 'N/A'})")
+        self.get_logger().info(f"│ 📤 RÉCEPTEURS   :")
+        if tts_text:
+            self.get_logger().info(f"│    📱 Mobile (TTS): « {tts_text} »")
+        if ui_screen:
+            self.get_logger().info(f"│    📱 Mobile (UI) : Affichage écran '{ui_screen}'")
+        if intent.ros_command:
+            self.get_logger().info(f"│    🤖 ROS 2 (Nav) : /navigation/command ➔ {intent.ros_command} (Nœuds: navigation_decision, supervisor)")
+        if intent.ros_request:
+            self.get_logger().info(f"│    🤖 ROS 2 (HMI) : /hmi/request ➔ {intent.ros_request} (Nœud: hmi_request_receiver)")
+        if vitals_id:
+            self.get_logger().info(f"│    🤖 ROS 2 (ESP) : /vitals/request ➔ {vitals_id} (Nœud: esp32_interface)")
+        if not intent.ros_command and not intent.ros_request and not vitals_id:
+            self.get_logger().info(f"│    🤖 ROS 2       : Aucun ordre moteur nécessaire")
+        self.get_logger().info("└────────────────────────────────────────────────────────────────────────")
 
     # ========================================================
     # LOGIQUE TACTILE UI ACTION
