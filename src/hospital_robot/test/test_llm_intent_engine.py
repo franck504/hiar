@@ -155,6 +155,14 @@ class TestVoiceIntentParserWithLLM:
         assert intent.intent_type == "GREETING"
         assert intent.details.get("llm_generated") is True
 
+        intent2 = parser.parse("tu es qui")
+        assert intent2.intent_type == "GREETING"
+        assert intent2.details.get("llm_generated") is True
+
+        intent3 = parser.parse("vous êtes qui")
+        assert intent3.intent_type == "GREETING"
+        assert intent3.details.get("llm_generated") is True
+
         instruction = parser.build_instruction(intent)
         assert "hiar" in instruction["text_to_speak"].lower()
         assert instruction["instruction_ui"]["screen"] == "home"

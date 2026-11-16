@@ -332,7 +332,7 @@ class VoiceIntentParser:
         if use_llm and self.enable_llm and self.llm_engine and self.llm_engine.is_available():
             try:
                 llm_res = self.llm_engine.infer(raw_text)
-                if llm_res and llm_res.success and llm_res.intent != "UNKNOWN":
+                if llm_res and llm_res.success:
                     intent = self._convert_llm_response(llm_res, confidence, raw_text)
                     if intent:
                         return intent
@@ -377,6 +377,15 @@ class VoiceIntentParser:
                 "latency_ms": latency_ms,
                 "model": model_name,
             }
+
+        norm = normalize_text(raw_text)
+        if any(w in norm for w in ["qui es-tu", "tu es qui", "qui etes-vous", "vous etes qui", "presente-toi", "ton nom"]):
+            return ParsedIntent(
+                intent_type="GREETING",
+                confidence=confidence,
+                label="Bonjour",
+                details=_make_details("home"),
+            )
 
         if (target and target in self.DEPARTMENTS) or intent_type == "ORIENTATION":
             dest_key = target if (target and target in self.DEPARTMENTS) else "PHARMACY"
