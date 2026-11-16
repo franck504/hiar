@@ -356,7 +356,7 @@ class VoiceIntentParser:
         target = res.target
         intent_type = res.intent
 
-        if intent_type == "ORIENTATION":
+        if (target and target in self.DEPARTMENTS) or intent_type == "ORIENTATION":
             dest_key = target if (target and target in self.DEPARTMENTS) else "PHARMACY"
             label = self.DEPARTMENTS.get(dest_key, {}).get("label", dest_key)
             return ParsedIntent(
@@ -370,12 +370,12 @@ class VoiceIntentParser:
                 details={
                     "llm_text_to_speak": res.text_to_speak,
                     "llm_generated": True,
-                    "screen": res.screen or "orientation",
+                    "screen": res.screen or "mission",
                     "original_text": raw_text,
                 },
             )
 
-        if intent_type == "INFORMATION":
+        if (target and target in self.TOPICS) or intent_type == "INFORMATION":
             topic_key = target if (target and target in self.TOPICS) else "MALARIA"
             label = self.TOPICS.get(topic_key, {}).get("label", topic_key)
             return ParsedIntent(

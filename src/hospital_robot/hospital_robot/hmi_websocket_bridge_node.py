@@ -115,7 +115,7 @@ class HMIWebSocketBridgeNode(Node):
             self.declare_parameter("llm_backend", "ollama")
             self.declare_parameter("llm_host", "http://127.0.0.1:11434")
             self.declare_parameter("llm_model", "qwen2.5:0.5b")
-            self.declare_parameter("llm_timeout", 2.5)
+            self.declare_parameter("llm_timeout", 15.0)
 
             self.host = host or str(self.get_parameter("websocket_host").value)
             self.port = port or int(self.get_parameter("websocket_port").value)
@@ -131,7 +131,7 @@ class HMIWebSocketBridgeNode(Node):
             llm_backend = "ollama"
             llm_host = "http://127.0.0.1:11434"
             llm_model = "qwen2.5:0.5b"
-            llm_timeout = 2.5
+            llm_timeout = 15.0
 
         # Composants de traitement métier (Parseur hybride Déterministe + LLM)
         if LLMConfig is not None:
@@ -145,6 +145,20 @@ class HMIWebSocketBridgeNode(Node):
             self.intent_parser = VoiceIntentParser(enable_llm=enable_llm, llm_config=llm_cfg)
         else:
             self.intent_parser = VoiceIntentParser()
+
+        # Préchauffage en arrière-plan pour garder le modèle Qwen chargé en RAM
+        if getattr(self.intent_parser, "enable_llm", False) and getattr(self.intent_parser, "llm_engine", None):
+            def _prewarm_llm():
+                try:
+                    time.sleep(1.0)
+                    if self.intent_parser.llm_engine.is_available():
+                        self.get_logger().info("🔥 Pre-warming LLM Qwen 2.5 in RAM...")
+                        res = self.intent_parser.llm_engine.infer("Bonjour robot")
+                        self.get_logger().info(f"✅ LLM Qwen 2.5 pre-warmed and ready (latency={res.latency_ms:.0f}ms).")
+                except Exception as ex:
+                    self.get_logger().warning(f"LLM pre-warm warning: {ex}")
+            threading.Thread(target=_prewarm_llm, daemon=True).start()
+
         self._last_stt_text = ""
         self._last_stt_time = 0.0
 
@@ -354,7 +368,15 @@ class HMIWebSocketBridgeNode(Node):
             self.get_logger().info(f"Silently ignored fragment: '{text}'")
             return
 
-        self.get_logger().info(f"🎤 Spoken text received: '{text}' (conf={confidence:.2f}) -> {intent.intent_type}")
+        is_llm = bool(intent.details.get("llm_generated", False))
+        if is_llm:
+            self.get_logger().info(
+                f"🧠 [LLM Qwen 2.5] Inferred: '{intent.intent_type}' | Target: '{intent.target_value or intent.label}'"
+            )
+        else:
+            self.get_logger().info(
+                f"⚙️ [Deterministic Regex] Matched: '{intent.intent_type}' | Target: '{intent.target_value or intent.label}'"
+            )
 
         # 1. Action ROS 2 Navigation Command (ex: STOP)
         if intent.ros_command:
@@ -372,10 +394,15 @@ class HMIWebSocketBridgeNode(Node):
         # 4. Construction de l'instruction UI & TTS pour le mobile
         instruction = self.intent_parser.build_instruction(intent, text)
         if instruction:
+            if is_llm:
+                instruction["llm_source"] = "qwen2.5:0.5b"
+            text_to_speak = instruction.get("text_to_speak")
+            if is_llm and text_to_speak:
+                self.get_logger().info(f"🗣️ [TTS Qwen] Text to speak: « {text_to_speak} »")
+
             await self.broadcast("server/instruction", instruction)
 
             # Diffusion synchronisée sur le topic TTS dédié si texte à prononcer
-            text_to_speak = instruction.get("text_to_speak")
             if text_to_speak:
                 await self.broadcast(
                     "voice/tts/request",

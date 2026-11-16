@@ -19,35 +19,28 @@ import urllib.request
 logger = logging.getLogger("hospital_robot.llm_intent_engine")
 
 
-DEFAULT_SYSTEM_PROMPT = """Tu es l'assistant vocal intelligent du robot hospitalier HIAR (Hospital Intelligent Assistant Robot).
-Ton rôle est d'analyser la demande d'un patient ou visiteur en français, de classifier son intention et de formuler une réponse vocale courtoise, concise (15 mots max) et adaptée à la synthèse vocale (TTS).
-
-Tu dois répondre UNIQUEMENT par un objet JSON valide, sans texte additionnel ni explication, selon ce schéma exact :
+DEFAULT_SYSTEM_PROMPT = """Tu es l'assistant vocal intelligent du robot hospitalier HIAR.
+Analyse la demande du patient en français et réponds UNIQUEMENT par un objet JSON valide :
 {
   "intent": "ORIENTATION" | "INFORMATION" | "VITALS" | "CONSULTATION" | "GREETING" | "HOME" | "UNKNOWN",
   "target": "PHARMACY" | "LABORATORY" | "RADIOLOGY" | "RECEPTION" | "MALARIA" | "HIV" | "DIABETES" | "HYPERTENSION" | "TUBERCULOSIS" | "MENSTRUAL_HEALTH" | null,
-  "text_to_speak": "Phrase très courte à prononcer par le robot (15 mots max)",
+  "text_to_speak": "Phrase très courte à prononcer (12 mots max)",
   "screen": "orientation" | "information" | "consultation" | "home"
 }
 
 Règles de classification :
-1. ORIENTATION (direction dans l'hôpital) :
-   - PHARMACY : médicaments, ordonnance, pilules, pharmacie, remède.
-   - LABORATORY : prise de sang, analyses, bilan, laboratoire, labo, examen biologique.
-   - RADIOLOGY : radio, scanner, irm, radiographie, imagerie, fracture, os cassé.
-   - RECEPTION : entrée, accueil, renseignements, guichet, sortie.
-2. INFORMATION (prévention et fiches OMS) :
-   - MALARIA : paludisme, palu, moustiques, fièvre tropicale.
-   - HIV : sida, vih, dépistage vih.
-   - DIABETES : diabète, glycémie, sucre dans le sang, insuline.
-   - HYPERTENSION : tension artérielle, pression artérielle, vertiges tension.
-   - TUBERCULOSIS : tuberculose, toux persistante, crachats de sang.
-   - MENSTRUAL_HEALTH : règles, santé menstruelle, cycle.
-3. VITALS : mesure des constantes, tension, température, pouls, oxymètre, saturation.
-4. CONSULTATION : voir un docteur, prendre un rendez-vous, consultation générale, médecin.
-5. GREETING : salutation ou présentation ("bonjour", "qui es-tu ?", "comment tu t'appelles ?").
-6. HOME : retour au menu principal, accueil, annuler.
-7. UNKNOWN : demande incompréhensible ou hors sujet."""
+- ORIENTATION :
+  * PHARMACY : médicaments, ordonnance, pilules, pharmacie, cachets, sirop, comprimés, remède.
+  * LABORATORY : prise de sang, analyses, bilan biologique, laboratoire, labo, examen sanguin.
+  * RADIOLOGY : radio, scanner, irm, radiographie, imagerie, fracture, os cassé ou foulé.
+  * RECEPTION : entrée, accueil, sortie, guichet.
+- INFORMATION (fiches OMS) :
+  * MALARIA (paludisme, piqûre de moustique), HIV (sida), DIABETES (diabète, glycémie, sucre), HYPERTENSION (tension artérielle), TUBERCULOSIS (tuberculose), MENSTRUAL_HEALTH (santé menstruelle).
+- VITALS : mesure des constantes, tension, température, pouls, oxymètre, saturation.
+- CONSULTATION : voir un docteur, médecin, prendre un rdv.
+- GREETING : salutation ou présentation ("bonjour", "qui es-tu ?").
+- HOME : retour menu, accueil, annuler.
+- UNKNOWN : incompréhensible ou hors sujet."""
 
 
 @dataclass
@@ -58,9 +51,9 @@ class LLMConfig:
     backend: str = "ollama"  # "ollama", "llama_cpp", "mock"
     host: str = "http://127.0.0.1:11434"
     model_name: str = "qwen2.5:0.5b"
-    timeout_sec: float = 2.5
-    temperature: float = 0.2
-    max_tokens: int = 150
+    timeout_sec: float = 15.0
+    temperature: float = 0.1
+    max_tokens: int = 120
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
 
 
@@ -111,6 +104,7 @@ class OllamaBackend(LLMBackendInterface):
             ],
             "stream": False,
             "format": "json",
+            "keep_alive": "24h",
             "options": {
                 "temperature": config.temperature,
                 "num_predict": config.max_tokens,
@@ -364,4 +358,24 @@ class LLMIntentEngine:
                 text_fixed = text.replace("'", '"')
                 return json.loads(text_fixed)
             except Exception:
-                return None
+                pass
+
+        # 4. Récupération robuste par regex si le JSON est tronqué en fin de génération
+        salvaged = {}
+        intent_m = re.search(r'"intent"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
+        if intent_m:
+            salvaged["intent"] = intent_m.group(1).upper()
+        target_m = re.search(r'"target"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
+        if target_m:
+            salvaged["target"] = target_m.group(1).upper()
+        speech_m = re.search(r'"text_to_speak"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?', text)
+        if speech_m:
+            salvaged["text_to_speak"] = speech_m.group(1)
+        screen_m = re.search(r'"screen"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
+        if screen_m:
+            salvaged["screen"] = screen_m.group(1).lower()
+
+        if salvaged.get("intent") or salvaged.get("target"):
+            return salvaged
+
+        return None
