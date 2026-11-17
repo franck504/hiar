@@ -46,6 +46,10 @@ class HubClient {
   Function(Map<String, dynamic> instruction)? onServerInstruction;
   Function(String ip, int port)? onRobotDiscovered;
 
+  /// Dernier diagnostic capteurs / nœuds reçu en direct du Raspberry Pi
+  final ValueNotifier<Map<String, dynamic>?> diagnosticsNotifier = ValueNotifier(null);
+  final ValueNotifier<bool> connectedNotifier = ValueNotifier(false);
+
   String? _lastTtsDispatched;
   DateTime? _lastTtsDispatchedTime;
 
@@ -229,6 +233,7 @@ class HubClient {
       _isConnecting = false;
       _isConnected = true;
       _consecutiveFailures = 0;
+      connectedNotifier.value = true;
       onConnectionChange?.call(true);
       debugPrint("HubClient: ✅ Connecté à $wsUrl");
 
@@ -240,6 +245,7 @@ class HubClient {
       _subscribe(HiarTopics.uiActionRequest);
       _subscribe(HiarTopics.robotMissionStatus);
       _subscribe("server/instruction");
+      _subscribe("robot/diagnostics");
 
       // Heartbeat régulier
       _startHeartbeat();
@@ -336,6 +342,16 @@ class HubClient {
         onMissionStatus?.call(state);
       }
     }
+
+    // 4. Diagnostics matériels / capteurs / nœuds ROS 2 en direct
+    else if (topic == "robot/diagnostics") {
+      diagnosticsNotifier.value = Map<String, dynamic>.from(payload);
+    }
+  }
+
+  /// Demande un rafraîchissement immédiat des capteurs et diagnostics au Raspberry Pi
+  void requestDiagnosticsRefresh() {
+    publishAction("diagnostics.refresh", {});
   }
 
   /// PUBLICATION STT : Envoie le texte brut entendu par le micro au Raspberry Pi
@@ -440,6 +456,7 @@ class HubClient {
     _channel = null;
 
     if (wasConnected) {
+      connectedNotifier.value = false;
       onConnectionChange?.call(false);
     }
 
@@ -481,5 +498,6 @@ class HubClient {
     } catch (_) {}
     _discoverySocket = null;
     _isConnected = false;
+    connectedNotifier.value = false;
   }
 }

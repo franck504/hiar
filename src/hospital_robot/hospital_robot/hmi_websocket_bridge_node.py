@@ -150,15 +150,28 @@ class HMIWebSocketBridgeNode(Node):
             self.intent_parser = VoiceIntentParser()
 
         # Préchauffage en arrière-plan pour garder le modèle Qwen chargé en RAM
+        self._llm_status: str = "offline"
+        self._llm_detail: str = "Désactivé"
         if getattr(self.intent_parser, "enable_llm", False) and getattr(self.intent_parser, "llm_engine", None):
+            self._llm_status = "warn"
+            self._llm_detail = "Initialisation Qwen 2.5..."
             def _prewarm_llm():
                 try:
                     time.sleep(1.0)
                     if self.intent_parser.llm_engine.is_available():
+                        self._llm_status = "warn"
+                        self._llm_detail = "Chargement RAM..."
                         self.get_logger().info("[LLM] 🔥 Pre-warming LLM Qwen 2.5 in RAM...")
                         res = self.intent_parser.llm_engine.infer("Bonjour robot")
+                        self._llm_status = "ok"
+                        self._llm_detail = f"Qwen 2.5 prêt ({res.latency_ms:.0f} ms)"
                         self.get_logger().info(f"[LLM] ✅ Qwen 2.5 prêt (latency={res.latency_ms:.0f}ms).")
+                    else:
+                        self._llm_status = "offline"
+                        self._llm_detail = "Ollama indisponible"
                 except Exception as ex:
+                    self._llm_status = "warn"
+                    self._llm_detail = f"Erreur: {ex}"
                     self.get_logger().warning(f"[LLM] Pre-warm warning: {ex}")
             threading.Thread(target=_prewarm_llm, daemon=True).start()
 
@@ -169,9 +182,12 @@ class HMIWebSocketBridgeNode(Node):
         self._last_ticket_label: Optional[str] = None
         self._last_stt_text = ""
         self._last_stt_time = 0.0
+        self._esp32_diagnostics: Optional[Dict[str, Any]] = None
+        self._esp32_diagnostics_at: float = 0.0
 
         # Clients WebSocket connectés
         self.ws_clients: Set[WSConnection] = set()
+        self._diagnostics_subscribers: Set[WSConnection] = set()
         self._ws_clients_lock = threading.Lock()
 
         # Gestion Asyncio & Serveur
@@ -188,6 +204,7 @@ class HMIWebSocketBridgeNode(Node):
         self.hmi_request_pub = self.create_publisher(String, "/hmi/request", 10)
         self.navigation_command_pub = self.create_publisher(String, "/navigation/command", 10)
         self.vitals_request_pub = self.create_publisher(String, "/vitals/request", 10)
+        self.diagnostics_request_pub = self.create_publisher(String, "/esp32/diagnostics/request", 10)
 
         # ----------------------------------------------------
         # Souscriptions ROS 2
@@ -203,6 +220,9 @@ class HMIWebSocketBridgeNode(Node):
         )
         self.obstacle_sub = self.create_subscription(
             String, "/sensors/obstacle", self._on_obstacle, 10
+        )
+        self.esp32_diagnostics_sub = self.create_subscription(
+            String, "/esp32/diagnostics", self._on_esp32_diagnostics, 10
         )
 
         self.get_logger().info(
@@ -236,6 +256,7 @@ class HMIWebSocketBridgeNode(Node):
                 self.get_logger().info(
                     f"WebSocket server listening on ws://{self.host}:{self.port}/ws"
                 )
+                self.loop.create_task(self._diagnostics_broadcast_loop())
                 ready_event.set()
 
             self.loop.create_task(_start())
@@ -436,6 +457,7 @@ class HMIWebSocketBridgeNode(Node):
         finally:
             with self._ws_clients_lock:
                 self.ws_clients.discard(websocket)
+                self._diagnostics_subscribers.discard(websocket)
             self.get_logger().info(f"[MOBILE] Client déconnecté: {websocket.remote_address}")
 
     async def _process_incoming_frame(
@@ -470,6 +492,14 @@ class HMIWebSocketBridgeNode(Node):
             return
 
         if msg_type == "sub":
+            if topic == "robot/diagnostics":
+                with self._ws_clients_lock:
+                    self._diagnostics_subscribers.add(websocket)
+                diag_env = make_envelope("robot/diagnostics", self.build_system_diagnostics())
+                try:
+                    await websocket.send(diag_env)
+                except Exception:
+                    pass
             return
 
         # Publications entrantes du smartphone
@@ -803,6 +833,12 @@ class HMIWebSocketBridgeNode(Node):
             if topic:
                 self._publish_hmi_request({"category": "INFORMATION", "topic": topic})
 
+        elif action_id == "diagnostics.refresh":
+            msg = String()
+            msg.data = "REFRESH"
+            self.diagnostics_request_pub.publish(msg)
+            await self._broadcast_diagnostics_to_subscribers()
+
         elif action_id in {"consult.confirm", "consult.book", "consult.create"}:
             if args:
                 self._current_consultation_data.update(args)
@@ -1056,6 +1092,129 @@ class HMIWebSocketBridgeNode(Node):
                     "robot_status": {"status_label": f"Obstacle détecté : {obs_text}"},
                 },
             )
+
+    def _on_esp32_diagnostics(self, msg):
+        """Reçoit /esp32/diagnostics (JSON) publié périodiquement par esp32_interface."""
+        try:
+            data = json.loads(msg.data)
+            if isinstance(data, dict):
+                self._esp32_diagnostics = data
+                self._esp32_diagnostics_at = time.monotonic()
+        except Exception:
+            pass
+
+    def build_system_diagnostics(self) -> Dict[str, Any]:
+        """Agrège l'état de l'ESP32, des capteurs, des nœuds ROS 2 et du LLM."""
+        now_mono = time.monotonic()
+        esp_fresh = (
+            self._esp32_diagnostics is not None
+            and (now_mono - self._esp32_diagnostics_at) <= 8.0
+        )
+
+        if esp_fresh and self._esp32_diagnostics is not None:
+            esp32_info = self._esp32_diagnostics.get("esp32", {
+                "status": "unknown", "port": "/dev/ttyUSB0", "detail": "Inconnu"
+            })
+            sensors = self._esp32_diagnostics.get("sensors", {})
+            fw_mode = self._esp32_diagnostics.get("firmware_diagnostics", "unknown")
+        else:
+            esp32_info = {
+                "status": "offline",
+                "port": "/dev/ttyUSB0",
+                "detail": "Nœud esp32_interface hors ligne",
+            }
+            sensors = {
+                "ultrasonic": {"status": "offline", "distance_cm": None, "detail": "ESP32 hors ligne"},
+                "ir_left": {"status": "offline", "state": None, "raw": None, "detail": "ESP32 hors ligne"},
+                "ir_right": {"status": "offline", "state": None, "raw": None, "detail": "ESP32 hors ligne"},
+                "ds18b20": {"status": "offline", "detail": "ESP32 hors ligne"},
+                "max30102": {"status": "offline", "detail": "ESP32 hors ligne"},
+                "motors": {"status": "offline", "mode": "OFFLINE", "detail": "ESP32 hors ligne"},
+            }
+            fw_mode = "offline"
+
+        expected_nodes = [
+            "esp32_interface",
+            "obstacle_detector",
+            "robot_supervisor",
+            "navigation_decision",
+            "hmi_request_receiver",
+            "hmi_websocket_bridge",
+        ]
+        if ROS_AVAILABLE and hasattr(self, "get_node_names"):
+            try:
+                raw_names = {n.lstrip("/") for n in self.get_node_names()}
+                active_nodes = [n for n in expected_nodes if n in raw_names]
+                missing_nodes = [n for n in expected_nodes if n not in raw_names]
+                nodes_status = "ok" if not missing_nodes else ("warn" if active_nodes else "offline")
+                nodes_detail = (
+                    f"{len(active_nodes)}/{len(expected_nodes)} actifs"
+                    if not missing_nodes
+                    else f"{len(active_nodes)}/{len(expected_nodes)} (manque: {', '.join(missing_nodes[:2])})"
+                )
+            except Exception:
+                active_nodes = ["hmi_websocket_bridge"]
+                missing_nodes = []
+                nodes_status = "warn"
+                nodes_detail = "Vérification ROS 2 indisponible"
+        else:
+            active_nodes = ["hmi_websocket_bridge"]
+            missing_nodes = []
+            nodes_status = "ok"
+            nodes_detail = "Mode autonome (hors ROS 2)"
+
+        primary_ip, all_ips, _ = self._collect_network_info()
+
+        return {
+            "ts": round(time.time(), 2),
+            "firmware_diagnostics": fw_mode,
+            "esp32": esp32_info,
+            "sensors": sensors,
+            "ros_nodes": {
+                "status": nodes_status,
+                "active_count": len(active_nodes),
+                "total_count": len(expected_nodes),
+                "active": active_nodes,
+                "missing": missing_nodes,
+                "detail": nodes_detail,
+            },
+            "llm": {
+                "status": self._llm_status,
+                "detail": self._llm_detail,
+            },
+            "network": {
+                "hostname": socket.gethostname(),
+                "ip": primary_ip,
+                "ips": all_ips,
+                "ws_port": self.port,
+                "web_port": 5001,
+            },
+        }
+
+    async def _broadcast_diagnostics_to_subscribers(self):
+        with self._ws_clients_lock:
+            subs = list(self._diagnostics_subscribers)
+        if not subs:
+            return
+        envelope = make_envelope("robot/diagnostics", self.build_system_diagnostics())
+        for client in subs:
+            try:
+                await client.send(envelope)
+            except Exception:
+                pass
+
+    async def _diagnostics_broadcast_loop(self):
+        """Diffuse périodiquement robot/diagnostics aux clients mobiles abonnés."""
+        while not self._stop_event.is_set():
+            try:
+                await asyncio.sleep(2.5)
+                if self._stop_event.is_set():
+                    break
+                await self._broadcast_diagnostics_to_subscribers()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                continue
 
     # ========================================================
     # DIFFUSION WEBSOCKET MULTI-CLIENTS

@@ -11,6 +11,7 @@ import 'features/orientation/orientation_screen.dart';
 import 'features/orientation/mission_screen.dart';
 import 'features/information/information_screen.dart';
 import 'features/consultation/consultation_screen.dart';
+import 'ui/components/sensor_monitor_panel.dart';
 import 'ui/rail/voice_rail.dart';
 import 'ui/theme/hiar_colors.dart';
 import 'voice/voice_service.dart';
@@ -719,10 +720,14 @@ class _HiarAppState extends State<HiarApp> {
     }
   }
 
-  /// Boîte de dialogue pour configurer l'IP et le port du Raspberry Pi 4 (protégée contre l'overflow du clavier)
+  /// Boîte de dialogue pour configurer l'IP/port et monitorer les capteurs & nœuds en direct
   void _showServerConfigDialog() {
     final ipController = TextEditingController(text: _hub.serverIp);
     final portController = TextEditingController(text: _hub.serverPort.toString());
+
+    if (_hub.isConnected) {
+      _hub.requestDiagnosticsRefresh();
+    }
 
     showDialog(
       context: _navKey.currentContext ?? context,
@@ -730,7 +735,7 @@ class _HiarAppState extends State<HiarApp> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
+          constraints: const BoxConstraints(maxWidth: 560),
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -745,7 +750,7 @@ class _HiarAppState extends State<HiarApp> {
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        "Paramètres du serveur",
+                        "Paramètres & Diagnostic du robot",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: HiarColors.marine),
                       ),
                     ),
@@ -760,40 +765,51 @@ class _HiarAppState extends State<HiarApp> {
                 ),
                 const SizedBox(height: 8),
 
-                // Indicateur de statut actuel
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _isRobotConnected ? HiarColors.okBg : HiarColors.errBg,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _isRobotConnected ? HiarColors.ok.withOpacity(0.3) : HiarColors.err.withOpacity(0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _isRobotConnected ? Icons.check_circle : Icons.error_outline,
-                        color: _isRobotConnected ? HiarColors.ok : HiarColors.err,
-                        size: 16,
+                // Indicateur de statut WebSocket en direct
+                ValueListenableBuilder<bool>(
+                  valueListenable: _hub.connectedNotifier,
+                  builder: (_, connected, __) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: connected ? HiarColors.okBg : HiarColors.errBg,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: connected ? HiarColors.ok.withOpacity(0.3) : HiarColors.err.withOpacity(0.3),
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _isRobotConnected
-                              ? "Connecté : ws://${_hub.serverIp}:${_hub.serverPort}/ws"
-                              : "Déconnecté (${_hub.serverIp}:${_hub.serverPort})",
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: _isRobotConnected ? HiarColors.marine : HiarColors.err,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          connected ? Icons.check_circle : Icons.error_outline,
+                          color: connected ? HiarColors.ok : HiarColors.err,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            connected
+                                ? "Connecté : ws://${_hub.serverIp}:${_hub.serverPort}/ws"
+                                : "Déconnecté (${_hub.serverIp}:${_hub.serverPort})",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: connected ? HiarColors.marine : HiarColors.err,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+
+                // Moniteur temps réel du cycle de vie des capteurs, ESP32, ROS 2 et LLM
+                SensorMonitorPanel(
+                  diagnosticsListenable: _hub.diagnosticsNotifier,
+                  connectedListenable: _hub.connectedNotifier,
+                  onRefresh: () => _hub.requestDiagnosticsRefresh(),
+                ),
+                const SizedBox(height: 10),
 
                 const Text(
                   "Adresse IP locale du robot :",
