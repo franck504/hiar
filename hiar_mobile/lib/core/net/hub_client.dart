@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../bus/envelope.dart';
@@ -13,12 +14,24 @@ class HubClient {
   StreamSubscription? _subscription;
   Timer? _reconnectTimer;
   Timer? _heartbeatTimer;
+  RawDatagramSocket? _discoverySocket;
+  Timer? _discoveryProbeTimer;
 
-  static const List<String> candidateIps = ["127.0.0.1", "192.168.43.181", "10.42.0.1", "192.168.0.105"];
+  static const int discoveryPort = 5005;
+  static const List<String> candidateIps = [
+    "192.168.43.52",
+    "cecilia-desktop.local",
+    "127.0.0.1",
+    "10.42.0.1",
+    "192.168.0.105",
+  ];
   int _candidateIndex = 0;
   bool _manualIpSet = false;
+  int _consecutiveFailures = 0;
+  bool _isConnecting = false;
+  bool _isDisposed = false;
 
-  String serverIp = "127.0.0.1";
+  String serverIp = "192.168.43.52";
   int serverPort = 5000;
   bool _isConnected = false;
   int _seq = 0;
@@ -31,6 +44,7 @@ class HubClient {
   Function(String actionId, Map<String, dynamic> args)? onActionRequested;
   Function(String missionState)? onMissionStatus;
   Function(Map<String, dynamic> instruction)? onServerInstruction;
+  Function(String ip, int port)? onRobotDiscovered;
 
   String? _lastTtsDispatched;
   DateTime? _lastTtsDispatchedTime;
@@ -52,22 +66,158 @@ class HubClient {
     onTtsRequested?.call(clean);
   }
 
+  /// Active la découverte automatique UDP sur le réseau Wi-Fi local (port 5005)
+  Future<void> _ensureDiscoveryListening() async {
+    if (kIsWeb || _isDisposed || _discoverySocket != null) return;
+    try {
+      final sock = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        discoveryPort,
+        reuseAddress: true,
+      );
+      if (_isDisposed) {
+        sock.close();
+        return;
+      }
+      sock.broadcastEnabled = true;
+      _discoverySocket = sock;
+      debugPrint("HubClient: Écoute auto-découverte Wi-Fi UDP sur le port $discoveryPort");
+
+      sock.listen(
+        (event) {
+          if (event != RawSocketEvent.read) return;
+          final datagram = sock.receive();
+          if (datagram == null) return;
+          _handleDiscoveryDatagram(datagram);
+        },
+        onError: (err) {
+          debugPrint("HubClient: Erreur socket découverte UDP: $err");
+        },
+      );
+
+      _sendDiscoveryProbe();
+      _discoveryProbeTimer?.cancel();
+      _discoveryProbeTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+        if (!_isConnected && !_isDisposed) {
+          _sendDiscoveryProbe();
+        }
+      });
+    } catch (e) {
+      debugPrint("HubClient: Impossible de lier le port UDP $discoveryPort: $e");
+    }
+  }
+
+  void _sendDiscoveryProbe() {
+    final sock = _discoverySocket;
+    if (sock == null) return;
+    final data = utf8.encode("HIAR_DISCOVER");
+    const targets = ["255.255.255.255", "192.168.43.255", "192.168.0.255", "10.42.0.255"];
+    for (final target in targets) {
+      try {
+        sock.send(data, InternetAddress(target), discoveryPort);
+      } catch (_) {}
+    }
+  }
+
+  void _handleDiscoveryDatagram(Datagram datagram) {
+    try {
+      final raw = utf8.decode(datagram.data, allowMalformed: true).trim();
+      if (!raw.startsWith("{")) return;
+      final parsed = json.decode(raw);
+      if (parsed is! Map<String, dynamic>) return;
+      if (parsed["service"] != "hiar_robot") return;
+
+      final sourceIp = datagram.address.address;
+      final advertisedIp = (parsed["ip"] as String?)?.trim();
+      final discoveredIp = (sourceIp.isNotEmpty && sourceIp != "0.0.0.0")
+          ? sourceIp
+          : (advertisedIp ?? "");
+      final discoveredPort = (parsed["ws_port"] is int)
+          ? parsed["ws_port"] as int
+          : int.tryParse("${parsed["ws_port"] ?? 5000}") ?? 5000;
+
+      if (discoveredIp.isEmpty) return;
+
+      // Si déjà connecté sur cette IP, rien à faire
+      if (_isConnected && serverIp == discoveredIp && serverPort == discoveredPort) {
+        return;
+      }
+
+      // Si une IP manuelle a été fixée et n'a pas encore échoué 2 fois, on la respecte
+      if (_manualIpSet && _consecutiveFailures < 2) {
+        return;
+      }
+
+      if (!_isConnected) {
+        debugPrint("HubClient: 📡 Robot HIAR découvert automatiquement sur Wi-Fi -> $discoveredIp:$discoveredPort");
+        serverIp = discoveredIp;
+        serverPort = discoveredPort;
+        _manualIpSet = false;
+        _consecutiveFailures = 0;
+        onRobotDiscovered?.call(discoveredIp, discoveredPort);
+        _reconnectTimer?.cancel();
+        connect();
+      }
+    } catch (_) {}
+  }
+
+  /// Relance une détection automatique Wi-Fi du Raspberry Pi
+  void triggerAutoDiscovery() {
+    _manualIpSet = false;
+    _consecutiveFailures = 0;
+    _candidateIndex = 0;
+    _isDisposed = false;
+    _ensureDiscoveryListening().then((_) => _sendDiscoveryProbe());
+    if (!_isConnected) {
+      _reconnectTimer?.cancel();
+      connect();
+    }
+  }
+
   /// Démarre la connexion WebSocket vers le Raspberry Pi
-  void connect({String? ip, int? port}) {
+  Future<void> connect({String? ip, int? port}) async {
+    _isDisposed = false;
     if (ip != null) {
       _manualIpSet = true;
+      _consecutiveFailures = 0;
       serverIp = ip;
     }
     if (port != null) serverPort = port;
 
-    _reconnectTimer?.cancel();
-    final wsUrl = Uri.parse("ws://$serverIp:$serverPort/ws");
+    if (_isConnecting) return;
+    _isConnecting = true;
 
+    _reconnectTimer?.cancel();
+    await _ensureDiscoveryListening();
+
+    // Fermer une éventuelle connexion précédente proprement
+    _heartbeatTimer?.cancel();
+    await _subscription?.cancel();
+    _subscription = null;
+    try {
+      await _channel?.sink.close();
+    } catch (_) {}
+    _channel = null;
+
+    final wsUrl = Uri.parse("ws://$serverIp:$serverPort/ws");
     debugPrint("HubClient: Tentative de connexion à $wsUrl");
 
     try {
-      _channel = WebSocketChannel.connect(wsUrl);
-      _subscription = _channel!.stream.listen(
+      final channel = WebSocketChannel.connect(wsUrl);
+      _channel = channel;
+
+      // Attendre que la poignée de main TCP/WebSocket aboutisse (évite faux "Connecté")
+      await channel.ready.timeout(const Duration(seconds: 3));
+
+      if (_isDisposed || _channel != channel) {
+        try {
+          await channel.sink.close();
+        } catch (_) {}
+        _isConnecting = false;
+        return;
+      }
+
+      _subscription = channel.stream.listen(
         _onMessage,
         onDone: _onDisconnected,
         onError: (err) {
@@ -76,8 +226,11 @@ class HubClient {
         },
       );
 
+      _isConnecting = false;
       _isConnected = true;
+      _consecutiveFailures = 0;
       onConnectionChange?.call(true);
+      debugPrint("HubClient: ✅ Connecté à $wsUrl");
 
       // 1. Envoi du handshake "hello" selon hiar_contract_v1.json
       _sendHello();
@@ -91,7 +244,8 @@ class HubClient {
       // Heartbeat régulier
       _startHeartbeat();
     } catch (e) {
-      debugPrint("HubClient: Exception connexion: $e");
+      debugPrint("HubClient: Échec connexion ($wsUrl): $e");
+      _isConnecting = false;
       _onDisconnected();
     }
   }
@@ -177,7 +331,7 @@ class HubClient {
 
     // 3. Statut du robot relayé par ROS 2
     else if (topic == HiarTopics.robotMissionStatus) {
-      final state = payload['state'] as String?;
+      final state = (payload['state'] ?? payload['status']) as String?;
       if (state != null) {
         onMissionStatus?.call(state);
       }
@@ -272,31 +426,60 @@ class HubClient {
   }
 
   void _onDisconnected() {
+    if (_isDisposed) return;
+    final wasConnected = _isConnected;
     _isConnected = false;
+    _isConnecting = false;
+    _consecutiveFailures++;
     _heartbeatTimer?.cancel();
     _subscription?.cancel();
+    _subscription = null;
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
     _channel = null;
-    onConnectionChange?.call(false);
 
-    // Si aucune IP manuelle n'a été saisie, essayer le candidat suivant (127.0.0.1, 10.42.0.1, 192.168.0.105)
-    if (!_manualIpSet) {
+    if (wasConnected) {
+      onConnectionChange?.call(false);
+    }
+
+    // Relancer une sonde UDP pour découvrir le Pi sur le Wi-Fi
+    _sendDiscoveryProbe();
+
+    // Si aucune IP manuelle n'a été forcée (ou si elle échoue >= 2 fois), basculer sur les candidats suivants
+    if (!_manualIpSet || _consecutiveFailures >= 2) {
       _candidateIndex = (_candidateIndex + 1) % candidateIps.length;
       serverIp = candidateIps[_candidateIndex];
     }
 
     // Tentative de reconnexion automatique en boucle
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 3), () {
-      connect();
+    _reconnectTimer = Timer(const Duration(seconds: 2), () {
+      if (!_isDisposed) {
+        connect();
+      }
     });
   }
 
   void disconnect() {
+    _isDisposed = true;
+    _isConnecting = false;
     _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _discoveryProbeTimer?.cancel();
+    _discoveryProbeTimer = null;
     _subscription?.cancel();
-    _channel?.sink.close();
+    _subscription = null;
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
     _channel = null;
+    try {
+      _discoverySocket?.close();
+    } catch (_) {}
+    _discoverySocket = null;
     _isConnected = false;
   }
 }

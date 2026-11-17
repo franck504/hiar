@@ -9,9 +9,12 @@ Ce nœud héberge le serveur WebSocket central (port 5000) et fait la passerelle
 import asyncio
 import json
 import logging
+import re
+import socket
+import subprocess
 import threading
 import time
-from typing import Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 import uuid
 
 try:
@@ -175,6 +178,8 @@ class HMIWebSocketBridgeNode(Node):
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.server = None
         self._server_thread: Optional[threading.Thread] = None
+        self._discovery_thread: Optional[threading.Thread] = None
+        self.discovery_port: int = 5005
         self._stop_event = threading.Event()
 
         # ----------------------------------------------------
@@ -225,6 +230,8 @@ class HMIWebSocketBridgeNode(Node):
                     self._handle_client,
                     self.host,
                     self.port,
+                    ping_interval=15,
+                    ping_timeout=10,
                 )
                 self.get_logger().info(
                     f"WebSocket server listening on ws://{self.host}:{self.port}/ws"
@@ -248,9 +255,139 @@ class HMIWebSocketBridgeNode(Node):
         self._server_thread.start()
         ready_event.wait(timeout=5.0)
 
+        # Lancer la balise de découverte UDP sur le réseau local / Wi-Fi
+        if self.host != "127.0.0.1":
+            self._start_discovery_beacon()
+
+    def _collect_network_info(self) -> Tuple[str, List[str], List[str]]:
+        """Retourne (ip_principale, toutes_ips, cibles_broadcast_udp)."""
+        wlan_ips: List[str] = []
+        other_ips: List[str] = []
+        targets: Set[str] = {"255.255.255.255"}
+
+        try:
+            out = subprocess.check_output(
+                ["ip", "-4", "-o", "addr", "show"],
+                text=True,
+                timeout=2.0,
+            )
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                iface = parts[1]
+                if iface == "lo":
+                    continue
+                ip_match = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)", line)
+                if ip_match:
+                    ip_addr = ip_match.group(1)
+                    if iface.startswith("wl"):
+                        wlan_ips.append(ip_addr)
+                    else:
+                        other_ips.append(ip_addr)
+                brd_match = re.search(r"brd\s+(\d+\.\d+\.\d+\.\d+)", line)
+                if brd_match:
+                    targets.add(brd_match.group(1))
+        except Exception:
+            pass
+
+        # Ajouter la passerelle Wi-Fi (ex: 192.168.43.1 si le téléphone partage sa connexion)
+        try:
+            route_out = subprocess.check_output(
+                ["ip", "-4", "route", "show"],
+                text=True,
+                timeout=2.0,
+            )
+            for line in route_out.splitlines():
+                if "default via" in line and "wl" in line:
+                    gw_match = re.search(r"default via\s+(\d+\.\d+\.\d+\.\d+)", line)
+                    if gw_match:
+                        targets.add(gw_match.group(1))
+        except Exception:
+            pass
+
+        all_ips = wlan_ips + other_ips
+        primary_ip = all_ips[0] if all_ips else "127.0.0.1"
+        return primary_ip, all_ips, sorted(targets)
+
+    def _build_discovery_payload(self) -> bytes:
+        primary_ip, all_ips, _ = self._collect_network_info()
+        payload = {
+            "service": "hiar_robot",
+            "hostname": socket.gethostname(),
+            "ip": primary_ip,
+            "ips": all_ips,
+            "ws_port": self.port,
+            "web_port": 5001,
+        }
+        return json.dumps(payload).encode("utf-8")
+
+    def _start_discovery_beacon(self):
+        """Démarre un répondeur + diffuseur UDP (port 5005) pour auto-découverte Wi-Fi par le mobile."""
+        if self._discovery_thread is not None and self._discovery_thread.is_alive():
+            return
+
+        def _beacon_loop():
+            sock = None
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                sock.bind(("0.0.0.0", self.discovery_port))
+                sock.settimeout(0.5)
+                self.get_logger().info(
+                    f"📡 Balise de découverte Wi-Fi UDP active sur le port {self.discovery_port}"
+                )
+            except Exception as err:
+                self.get_logger().warning(f"Impossible de démarrer la balise UDP {self.discovery_port}: {err}")
+                if sock:
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+                return
+
+            last_broadcast = 0.0
+            try:
+                while not self._stop_event.is_set():
+                    now = time.monotonic()
+                    if now - last_broadcast >= 2.0:
+                        last_broadcast = now
+                        _, _, targets = self._collect_network_info()
+                        data = self._build_discovery_payload()
+                        for target in targets:
+                            try:
+                                sock.sendto(data, (target, self.discovery_port))
+                            except Exception:
+                                pass
+
+                    try:
+                        msg, addr = sock.recvfrom(1024)
+                        if b"HIAR_DISCOVER" in msg:
+                            sock.sendto(self._build_discovery_payload(), addr)
+                    except socket.timeout:
+                        continue
+                    except Exception:
+                        continue
+            finally:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+
+        self._discovery_thread = threading.Thread(
+            target=_beacon_loop,
+            name="hiar-udp-discovery",
+            daemon=True,
+        )
+        self._discovery_thread.start()
+
     def stop_websocket_server(self):
         """Arrête proprement le serveur WebSocket et la boucle asyncio."""
         self._stop_event.set()
+        if self._discovery_thread and self._discovery_thread.is_alive():
+            self._discovery_thread.join(timeout=2.0)
+            self._discovery_thread = None
         if self.loop and self.loop.is_running():
             with self._ws_clients_lock:
                 for ws in list(self.ws_clients):

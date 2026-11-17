@@ -136,6 +136,16 @@ class _HiarAppState extends State<HiarApp> {
       });
     };
 
+    // 6. Auto-découverte Wi-Fi UDP du Raspberry Pi (sauvegarde automatique de l'IP)
+    _hub.onRobotDiscovered = (discoveredIp, discoveredPort) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('server_ip', discoveredIp);
+      await prefs.setInt('server_port', discoveredPort);
+      if (mounted) {
+        setState(() {});
+      }
+    };
+
     // Connexion au Hub WebSocket (restaure l'IP et le port sauvegardés)
     final prefs = await SharedPreferences.getInstance();
     final savedIp = prefs.getString('server_ip');
@@ -832,28 +842,45 @@ class _HiarAppState extends State<HiarApp> {
                   children: [
                     ActionChip(
                       visualDensity: VisualDensity.compact,
-                      avatar: const Icon(Icons.usb, size: 14),
-                      label: const Text("127.0.0.1 (USB ADB)", style: TextStyle(fontSize: 11)),
+                      avatar: const Icon(Icons.radar, size: 14, color: HiarColors.azur),
+                      label: const Text("Auto-détecter (Wi-Fi)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                       onPressed: () {
-                        ipController.text = "127.0.0.1";
-                        portController.text = "5000";
-                      },
-                    ),
-                    ActionChip(
-                      visualDensity: VisualDensity.compact,
-                      avatar: const Icon(Icons.wifi_tethering, size: 14),
-                      label: const Text("10.42.0.1 (Hotspot Pi)", style: TextStyle(fontSize: 11)),
-                      onPressed: () {
-                        ipController.text = "10.42.0.1";
-                        portController.text = "5000";
+                        _hub.triggerAutoDiscovery();
+                        Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Recherche automatique du Raspberry Pi sur le Wi-Fi..."),
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                        }
                       },
                     ),
                     ActionChip(
                       visualDensity: VisualDensity.compact,
                       avatar: const Icon(Icons.wifi, size: 14),
-                      label: const Text("192.168.43.181 (Wi-Fi)", style: TextStyle(fontSize: 11)),
+                      label: const Text("192.168.43.52 (Pi Wi-Fi Ceyci)", style: TextStyle(fontSize: 11)),
                       onPressed: () {
-                        ipController.text = "192.168.43.181";
+                        ipController.text = "192.168.43.52";
+                        portController.text = "5000";
+                      },
+                    ),
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: const Icon(Icons.dns_outlined, size: 14),
+                      label: const Text("cecilia-desktop.local", style: TextStyle(fontSize: 11)),
+                      onPressed: () {
+                        ipController.text = "cecilia-desktop.local";
+                        portController.text = "5000";
+                      },
+                    ),
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: const Icon(Icons.usb, size: 14),
+                      label: const Text("127.0.0.1 (USB ADB)", style: TextStyle(fontSize: 11)),
+                      onPressed: () {
+                        ipController.text = "127.0.0.1";
                         portController.text = "5000";
                       },
                     ),
