@@ -333,7 +333,6 @@ class _HiarAppState extends State<HiarApp> {
   void _handleServerInstruction(Map<String, dynamic> data) {
     if (!mounted) return;
 
-    final origin = data['origin']?.toString() ?? 'server';
     final ui = data['instruction_ui'] as Map<String, dynamic>?;
     final valueToShow = data['value_to_show'] as Map<String, dynamic>?;
     final fields = data['fields'] as Map<String, dynamic>?;
@@ -410,16 +409,15 @@ class _HiarAppState extends State<HiarApp> {
           _closeDialogIfOpen();
           _goToScreen('mission');
         } else if (targetScreen == 'orientation') {
-          if (origin == 'voice' || !requireConfirmation) {
-            // Commande vocale pour une destination -> direct en mission !
-            if (destination.isNotEmpty && destination != 'null' && destination != 'ORIENTATION') {
-              _selectedDestination = destination;
-              _closeDialogIfOpen();
-              _goToScreen('mission');
-            } else {
-              _closeDialogIfOpen();
-              _goToScreen('orientation');
-            }
+          if (requireConfirmation && destination.isNotEmpty && destination != 'null' && destination != 'ORIENTATION') {
+            _selectedDestination = destination;
+            _goToScreen('orientation');
+            final targetKey = ui['target']?.toString() ?? fields?['target']?.toString() ?? fields?['pending_destination']?.toString() ?? 'PHARMACY';
+            _showOrientationConfirmationDialog(destination, targetKey);
+          } else if (!requireConfirmation && destination.isNotEmpty && destination != 'null' && destination != 'ORIENTATION') {
+            _selectedDestination = destination;
+            _closeDialogIfOpen();
+            _goToScreen('mission');
           } else {
             _closeDialogIfOpen();
             _goToScreen('orientation');
@@ -443,6 +441,98 @@ class _HiarAppState extends State<HiarApp> {
     if (_navKey.currentContext != null && Navigator.of(_navKey.currentContext!).canPop()) {
       Navigator.of(_navKey.currentContext!).pop();
     }
+  }
+
+  /// Boîte de dialogue de confirmation vocale / tactile pour l'orientation
+  void _showOrientationConfirmationDialog(String destination, String targetKey) {
+    _closeDialogIfOpen();
+    if (_navKey.currentContext == null) return;
+
+    showDialog(
+      context: _navKey.currentContext!,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          width: 460,
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: HiarColors.azur.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.navigation_outlined, size: 30, color: HiarColors.azur),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                "Confirmation de guidage",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: HiarColors.marine),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Voulez-vous que le robot vous guide vers :",
+                style: TextStyle(fontSize: 14, color: HiarColors.text2),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                destination,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: HiarColors.azur),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Dites « Oui » ou « Non », ou confirmez à l'écran.",
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: HiarColors.text2),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: HiarColors.err,
+                        side: const BorderSide(color: HiarColors.err),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text("Non / Annuler"),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _hub.publishAction('orientation.cancel', {});
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: HiarColors.azur,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.check, size: 18),
+                      label: const Text("Oui / Confirmer"),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _hub.publishAction('orientation.confirm', {'destination': targetKey});
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Affiche la fiche de renseignement de santé publique (OMS)
@@ -761,9 +851,9 @@ class _HiarAppState extends State<HiarApp> {
                     ActionChip(
                       visualDensity: VisualDensity.compact,
                       avatar: const Icon(Icons.wifi, size: 14),
-                      label: const Text("192.168.0.105 (Wi-Fi)", style: TextStyle(fontSize: 11)),
+                      label: const Text("192.168.43.181 (Wi-Fi)", style: TextStyle(fontSize: 11)),
                       onPressed: () {
-                        ipController.text = "192.168.0.105";
+                        ipController.text = "192.168.43.181";
                         portController.text = "5000";
                       },
                     ),
@@ -941,9 +1031,14 @@ class _HiarAppState extends State<HiarApp> {
                 onStepChanged: (newStep) {
                   _consultationStep = newStep;
                   _hub.publishAction('consult.step_changed', {'step': newStep});
+                  _hub.publishUiState('consultation', ['step_$newStep']);
                 },
                 onRequestMeasure: () {
                   _hub.publishAction('consult.measure_vitals', {});
+                },
+                onConfirmAppointment: (data) {
+                  _hub.publishAction('consult.confirm', data);
+                  _hub.publishUiState('consultation', ['confirming']);
                 },
                 onCancel: () {
                   _consultationStep = 1;

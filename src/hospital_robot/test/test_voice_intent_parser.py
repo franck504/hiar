@@ -6,7 +6,7 @@ from hospital_robot.voice_intent_parser import VoiceIntentParser, normalize_text
 
 @pytest.fixture
 def parser():
-    return VoiceIntentParser()
+    return VoiceIntentParser(enable_llm=False)
 
 
 def test_normalize_text():
@@ -135,10 +135,24 @@ def test_orientation_intents(parser, phrase, expected_dest):
     assert intent.ros_request == {"category": "ORIENTATION", "destination": expected_dest}
 
     instruction = parser.build_instruction(intent, phrase)
-    assert instruction["instruction_ui"]["screen"] == "mission"
-    assert instruction["instruction_ui"]["require_confirmation"] is False
+    assert instruction["instruction_ui"]["screen"] == "orientation"
+    assert instruction["instruction_ui"]["require_confirmation"] is True
     assert instruction["speech_priority"] == "normal"
-    assert len(instruction["text_to_speak"]) > 5
+    assert "voulez-vous" in instruction["text_to_speak"].lower()
+
+
+def test_confirmation_intents(parser):
+    yes_intent = parser.parse("oui")
+    assert yes_intent.intent_type == "CONFIRM_YES"
+    inst_yes = parser.build_instruction(yes_intent)
+    assert inst_yes["instruction_ui"]["screen"] == "mission"
+    assert inst_yes["instruction_ui"]["require_confirmation"] is False
+
+    no_intent = parser.parse("non merci")
+    assert no_intent.intent_type == "CONFIRM_NO"
+    inst_no = parser.build_instruction(no_intent)
+    assert inst_no["instruction_ui"]["screen"] == "home"
+    assert "annulé" in inst_no["text_to_speak"].lower()
 
 
 # ============================================================

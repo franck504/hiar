@@ -14,7 +14,7 @@ class HubClient {
   Timer? _reconnectTimer;
   Timer? _heartbeatTimer;
 
-  static const List<String> candidateIps = ["127.0.0.1", "10.42.0.1", "192.168.0.105"];
+  static const List<String> candidateIps = ["127.0.0.1", "192.168.43.181", "10.42.0.1", "192.168.0.105"];
   int _candidateIndex = 0;
   bool _manualIpSet = false;
 

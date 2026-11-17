@@ -20,7 +20,7 @@
       <path d="M24 13 V8 M20 8 H28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
     </svg></a>
     <span class="topbar-title">Espace médecin</span>
-    <div id="doctor-topbar-actions" class="staff-topbar-actions" hidden>
+    <div id="doctor-topbar-actions" class="staff-topbar-actions" style="margin-left: auto;" hidden>
       <button type="button" id="refresh-btn"
               class="btn btn-outline icon-btn staff-refresh-icon"
               aria-label="Actualiser la file" title="Actualiser la file">
@@ -50,6 +50,15 @@
         <label for="token">Jeton médecin</label>
         <input id="token" type="password" autocomplete="off"
                autocapitalize="none" spellcheck="false" required>
+        <div class="doctor-quick-select" style="margin: 12px 0;">
+          <p class="muted" style="margin-bottom: 6px; font-size: 13px;">Sélection rapide :</p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="A">Médecin A</button>
+            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="B">Médecin B</button>
+            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="C">Médecin C</button>
+            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="D">Médecin D</button>
+          </div>
+        </div>
         <p id="login-feedback" class="feedback"
            role="status" aria-live="polite"></p>
         <button type="submit" class="btn">Accéder à ma file</button>
@@ -74,7 +83,8 @@
           <thead>
             <tr>
               <th>Ticket</th><th>Période</th><th>Patient</th>
-              <th>Motif</th><th>Statut</th><th>Actions</th>
+              <th>Téléphone</th><th>Motif</th><th>Constantes (HIAR)</th>
+              <th>Statut</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="queue-body"></tbody>

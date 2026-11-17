@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/hiar_colors.dart';
 import '../theme/hiar_typography.dart';
+import '../components/auto_scroll_text.dart';
 
 enum VoiceState { idle, listening, thinking, speaking, error }
 
@@ -47,7 +48,7 @@ class VoiceRail extends StatelessWidget {
         children: [
           // 1. Robot stylisé HIAR
           _buildRobotFace(),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           // 2. Libellé d'état vocal
           Text(
@@ -57,11 +58,11 @@ class VoiceRail extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           // 3. Bouton Microphone avec Halo
           _buildMicButton(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           // 4. Transcription en direct & conseil vocal
           Expanded(
@@ -104,21 +105,20 @@ class VoiceRail extends StatelessWidget {
                     const Spacer(),
                   ],
                   if (voiceTip != null) ...[
-                    const Divider(color: Colors.white12, height: 12),
+                    const Divider(color: Colors.white12, height: 10),
                     Row(
                       children: [
                         const Icon(Icons.lightbulb_outline, size: 14, color: HiarColors.cyan),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 6),
                         Expanded(
-                          child: Text(
-                            voiceTip!,
+                          child: AutoScrollText(
+                            text: voiceTip!,
                             style: const TextStyle(
                               fontSize: 12,
                               color: HiarColors.cyanSoft,
                               fontWeight: FontWeight.w500,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                            velocity: 30.0,
                           ),
                         ),
                       ],
@@ -194,12 +194,12 @@ class VoiceRail extends StatelessWidget {
 
   Widget _buildRobotFace() {
     return Container(
-      width: 72,
-      height: 56,
+      width: 52,
+      height: 40,
       decoration: BoxDecoration(
         color: const Color(0xFF102F55),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: HiarColors.cyan, width: 2.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: HiarColors.cyan, width: 2.0),
       ),
       child: Center(
         child: Row(
@@ -207,21 +207,21 @@ class VoiceRail extends StatelessWidget {
           children: [
             // Œil gauche
             Container(
-              width: 9,
-              height: 14,
+              width: 7,
+              height: 11,
               decoration: BoxDecoration(
                 color: HiarColors.cyanSoft,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(3),
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
             // Œil droit
             Container(
-              width: 9,
-              height: 14,
+              width: 7,
+              height: 11,
               decoration: BoxDecoration(
                 color: HiarColors.cyanSoft,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(3),
               ),
             ),
           ],
@@ -237,8 +237,8 @@ class VoiceRail extends StatelessWidget {
       onTap: onMicTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        width: 68,
-        height: 68,
+        width: 52,
+        height: 52,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: isListening ? HiarColors.cyan : HiarColors.azur,
@@ -246,22 +246,22 @@ class VoiceRail extends StatelessWidget {
               ? [
                   BoxShadow(
                     color: HiarColors.cyan.withOpacity(0.55),
-                    blurRadius: 18,
-                    spreadRadius: 4,
+                    blurRadius: 14,
+                    spreadRadius: 3,
                   )
                 ]
               : [
                   const BoxShadow(
                     color: Colors.black26,
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
+                    blurRadius: 5,
+                    offset: Offset(0, 2),
                   )
                 ],
         ),
         child: Icon(
           isListening ? Icons.mic : Icons.mic_none,
           color: isListening ? HiarColors.marine : Colors.white,
-          size: 34,
+          size: 26,
         ),
       ),
     );

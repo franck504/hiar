@@ -612,4 +612,18 @@
   byId("step5-back").addEventListener("click", () => goStep(4));
   byId("step5-confirm").addEventListener("click", submitAppointment);
   byId("finish-consultation").addEventListener("click", finishConsultation);
+
+  const show = window.show || function(id) {
+    document.querySelectorAll(".screen").forEach(el => el.classList.toggle("active", el.id === id));
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () {
+      if (typeof window.startConsultation === "function") {
+        window.startConsultation();
+      }
+    });
+  } else {
+    window.startConsultation();
+  }
 })();

@@ -100,6 +100,8 @@ class VoiceIntentParser:
     RESUME_REGEX = r"\b(reprendre|reprends|repartir|repars|reprise|en route|recommencer|recommence|continuer le guidage|poursuivre le guidage|resume)\b"
     FINISH_REGEX = r"\b(terminer|termine|fin de mission|mission terminee|c'est bon|c est bon|on est arrive|on est arrives|dismiss)\b"
     START_REGEX = r"\b(commencer|commence|debuter|debute|demarrer|demarre|start)\b"
+    CONFIRM_YES_REGEX = r"\b(oui|ouais|d'accord|d accord|d'ac|dac|confirmer|confirme|c'est ca|c est ca|exactement|allons[- ]y|vas[- ]y|ok|yes|absolument|volontiers|je veux bien)\b"
+    CONFIRM_NO_REGEX = r"\b(non|nan|pas du tout|annuler|annule|non merci|pas maintenant|laisse tomber|laisser tomber|refuser|refuse|plus tard|pas la peine)\b"
     VITALS_REGEX = r"\b(constantes?|signes? vitaux|pouls|temperature|frequence cardiaque|oxymetre|oxymetrie|saturation|tensiometre)\b"
     CONSULTATION_REGEX = r"\b(rendez-vous|rdv|consultation|consulter|medecin|docteur|visite medicale|prendre rdv)\b"
     HOME_REGEX = r"\b(retour.*accueil|page d'accueil|ecran d'accueil|aller.*accueil|revenir.*accueil|retour au menu|menu principal|ecran principal|revenir au debut|accueil principal|quitter|fermer|retour accueil)\b|^accueil$|^menu$|^retour$"
@@ -204,7 +206,21 @@ class VoiceIntentParser:
                 label="Commencer",
             )
 
-        # 5. POLITESSE : MERCI
+        # 5. CONFIRMATION VOCALE (OUI / NON)
+        if re.search(self.CONFIRM_YES_REGEX, norm):
+            return ParsedIntent(
+                intent_type="CONFIRM_YES",
+                confidence=confidence,
+                label="Confirmer",
+            )
+        if re.search(self.CONFIRM_NO_REGEX, norm):
+            return ParsedIntent(
+                intent_type="CONFIRM_NO",
+                confidence=confidence,
+                label="Annuler",
+            )
+
+        # 6. POLITESSE : MERCI
         if re.search(self.THANKS_REGEX, norm):
             return ParsedIntent(
                 intent_type="THANKS",
@@ -212,7 +228,7 @@ class VoiceIntentParser:
                 label="Remerciement",
             )
 
-        # 6. POLITESSE : BONJOUR
+        # 7. POLITESSE : BONJOUR
         if re.search(self.GREETING_REGEX, norm):
             return ParsedIntent(
                 intent_type="GREETING",
@@ -570,7 +586,34 @@ class VoiceIntentParser:
 
         if intent.intent_type == "ORIENTATION":
             dest_label = intent.label or "votre destination"
-            speech = intent.details.get("llm_text_to_speak") or f"Très bien, suivez-moi vers {dest_label}."
+            dest_key = intent.target_value or "PHARMACY"
+            speech = f"Voulez-vous que je vous guide vers {dest_label} ?"
+            return {
+                "origin": "voice",
+                "text_to_speak": speech,
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "orientation",
+                    "destination": dest_label,
+                    "target": dest_key,
+                    "require_confirmation": True,
+                },
+                "fields": {
+                    "destination": dest_label,
+                    "target": dest_key,
+                    "pending_destination": dest_key,
+                    "confirmation_required": True,
+                },
+                "voice_hints": ["Oui", "Non", "Confirmer", "Annuler"],
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": f"Confirmer {dest_label} ?",
+                },
+            }
+
+        if intent.intent_type == "CONFIRM_YES":
+            dest_label = intent.label if (intent.label and intent.label != "Confirmer") else ""
+            speech = f"Très bien, suivez-moi vers {dest_label}." if dest_label else "Très bien, suivez-moi."
             return {
                 "origin": "voice",
                 "text_to_speak": speech,
@@ -588,8 +631,24 @@ class VoiceIntentParser:
                 "voice_hints": ["Stop", "Terminer"],
                 "robot_status": {
                     "face_expression": "speaking",
-                    "status_label": f"Guidage vers {dest_label}",
+                    "status_label": f"Guidage vers {dest_label}" if dest_label else "Guidage en cours",
                 },
+            }
+
+        if intent.intent_type == "CONFIRM_NO":
+            return {
+                "origin": "voice",
+                "text_to_speak": "D'accord, guidage annulé. Que puis-je faire pour vous ?",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "home",
+                    "require_confirmation": False,
+                },
+                "robot_status": {
+                    "face_expression": "happy",
+                    "status_label": "Robot prêt",
+                },
+                "voice_hints": ["Orientation", "Renseignements", "Consultation"],
             }
 
         if intent.intent_type == "VITALS":

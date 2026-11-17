@@ -181,6 +181,7 @@ def create_session_appointment(
     heart_rate_bpm=None,
     spo2_percent=None,
     now=None,
+    bypass_cutoff=False,
 ):
     """Inscrit un patient dans une session ouverte avec ticket séquentiel."""
     current = _now(now)
@@ -220,7 +221,8 @@ def create_session_appointment(
             )
 
         if (
-            not session["manual_open"]
+            not bypass_cutoff
+            and not session["manual_open"]
             and current >= _cutoff(parsed_date, period)
         ):
             raise BookingError(

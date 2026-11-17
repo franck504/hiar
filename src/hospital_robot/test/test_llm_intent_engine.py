@@ -126,7 +126,8 @@ class TestVoiceIntentParserWithLLM:
 
         instruction = parser.build_instruction(intent)
         assert "pharmacie" in instruction["text_to_speak"].lower()
-        assert instruction["instruction_ui"]["screen"] == "mission"
+        assert instruction["instruction_ui"]["screen"] == "orientation"
+        assert instruction["instruction_ui"]["require_confirmation"] is True
 
     def test_health_education_with_llm(self):
         """Questions ouvertes sur la santé résolues par le LLM."""

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../ui/components/landscape_scaffold.dart';
 import '../../ui/components/action_button.dart';
@@ -16,6 +17,7 @@ class ConsultationScreen extends StatefulWidget {
   final bool isRobotConnected;
   final ValueChanged<int>? onStepChanged;
   final VoidCallback? onRequestMeasure;
+  final ValueChanged<Map<String, dynamic>>? onConfirmAppointment;
   final VoidCallback onCancel;
   final VoidCallback onFinish;
 
@@ -32,6 +34,7 @@ class ConsultationScreen extends StatefulWidget {
     this.isRobotConnected = true,
     this.onStepChanged,
     this.onRequestMeasure,
+    this.onConfirmAppointment,
     required this.onCancel,
     required this.onFinish,
   });
@@ -50,19 +53,32 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   final _nameController = TextEditingController(text: "Jean Dupont");
   final _phoneController = TextEditingController(text: "0341234567");
 
-  // Signes vitaux dynamiques (mis à jour par le Raspberry Pi 4 / ROS 2)
+  // Signes vitaux dynamiques (mis à jour par le Raspberry Pi 4 / ROS 2 / ESP32)
   bool _vitalsRunning = false;
+  bool _vitalsSuccess = false;
+  String? _vitalsError;
+  Timer? _vitalsTimeoutTimer;
   double? _temperatureC;
   int? _heartRateBpm;
   int? _spo2Percent;
 
   // Ticket généré
   String? _ticketLabel;
+  bool _isSubmitting = false;
+  String? _submitError;
 
   @override
   void initState() {
     super.initState();
     _currentStep = widget.initialStep;
+    final hour = DateTime.now().hour;
+    if (hour >= 12) {
+      _selectedDoctor = 'B';
+      _selectedPeriod = 'AM';
+    } else {
+      _selectedDoctor = 'A';
+      _selectedPeriod = 'MAT';
+    }
     _syncFields();
   }
 
@@ -75,6 +91,14 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       });
     }
     _syncFields();
+  }
+
+  @override
+  void dispose() {
+    _vitalsTimeoutTimer?.cancel();
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
   }
 
   void _syncFields() {
@@ -126,32 +150,110 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     }
     if (fields.containsKey('ticket_label') && fields['ticket_label'] != null) {
       _ticketLabel = fields['ticket_label'].toString();
+      _isSubmitting = false;
+      _submitError = null;
+      _currentStep = 6;
+    }
+    if (fields.containsKey('booking_error') && fields['booking_error'] != null) {
+      _submitError = fields['booking_error'].toString();
+      _isSubmitting = false;
     }
     if (fields.containsKey('selected_reason') && fields['selected_reason'] != null) {
       _selectedReason = fields['selected_reason'].toString();
     }
     if (fields.containsKey('vitals_state')) {
       final state = fields['vitals_state'].toString();
-      _vitalsRunning = state == 'measuring';
-      if (state == 'reset' || state == 'cleared') {
+      if (state == 'measuring') {
+        _vitalsRunning = true;
+        _vitalsError = null;
+        _vitalsSuccess = false;
+      } else if (state == 'done') {
+        _vitalsRunning = false;
+        _vitalsTimeoutTimer?.cancel();
+        _vitalsSuccess = true;
+        _vitalsError = null;
+      } else if (state == 'error') {
+        _vitalsRunning = false;
+        _vitalsTimeoutTimer?.cancel();
+        _vitalsSuccess = false;
+        _vitalsError = fields['vitals_error']?.toString() ??
+            "Mesure interrompue ou capteur non détecté. Veuillez replacer votre doigt.";
+      } else if (state == 'reset' || state == 'cleared') {
+        _vitalsRunning = false;
+        _vitalsTimeoutTimer?.cancel();
         _temperatureC = null;
         _heartRateBpm = null;
         _spo2Percent = null;
+        _vitalsSuccess = false;
+        _vitalsError = null;
       }
     }
   }
 
-  void _nextStep() {
+  void _startVitalsMeasurement() {
     setState(() {
-      if (_currentStep < 5) {
-        _currentStep++;
-      } else {
-        // Confirmation finale -> Génération du ticket
-        _ticketLabel = "$_selectedDoctor-$_selectedPeriod-3";
-        _currentStep = 6;
+      _vitalsRunning = true;
+      _vitalsSuccess = false;
+      _vitalsError = null;
+      _temperatureC = null;
+      _heartRateBpm = null;
+      _spo2Percent = null;
+    });
+
+    widget.onRequestMeasure?.call();
+
+    // Timeout de sécurité de 35s (en phase avec le timeout de 32s de l'ESP32)
+    _vitalsTimeoutTimer?.cancel();
+    _vitalsTimeoutTimer = Timer(const Duration(seconds: 35), () {
+      if (mounted && _vitalsRunning) {
+        setState(() {
+          _vitalsRunning = false;
+          _vitalsError = "Délai d'attente dépassé. Vérifiez la connexion du capteur ESP32.";
+        });
       }
     });
-    widget.onStepChanged?.call(_currentStep);
+  }
+
+  void _nextStep() {
+    if (_currentStep < 5) {
+      setState(() {
+        _currentStep++;
+        _submitError = null;
+      });
+      widget.onStepChanged?.call(_currentStep);
+    } else {
+      // Confirmation finale -> Envoi au serveur pour enregistrement réel en base SQLite
+      _confirmAndBook();
+    }
+  }
+
+  void _confirmAndBook() {
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+    });
+
+    final payload = {
+      'patient_name': _nameController.text.trim().isEmpty ? 'Jean Dupont' : _nameController.text.trim(),
+      'contact': _phoneController.text.trim().isEmpty ? '0341234567' : _phoneController.text.trim(),
+      'reason_code': _selectedReason ?? 'consultation_generale',
+      'doctor_code': _selectedDoctor ?? 'A',
+      'period': _selectedPeriod ?? 'MAT',
+      'temperature_c': _temperatureC,
+      'heart_rate_bpm': _heartRateBpm,
+      'spo2_percent': _spo2Percent,
+    };
+
+    if (widget.onConfirmAppointment != null) {
+      widget.onConfirmAppointment!(payload);
+    } else {
+      setState(() {
+        _ticketLabel = "$_selectedDoctor-$_selectedPeriod-1";
+        _currentStep = 6;
+        _isSubmitting = false;
+      });
+      widget.onStepChanged?.call(6);
+    }
   }
 
   void _prevStep() {
@@ -226,13 +328,19 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: _nextStep,
-              child: Text(
-                _currentStep == 5 ? "Confirmer (🎤 « Confirmer »)" : "Continuer (🎤 « Suivant »)",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
+              onPressed: _isSubmitting ? null : _nextStep,
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : Text(
+                      _currentStep == 5 ? "Confirmer (🎤 « Confirmer »)" : "Continuer (🎤 « Suivant »)",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
             ),
           ),
         ],
@@ -413,6 +521,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   // Étape 4 : Signes vitaux dynamiques
   Widget _buildVitalsStep() {
+    final bool hasMeasured = _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
@@ -420,114 +530,278 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // Bandeau d'état logique de la mesure
+            _buildVitalsStatusBanner(),
+            const SizedBox(height: 8),
+
             // Température
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: HiarColors.border),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.thermostat, color: HiarColors.azur, size: 28),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Température corporelle", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                        Text("Capteur DS18B20 (ID: temperature)", style: TextStyle(color: HiarColors.text2, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    _temperatureC != null ? "${_temperatureC!.toStringAsFixed(1)} °C" : "—",
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: HiarColors.ok),
-                  ),
-                ],
-              ),
+            _buildVitalCard(
+              icon: Icons.thermostat,
+              iconColor: HiarColors.azur,
+              title: "Température corporelle",
+              subtitle: "Capteur DS18B20 (ID: temperature)",
+              valueText: _temperatureC != null ? "${_temperatureC!.toStringAsFixed(1)} °C" : "—",
+              isMeasuring: _vitalsRunning,
+              isMeasured: _temperatureC != null,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
+
             // Fréquence cardiaque
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: HiarColors.border),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.favorite, color: HiarColors.err, size: 28),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Fréquence cardiaque", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                        Text("Capteur MAX30102 (ID: heart_rate)", style: TextStyle(color: HiarColors.text2, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    _heartRateBpm != null ? "$_heartRateBpm BPM" : "—",
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: HiarColors.ok),
-                  ),
-                ],
-              ),
+            _buildVitalCard(
+              icon: Icons.favorite,
+              iconColor: HiarColors.err,
+              title: "Fréquence cardiaque",
+              subtitle: "Capteur MAX30102 (ID: heart_rate)",
+              valueText: _heartRateBpm != null ? "$_heartRateBpm BPM" : "—",
+              isMeasuring: _vitalsRunning,
+              isMeasured: _heartRateBpm != null,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
+
             // Oxygénation SpO2
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: HiarColors.border),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.air, color: HiarColors.cyan, size: 28),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Oxygénation sanguine (SpO2)", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                        Text("Capteur MAX30102 (ID: spo2)", style: TextStyle(color: HiarColors.text2, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    _spo2Percent != null ? "$_spo2Percent %" : "—",
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: HiarColors.ok),
-                  ),
-                ],
-              ),
+            _buildVitalCard(
+              icon: Icons.air,
+              iconColor: HiarColors.cyan,
+              title: "Oxygénation sanguine (SpO2)",
+              subtitle: "Capteur MAX30102 (ID: spo2)",
+              valueText: _spo2Percent != null ? "$_spo2Percent %" : "—",
+              isMeasuring: _vitalsRunning,
+              isMeasured: _spo2Percent != null,
             ),
             const SizedBox(height: 10),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+
+            // Bouton de déclenchement logique
+            if (_vitalsRunning)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: HiarColors.azur.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: HiarColors.azur.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: HiarColors.azur),
+                    ),
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        "Mesure en cours (gardez votre doigt immobile)…",
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: HiarColors.azur),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (!hasMeasured && _vitalsError == null)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: HiarColors.azur,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.sensors, size: 20),
+                label: const Text(
+                  "Démarrer la mesure des constantes (🎤 « Mesurer »)",
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onPressed: _startVitalsMeasurement,
+              )
+            else
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(
+                  _vitalsError != null ? "Réessayer la mesure" : "Reprendre la mesure (🎤 « Mesurer »)",
+                  style: const TextStyle(fontSize: 13),
+                ),
+                onPressed: _startVitalsMeasurement,
               ),
-              icon: _vitalsRunning
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.sensors, size: 20),
-              label: Text(
-                _vitalsRunning ? "Mesure des capteurs en cours…" : "Lancer une nouvelle mesure (🎤 « Mesurer »)",
-                style: const TextStyle(fontSize: 13),
-              ),
-              onPressed: () {
-                setState(() => _vitalsRunning = true);
-                widget.onRequestMeasure?.call();
-                Future.delayed(const Duration(seconds: 3), () {
-                  if (mounted) setState(() => _vitalsRunning = false);
-                });
-              },
+
+            const SizedBox(height: 6),
+            const Text(
+              "La prise de constantes est facultative pour la consultation.",
+              style: TextStyle(color: HiarColors.text2, fontSize: 11, fontStyle: FontStyle.italic),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildVitalsStatusBanner() {
+    if (_vitalsRunning) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: HiarColors.cyanSoft.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: HiarColors.cyan.withOpacity(0.4)),
+        ),
+        child: const Column(
+          children: [
+            Row(
+              children: [
+                Icon(Icons.sensors, size: 18, color: HiarColors.azur),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Lecture des capteurs ESP32 en cours… Veuillez rester immobile.",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HiarColors.marine),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 6),
+            LinearProgressIndicator(
+              minHeight: 2.5,
+              backgroundColor: Colors.white,
+              valueColor: AlwaysStoppedAnimation<Color>(HiarColors.azur),
+            ),
+          ],
+        ),
+      );
+    } else if (_vitalsSuccess || (_temperatureC != null || _heartRateBpm != null || _spo2Percent != null)) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: HiarColors.ok.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: HiarColors.ok.withOpacity(0.4)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.check_circle_outline, size: 18, color: HiarColors.ok),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "Constantes enregistrées avec succès. Vous pouvez continuer vers le récapitulatif.",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HiarColors.marine),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (_vitalsError != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: HiarColors.err.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: HiarColors.err.withOpacity(0.4)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, size: 18, color: HiarColors.err),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _vitalsError!,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HiarColors.err),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: HiarColors.border),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.info_outline, size: 18, color: HiarColors.azur),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "Posez votre index sur le capteur du robot puis appuyez sur « Démarrer la mesure ».",
+                style: TextStyle(fontSize: 12, color: HiarColors.text2),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildVitalCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String valueText,
+    required bool isMeasuring,
+    required bool isMeasured,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isMeasured
+              ? HiarColors.ok.withOpacity(0.5)
+              : (isMeasuring ? HiarColors.azur.withOpacity(0.5) : HiarColors.border),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                Text(subtitle, style: const TextStyle(color: HiarColors.text2, fontSize: 11)),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isMeasuring && !isMeasured) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: HiarColors.azur.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    "Lecture…",
+                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: HiarColors.azur),
+                  ),
+                ),
+              ],
+              Text(
+                valueText,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                  color: isMeasured ? HiarColors.ok : HiarColors.text2,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -550,6 +824,29 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             children: [
               const Text("Récapitulatif de votre rendez-vous", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               const Divider(height: 14, thickness: 1),
+              if (_submitError != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _submitError!,
+                          style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               _buildReviewRow("Patient :", _nameController.text),
               _buildReviewRow("Téléphone :", _phoneController.text),
               _buildReviewRow("Motif :", _selectedReason == 'consultation_generale' ? 'Consultation générale' : 'Suivi médical'),

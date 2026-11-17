@@ -44,13 +44,20 @@ bridge = RosBridge()
 
 @app.route("/")
 def home():
-    return render_template("index.html", catalog=CATALOG)
+    """Page d'accueil du web : Portail unique Médecin (Login et Liste des rendez-vous)."""
+    return render_template("doctor.html")
 
 
 @app.route("/staff")
 def staff_page():
     # Page sans aucune donnée : les rendez-vous ne sont servis que par l'API,
     # protégée par le jeton du personnel.
+    return render_template("staff.html")
+
+
+@app.route("/admin")
+def admin_page():
+    """Page d'administration et de supervision du personnel médical."""
     return render_template("staff.html")
 
 
@@ -838,12 +845,37 @@ def api_navigation_cancel():
     return jsonify(response), 200
 
 
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Staff-Token, X-Doctor-Token"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, OPTIONS"
+    return response
+
+
+@app.before_request
+def handle_options_preflight():
+    if request.method == "OPTIONS":
+        res = app.make_default_options_response()
+        res.headers["Access-Control-Allow-Origin"] = "*"
+        res.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Staff-Token, X-Doctor-Token"
+        res.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, OPTIONS"
+        return res
+
+
 if __name__ == "__main__":
     if bridge.start():
         print("Pont ROS2 actif : demandes publiées sur /hmi/request")
     else:
         print("Pont ROS2 inactif : " + str(bridge.error))
+    server_port = int(os.environ.get("HIAR_WEB_PORT", os.environ.get("PORT", "5000")))
     try:
-        app.run(host="0.0.0.0", port=5000)
+        app.run(host="0.0.0.0", port=server_port)
+    except OSError as e:
+        if "Address already in use" in str(e) and server_port == 5000:
+            print("Port 5000 déjà utilisé (ex. hmi_websocket_bridge). Démarrage sur le port 5001...")
+            app.run(host="0.0.0.0", port=5001)
+        else:
+            raise
     finally:
         bridge.stop()

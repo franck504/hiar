@@ -20,6 +20,7 @@
       <path d="M24 13 V8 M20 8 H28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
     </svg></a>
     <span class="topbar-title">Espace du personnel médical</span>
+    <a class="btn btn-outline btn-small" href="/doctor" style="margin-left: auto; margin-right: 12px; text-decoration: none;">Espace Médecin</a>
     <div id="staff-topbar-actions" class="staff-topbar-actions" hidden>
       <button type="button" id="refresh" class="btn btn-outline icon-btn staff-refresh-icon"
               aria-label="Actualiser les rendez-vous" title="Actualiser les rendez-vous">
@@ -48,6 +49,9 @@
         <label for="token">Jeton d'accès</label>
         <input id="token" type="password" autocomplete="off"
                autocapitalize="none" spellcheck="false" required>
+        <div style="margin: 8px 0;">
+          <button type="button" class="btn btn-outline btn-small" id="quick-staff-btn">Jeton démo / test</button>
+        </div>
         <p id="login-feedback" class="feedback"
            role="status" aria-live="polite"></p>
         <button type="submit" class="btn">Accéder aux rendez-vous</button>

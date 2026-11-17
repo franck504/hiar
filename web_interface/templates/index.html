@@ -115,134 +115,13 @@
           <use href="#hiar-icon-logo"></use>
         </svg>
       </div>
+      <div style="margin-left: auto; display: flex; gap: 10px;">
+        <a class="btn btn-outline btn-small" href="/doctor" style="text-decoration: none; padding: 6px 12px; border-radius: 6px; border: 1px solid currentColor; color: inherit; font-size: 13px;">Espace Médecin</a>
+        <a class="btn btn-outline btn-small" href="/admin" style="text-decoration: none; padding: 6px 12px; border-radius: 6px; border: 1px solid currentColor; color: inherit; font-size: 13px;">Administration</a>
+      </div>
     </header>
 
-    <section id="hiar-splash" class="screen active" aria-label="Accueil HIAR">
-      <div class="hiar-robot" aria-hidden="true">
-        <svg class="hiar-robot-svg" viewBox="0 0 320 300"
-             xmlns="http://www.w3.org/2000/svg" role="img">
-          <defs>
-            <linearGradient id="hiarShell" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#F8FCFF"/>
-              <stop offset="100%" stop-color="#CDEBFF"/>
-            </linearGradient>
-            <linearGradient id="hiarScreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#102F55"/>
-              <stop offset="100%" stop-color="#071B35"/>
-            </linearGradient>
-          </defs>
-
-          <path d="M160 48 V25" stroke="#20C9E8" stroke-width="9"
-                stroke-linecap="round"/>
-          <circle cx="160" cy="17" r="12" fill="#20C9E8"
-                  class="hiar-antenna-light"/>
-
-          <rect x="42" y="48" width="236" height="205" rx="72"
-                fill="url(#hiarShell)" stroke="#20C9E8" stroke-width="7"/>
-          <rect x="61" y="76" width="198" height="150" rx="52"
-                fill="url(#hiarScreen)"/>
-
-          <g class="hiar-robot-eyes" fill="#55E7FF">
-            <ellipse cx="116" cy="137" rx="13" ry="19"/>
-            <ellipse cx="204" cy="137" rx="13" ry="19"/>
-          </g>
-
-          <path d="M125 178 Q160 207 195 178"
-                fill="none" stroke="#55E7FF" stroke-width="8"
-                stroke-linecap="round" class="hiar-robot-smile"/>
-
-          <circle cx="42" cy="151" r="12" fill="#20C9E8"/>
-          <circle cx="278" cy="151" r="12" fill="#20C9E8"/>
-          <path d="M105 265 Q160 281 215 265"
-                fill="none" stroke="#20C9E8" stroke-width="5"
-                stroke-linecap="round" opacity=".65"/>
-        </svg>
-      </div>
-      <h1>Bonjour !</h1>
-      <p class="subtitle">Touchez l’écran pour commencer</p>
-    </section>
-
-    <section id="home" class="screen">
-      <div class="hiar-home-heading">
-        <h1>Choisissez un service</h1>
-      </div>
-      {% for key, cat in catalog.items() %}
-        <button class="big-button service-tile" data-goto="menu-{{ key }}">
-          <span class="service-tile-icon" aria-hidden="true">
-            <svg>
-              {% if key == "ORIENTATION" %}
-                <use href="#hiar-icon-orientation"></use>
-              {% elif key == "INFORMATION" %}
-                <use href="#hiar-icon-info"></use>
-              {% else %}
-                <use href="#hiar-icon-consult"></use>
-              {% endif %}
-            </svg>
-          </span>
-          <span class="service-tile-copy">
-            <strong>{{ cat.label }}</strong>
-            <small>
-              {% if key == "ORIENTATION" %}Pharmacie, laboratoire et réception
-              {% elif key == "INFORMATION" %}Repères santé et prévention
-              {% else %}Rendez-vous et accompagnement{% endif %}
-            </small>
-          </span>
-          <svg class="service-tile-arrow" aria-hidden="true"><use href="#hiar-icon-chevron"></use></svg>
-        </button>
-      {% endfor %}
-    </section>
-
-    {% for key, cat in catalog.items() %}
-    <section id="menu-{{ key }}" class="screen">
-      <h2 class="menu-heading">
-        <svg class="menu-heading-icon" aria-hidden="true">
-          {% if key == "ORIENTATION" %}
-            <use href="#hiar-icon-orientation"></use>
-          {% elif key == "INFORMATION" %}
-            <use href="#hiar-icon-info"></use>
-          {% else %}
-            <use href="#hiar-icon-consult"></use>
-          {% endif %}
-        </svg>
-        {{ cat.label }}
-      </h2>
-      {% for item_key, item in cat["items"].items() %}
-        {% if not (key == "CONSULTATION" and item_key == "VITAL_SIGNS") %}
-        <button class="big-button menu-item{% if not item.available %} unavailable{% endif %}"
-                data-category="{{ key }}" data-item="{{ item_key }}"
-                data-label="{{ item.label }}"
-                data-available="{{ 'true' if item.available else 'false' }}">
-          <span class="menu-item-icon" aria-hidden="true">
-            <svg>
-              {% if item_key == "PHARMACY" %}
-                <use href="#hiar-icon-pharmacy"></use>
-              {% elif item_key == "LABORATORY" %}
-                <use href="#hiar-icon-lab"></use>
-              {% elif item_key == "RECEPTION" %}
-                <use href="#hiar-icon-reception"></use>
-              {% elif item_key == "VITAL_SIGNS" %}
-                <use href="#hiar-icon-pulse"></use>
-              {% elif item_key == "APPOINTMENT" %}
-                <use href="#hiar-icon-consult"></use>
-              {% else %}
-                <use href="#hiar-icon-info"></use>
-              {% endif %}
-            </svg>
-          </span>
-          <span class="menu-item-label">{{ item.label }}</span>
-          <svg class="menu-item-arrow" aria-hidden="true"><use href="#hiar-icon-chevron"></use></svg>
-        </button>
-        {% endif %}
-      {% endfor %}
-      <button class="back-button icon-back" data-goto="home"
-              aria-label="Retour à l’accueil">
-        <svg aria-hidden="true"><use href="#hiar-icon-arrow-left"></use></svg>
-        <span class="visually-hidden">Retour à l’accueil</span>
-      </button>
-    </section>
-    {% endfor %}
-
-    <section id="appointment-screen" class="screen">
+    <section id="appointment-screen" class="screen active">
       <p class="step-indicator" id="consult-progress">Étape 1 sur 5</p>
       <h2 id="consult-title">Motif de consultation</h2>
 
@@ -339,50 +218,11 @@
       </div>
     </section>
 
-<section id="confirm" class="screen">
-      <h2 id="confirm-title"></h2>
-      <p id="confirm-text" class="subtitle"></p>
-      <p id="confirm-debug" class="debug"></p>
-      <button class="back-button icon-back" id="confirm-back"
-              aria-label="Retour au menu précédent">
-        <svg aria-hidden="true"><use href="#hiar-icon-arrow-left"></use></svg>
-        <span class="visually-hidden">Retour au menu précédent</span>
-      </button>
-      <button class="back-button" data-goto="home">Annuler</button>
-    </section>
-
     <footer class="hiar-footer">
       <span>© Cecilia 2026</span>
     </footer>
   </main>
 
-  <div id="hiar-voice-bar" class="hiar-voice-bar" hidden>
-    <div class="hiar-voice-controls" role="group" aria-label="Commandes vocales">
-      <button type="button" id="hiar-mic" class="hiar-voice-button"
-              aria-label="Démarrer l’écoute vocale" title="Parler">
-        <svg aria-hidden="true"><use href="#hiar-icon-mic"></use></svg>
-      </button>
-      <button type="button" id="hiar-repeat" class="hiar-voice-button"
-              aria-label="Répéter le dernier message" title="Répéter">
-        <svg aria-hidden="true"><use href="#hiar-icon-repeat"></use></svg>
-      </button>
-      <button type="button" id="hiar-stop" class="hiar-voice-button"
-              aria-label="Arrêter la synthèse vocale" title="Arrêter">
-        <svg aria-hidden="true"><use href="#hiar-icon-stop"></use></svg>
-      </button>
-      <span class="hiar-voice-hints" title="Microphone ou écran tactile"
-            aria-label="Utilisation par la voix ou par contact tactile">
-        <svg aria-hidden="true"><use href="#hiar-icon-mic"></use></svg>
-        <svg aria-hidden="true"><use href="#hiar-icon-touch"></use></svg>
-      </span>
-    </div>
-    <p id="hiar-voice-status" role="status" aria-live="polite"></p>
-    <p id="hiar-voice-transcript" class="hiar-voice-transcript"
-       aria-live="polite" hidden></p>
-  </div>
-
-  <script src="{{ url_for('static', filename='hmi.js') }}"></script>
   <script src="{{ url_for('static', filename='consultation.js') }}"></script>
-  <script src="{{ url_for('static', filename='hiar-voice.js') }}"></script>
 </body>
 </html>

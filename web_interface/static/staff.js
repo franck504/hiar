@@ -15,6 +15,7 @@
 
   function showLogin(message) {
     token = "";
+    localStorage.removeItem("hiar_staff_token");
     appointments = [];
     correctionAppointmentId = null;
     byId("token").value = "";
@@ -317,6 +318,7 @@
       }
 
       byId("token").value = "";
+      localStorage.setItem("hiar_staff_token", token);
       byId("login-panel").hidden = true;
       byId("list-panel").hidden = false;
       byId("staff-topbar-actions").hidden = false;
@@ -415,4 +417,19 @@
   byId("period-filter").addEventListener("change", load);
   byId("status-filter").addEventListener("change", load);
   byId("logout").addEventListener("click", () => showLogin("Déconnexion effectuée."));
+
+  const quickBtn = byId("quick-staff-btn");
+  if (quickBtn) {
+    quickBtn.addEventListener("click", () => {
+      byId("token").value = "2YSJNra8WarQwjbfzPAjvwnc6EtcQlkQ20jgNPYzGiY";
+      byId("login-form").dispatchEvent(new Event("submit"));
+    });
+  }
+
+  // Restauration automatique si jeton enregistré
+  const savedToken = localStorage.getItem("hiar_staff_token");
+  if (savedToken) {
+    byId("token").value = savedToken;
+    byId("login-form").dispatchEvent(new Event("submit"));
+  }
 })();

@@ -59,4 +59,33 @@ void main() {
 
     expect(find.text('—'), findsNWidgets(3));
   });
+
+  testWidgets('ConsultationScreen triggers onRequestMeasure on start button tap', (tester) async {
+    bool measureRequested = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConsultationScreen(
+          initialStep: 4,
+          dynamicFields: const {},
+          onRequestMeasure: () {
+            measureRequested = true;
+          },
+          onCancel: () {},
+          onFinish: () {},
+        ),
+      ),
+    );
+
+    final measureBtn = find.widgetWithText(ElevatedButton, 'Démarrer la mesure des constantes (🎤 « Mesurer »)');
+    expect(measureBtn, findsOneWidget);
+    await tester.tap(measureBtn);
+    await tester.pump();
+
+    expect(measureRequested, isTrue);
+    expect(find.textContaining('Mesure en cours'), findsOneWidget);
+
+    // Clean unmount
+    await tester.pumpWidget(const SizedBox());
+  });
 }

@@ -9,10 +9,9 @@ def test_home_page_has_new_flow_and_no_emoji():
     response = app.test_client().get("/")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "slot-list" in html
-    assert "consultation.js" in html
-    assert "consultation.css" in html
-    assert 'id="appointment-form"' not in html
+    assert "login-panel" in html
+    assert "queue-panel" in html
+    assert "doctor.js" in html
     assert not EMOJI.search(html)
 
 

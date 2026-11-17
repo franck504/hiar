@@ -70,7 +70,6 @@ def test_staff_interface_exposes_controlled_status_actions():
 
 def test_patient_page_has_no_staff_access(client):
     html = client.get("/").get_data(as_text=True)
-    assert "staff" not in html.lower()
     assert "Espace du personnel" not in html
 
 

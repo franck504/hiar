@@ -159,6 +159,11 @@ class HMIWebSocketBridgeNode(Node):
                     self.get_logger().warning(f"LLM pre-warm warning: {ex}")
             threading.Thread(target=_prewarm_llm, daemon=True).start()
 
+        self._pending_orientation: Optional[Dict[str, Any]] = None
+        self._current_screen: str = "home"
+        self._current_step: int = 1
+        self._current_consultation_data: Dict[str, Any] = {}
+        self._last_ticket_label: Optional[str] = None
         self._last_stt_text = ""
         self._last_stt_time = 0.0
 
@@ -336,7 +341,17 @@ class HMIWebSocketBridgeNode(Node):
 
         elif topic == "ui/state":
             screen = payload.get("screen")
-            self.get_logger().info(f"Mobile UI state updated: screen={screen}")
+            step = payload.get("step")
+            if screen:
+                self._current_screen = str(screen)
+            if step is not None:
+                try:
+                    self._current_step = int(step)
+                except (ValueError, TypeError):
+                    pass
+            if isinstance(payload.get("consultation_data"), dict):
+                self._current_consultation_data.update(payload["consultation_data"])
+            self.get_logger().info(f"Mobile UI state updated: screen={self._current_screen} step={self._current_step}")
 
     # ========================================================
     # LOGIQUE VOCALE & INTENTS
@@ -379,12 +394,71 @@ class HMIWebSocketBridgeNode(Node):
         else:
             engine_str = f"❓ Non reconnu / Hors périmètre (Inconnu | Latence: {latency_ms:.0f}ms)"
 
-        # 1. Action ROS 2 Navigation Command (ex: STOP)
+        # 1. Action ROS 2 Navigation Command (ex: STOP, RESUME, HOME)
         if intent.ros_command:
             self._publish_navigation_command(intent.ros_command)
 
-        # 2. Action ROS 2 HMI Request (ex: ORIENTATION, CONSULTATION, INFORMATION)
-        if intent.ros_request:
+        # 2. Gestion de l'orientation vocale avec confirmation obligatoire
+        confirmed_dest_label = None
+        if intent.intent_type == "ORIENTATION":
+            dest_key = intent.target_value or "PHARMACY"
+            dest_label = intent.label or self.intent_parser.DEPARTMENTS.get(dest_key, {}).get("label", dest_key)
+            self._pending_orientation = {
+                "destination": dest_key,
+                "label": dest_label,
+                "ros_request": intent.ros_request or {"category": "ORIENTATION", "destination": dest_key},
+            }
+            self.get_logger().info(f"⏸️ [ORIENTATION EN ATTENTE] Destination : {dest_label} ({dest_key}). En attente de confirmation vocale (Oui/Non).")
+
+        elif intent.intent_type == "CONFIRM_YES":
+            if self._pending_orientation:
+                req = self._pending_orientation.get("ros_request")
+                confirmed_dest_label = self._pending_orientation.get("label", "votre destination")
+                self.get_logger().info(f"✅ [ORIENTATION CONFIRMÉE] Guidage validé vers {confirmed_dest_label} ! Publication sur /hmi/request.")
+                self._pending_orientation = None
+                if req:
+                    self._publish_hmi_request(req)
+                intent.label = confirmed_dest_label
+            elif self._current_screen == "consultation" and self._current_step == 5:
+                self.get_logger().info("✅ [CONSULTATION CONFIRMÉE] Confirmation vocale à l'étape 5, réservation en base !")
+                await self._handle_ui_action({
+                    "action_id": "consult.confirm",
+                    "args": self._current_consultation_data,
+                })
+                return
+            else:
+                self.get_logger().info("ℹ️ Confirmation reçue sans action en attente.")
+
+        elif intent.intent_type == "CONFIRM_NO":
+            if self._pending_orientation:
+                cancelled_label = self._pending_orientation.get("label", "")
+                self.get_logger().info(f"🚫 [ORIENTATION ANNULÉE] Guidage vers {cancelled_label} annulé par l'utilisateur.")
+                self._pending_orientation = None
+            elif self._current_screen == "consultation":
+                self.get_logger().info("🚫 [CONSULTATION ANNULÉE] Annulation vocale par l'utilisateur.")
+                await self._handle_ui_action({"action_id": "consult.cancel", "args": {}})
+                cancel_instruction = {
+                    "origin": "voice",
+                    "text_to_speak": "Consultation annulée. Retour à l'accueil.",
+                    "speech_priority": "normal",
+                    "instruction_ui": {"screen": "home", "require_confirmation": False},
+                    "robot_status": {"face_expression": "neutral", "status_label": "Robot prêt"},
+                }
+                await self.broadcast("server/instruction", cancel_instruction)
+                await self.broadcast("voice/tts/request", {"text": cancel_instruction["text_to_speak"], "priority": "normal"})
+                return
+            else:
+                self.get_logger().info("ℹ️ Annulation reçue sans action en attente.")
+
+        elif self._current_screen == "consultation" and self._current_step == 5 and intent.intent_type == "CONSULTATION_STEP" and (intent.target_value or "next") == "next":
+            self.get_logger().info("✅ [CONSULTATION ÉTAPE 5] Suivant/Valider reçu vocalement, réservation en base !")
+            await self._handle_ui_action({
+                "action_id": "consult.confirm",
+                "args": self._current_consultation_data,
+            })
+            return
+
+        elif intent.ros_request and intent.intent_type != "ORIENTATION":
             self._publish_hmi_request(intent.ros_request)
 
         # 3. Action ROS 2 Signes vitaux (déclenchement matériel)
@@ -400,6 +474,12 @@ class HMIWebSocketBridgeNode(Node):
         if instruction:
             if is_llm:
                 instruction["llm_source"] = model
+            if intent.intent_type == "CONSULTATION_TICKET" and self._last_ticket_label:
+                instruction["text_to_speak"] = f"Votre rendez-vous est confirmé. Voici votre ticket de passage numéro {self._last_ticket_label}."
+                if "fields" in instruction:
+                    instruction["fields"]["ticket_label"] = self._last_ticket_label
+                if "robot_status" in instruction:
+                    instruction["robot_status"]["status_label"] = f"Ticket {self._last_ticket_label}"
             tts_text = instruction.get("text_to_speak", "")
             ui_screen = instruction.get("instruction_ui", {}).get("screen") or instruction.get("screen", "")
 
@@ -429,11 +509,17 @@ class HMIWebSocketBridgeNode(Node):
             self.get_logger().info(f"│    📱 Mobile (UI) : Affichage écran '{ui_screen}'")
         if intent.ros_command:
             self.get_logger().info(f"│    🤖 ROS 2 (Nav) : /navigation/command ➔ {intent.ros_command} (Nœuds: navigation_decision, supervisor)")
-        if intent.ros_request:
+        if intent.intent_type == "ORIENTATION":
+            self.get_logger().info(f"│    🤖 ROS 2 (HMI) : [EN ATTENTE] Aucun ordre moteur émis avant confirmation vocale.")
+        elif intent.intent_type == "CONFIRM_YES" and confirmed_dest_label:
+            self.get_logger().info(f"│    🤖 ROS 2 (HMI) : /hmi/request ➔ {req} (Nœud: hmi_request_receiver)")
+        elif intent.intent_type == "CONFIRM_NO":
+            self.get_logger().info(f"│    🤖 ROS 2 (HMI) : [ANNULÉ] Guidage annulé, robot reste à l'arrêt.")
+        elif intent.ros_request:
             self.get_logger().info(f"│    🤖 ROS 2 (HMI) : /hmi/request ➔ {intent.ros_request} (Nœud: hmi_request_receiver)")
         if vitals_id:
             self.get_logger().info(f"│    🤖 ROS 2 (ESP) : /vitals/request ➔ {vitals_id} (Nœud: esp32_interface)")
-        if not intent.ros_command and not intent.ros_request and not vitals_id:
+        if not intent.ros_command and intent.intent_type not in ["ORIENTATION", "CONFIRM_YES"] and not intent.ros_request and not vitals_id:
             self.get_logger().info(f"│    🤖 ROS 2       : Aucun ordre moteur nécessaire")
         self.get_logger().info("└────────────────────────────────────────────────────────────────────────")
 
@@ -453,9 +539,100 @@ class HMIWebSocketBridgeNode(Node):
             if dest:
                 self._publish_hmi_request({"category": "ORIENTATION", "destination": dest})
 
+        elif action_id == "orientation.confirm":
+            dest_key = args.get("destination")
+            if not dest_key and self._pending_orientation:
+                dest_key = self._pending_orientation.get("destination")
+            dest_key = (dest_key or "PHARMACY").upper()
+            dest_label = self.intent_parser.DEPARTMENTS.get(dest_key, {}).get("label", dest_key)
+            self._pending_orientation = None
+
+            self._publish_hmi_request({"category": "ORIENTATION", "destination": dest_key})
+
+            instruction = {
+                "origin": "ui",
+                "text_to_speak": f"Très bien, suivez-moi vers {dest_label}.",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "mission",
+                    "destination": dest_label,
+                    "require_confirmation": False,
+                },
+                "fields": {
+                    "destination": dest_label,
+                    "distance": "En calcul...",
+                    "eta": "--",
+                },
+                "voice_hints": ["Stop", "Terminer"],
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": f"Guidage vers {dest_label}",
+                },
+            }
+            await self.broadcast("server/instruction", instruction)
+            await self.broadcast(
+                "voice/tts/request",
+                {"text": instruction["text_to_speak"], "priority": "normal"},
+            )
+
+        elif action_id == "orientation.cancel":
+            self._pending_orientation = None
+            instruction = {
+                "origin": "ui",
+                "text_to_speak": "D'accord, guidage annulé. Que puis-je faire pour vous ?",
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "home",
+                    "require_confirmation": False,
+                },
+                "robot_status": {
+                    "face_expression": "happy",
+                    "status_label": "Robot prêt",
+                },
+                "voice_hints": ["Orientation", "Renseignements", "Consultation"],
+            }
+            await self.broadcast("server/instruction", instruction)
+            await self.broadcast(
+                "voice/tts/request",
+                {"text": instruction["text_to_speak"], "priority": "normal"},
+            )
+
         elif action_id in {"vitals.acquire", "vitals.measure", "consult.measure_vitals"}:
             req_id = str(uuid.uuid4())
             self._publish_vitals_request(req_id)
+            prompt_text = "Veuillez poser votre index sur le capteur de constantes et rester immobile."
+            await self.broadcast(
+                "server/instruction",
+                {
+                    "origin": "server",
+                    "text_to_speak": prompt_text,
+                    "speech_priority": "normal",
+                    "instruction_ui": {
+                        "screen": "consultation",
+                        "step": 4,
+                        "require_confirmation": False,
+                    },
+                    "value_to_show": {
+                        "field_id": "vitals_state",
+                        "value": "measuring",
+                    },
+                    "fields": {
+                        "vitals_state": "measuring",
+                        "temperature": None,
+                        "heart_rate": None,
+                        "spo2": None,
+                    },
+                    "voice_hints": ["Annuler", "Suivant"],
+                    "robot_status": {
+                        "face_expression": "speaking",
+                        "status_label": "Mesure des constantes en cours...",
+                    },
+                },
+            )
+            await self.broadcast(
+                "voice/tts/request",
+                {"text": prompt_text, "priority": "normal"},
+            )
 
         elif action_id in {"robot.stop", "mission.stop", "navigation.cancel"}:
             self._publish_navigation_command("STOP")
@@ -473,6 +650,179 @@ class HMIWebSocketBridgeNode(Node):
             topic = args.get("topic", "").upper()
             if topic:
                 self._publish_hmi_request({"category": "INFORMATION", "topic": topic})
+
+        elif action_id in {"consult.confirm", "consult.book", "consult.create"}:
+            if args:
+                self._current_consultation_data.update(args)
+            data_to_book = self._current_consultation_data if self._current_consultation_data else args
+            res = self._book_appointment(data_to_book)
+            if res.get("ok"):
+                ticket_label = res.get("ticket_label", "A-MAT-1")
+                appt_id = res.get("appointment_id")
+                doctor = res.get("doctor", data_to_book.get("doctor_code", "A"))
+                period = res.get("period", data_to_book.get("period", "MAT"))
+                patient_name = data_to_book.get("patient_name", "Jean Dupont")
+
+                self._publish_hmi_request({
+                    "category": "CONSULTATION",
+                    "action": "APPOINTMENT",
+                    "appointment_id": appt_id,
+                    "ticket_label": ticket_label,
+                })
+
+                speech = f"Votre rendez-vous a bien été enregistré. Votre numéro de passage est {ticket_label}."
+                instruction = {
+                    "origin": "server",
+                    "text_to_speak": speech,
+                    "speech_priority": "normal",
+                    "instruction_ui": {
+                        "screen": "consultation",
+                        "step": 6,
+                        "require_confirmation": False,
+                    },
+                    "fields": {
+                        "ticket_label": ticket_label,
+                        "appointment_id": appt_id,
+                        "doctor": doctor,
+                        "period": period,
+                        "patient_name": patient_name,
+                    },
+                    "robot_status": {
+                        "face_expression": "happy",
+                        "status_label": f"Ticket {ticket_label} confirmé",
+                    },
+                    "voice_hints": ["Terminer", "Accueil"],
+                }
+                await self.broadcast("server/instruction", instruction)
+                await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal"})
+            else:
+                err_msg = res.get("error", "Impossible d'enregistrer le rendez-vous.")
+                speech = f"Attention : {err_msg}"
+                instruction = {
+                    "origin": "server",
+                    "text_to_speak": speech,
+                    "speech_priority": "normal",
+                    "instruction_ui": {
+                        "screen": "consultation",
+                        "step": 5,
+                        "require_confirmation": False,
+                    },
+                    "fields": {
+                        "booking_error": err_msg,
+                    },
+                    "robot_status": {
+                        "face_expression": "thinking",
+                        "status_label": "Erreur d'inscription",
+                    },
+                    "voice_hints": ["Réessayer", "Annuler"],
+                }
+                await self.broadcast("server/instruction", instruction)
+                await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal"})
+
+        elif action_id == "consult.step_changed":
+            step = args.get("step")
+            if step is not None:
+                try:
+                    self._current_step = int(step)
+                except (ValueError, TypeError):
+                    pass
+            self._current_screen = "consultation"
+            if "fields" in args and isinstance(args["fields"], dict):
+                self._current_consultation_data.update(args["fields"])
+
+        elif action_id == "consult.cancel":
+            self._current_screen = "home"
+            self._current_step = 1
+            self._current_consultation_data.clear()
+
+        elif action_id == "consult.finish":
+            self._current_screen = "home"
+            self._current_step = 1
+            self._current_consultation_data.clear()
+
+    def _book_appointment(self, args: Dict) -> Dict:
+        """Enregistre un rendez-vous dans la base SQLite du serveur."""
+        try:
+            try:
+                from consultation_sessions_store import (
+                    create_session_appointment,
+                    ensure_daily_sessions,
+                    set_doctor_session,
+                    TZ,
+                    BookingError,
+                )
+                from appointments_store import init_db
+            except ImportError:
+                import sys
+                from pathlib import Path
+                for cand in [
+                    Path(__file__).resolve().parents[3] / "web_interface",
+                    Path.home() / "hiar-main" / "web_interface",
+                    Path("/home/cecilia/hiar-main/web_interface"),
+                ]:
+                    if cand.exists() and str(cand) not in sys.path:
+                        sys.path.insert(0, str(cand))
+                from consultation_sessions_store import (
+                    create_session_appointment,
+                    ensure_daily_sessions,
+                    set_doctor_session,
+                    TZ,
+                    BookingError,
+                )
+                from appointments_store import init_db
+
+            from datetime import datetime
+
+            init_db()
+            now_dt = datetime.now(TZ)
+            today_iso = now_dt.date().isoformat()
+            requested_date = str(args.get("requested_date") or today_iso).strip()
+
+            patient_name = str(args.get("patient_name") or "Jean Dupont").strip()
+            contact = str(args.get("contact") or args.get("patient_phone") or "0341234567").strip()
+            reason_code = str(args.get("reason_code") or args.get("selected_reason") or "consultation_generale").strip()
+            doctor_code = str(args.get("doctor_code") or args.get("selected_doctor") or "A").strip()
+            period = str(args.get("period") or args.get("selected_period") or "MAT").strip()
+
+            if requested_date == today_iso:
+                ensure_daily_sessions()
+                try:
+                    set_doctor_session(requested_date, doctor_code, period, True)
+                except Exception as sess_err:
+                    self.get_logger().warn(f"Could not ensure session open for {doctor_code}/{period}: {sess_err}")
+
+            temp = args.get("temperature_c") if args.get("temperature_c") is not None else args.get("temperature")
+            hr = args.get("heart_rate_bpm") if args.get("heart_rate_bpm") is not None else args.get("heart_rate")
+            spo2 = args.get("spo2_percent") if args.get("spo2_percent") is not None else args.get("spo2")
+
+            temp_c = float(temp) if temp is not None else None
+            hr_bpm = int(hr) if hr is not None else None
+            spo2_pct = int(spo2) if spo2 is not None else None
+
+            res = create_session_appointment(
+                patient_name=patient_name,
+                contact=contact,
+                reason_code=reason_code,
+                requested_date=requested_date,
+                doctor_code=doctor_code,
+                period=period,
+                temperature_c=temp_c,
+                heart_rate_bpm=hr_bpm,
+                spo2_percent=spo2_pct,
+                bypass_cutoff=True,
+            )
+            self._last_ticket_label = res.get("ticket_label")
+            self.get_logger().info(f"💾 [BASE DE DONNÉES] Rendez-vous créé : {res.get('ticket_label')} (ID: {res.get('appointment_id')})")
+            return {"ok": True, **res}
+        except BookingError as be:
+            self.get_logger().warn(f"Règle de consultation : {be}")
+            msg = "Cette consultation n'est pas ouverte actuellement." if be.code == "session_closed" else (
+                "Ce numéro de téléphone est déjà inscrit aujourd'hui." if be.code == "duplicate_phone" else str(be)
+            )
+            return {"ok": False, "code": be.code, "error": msg}
+        except Exception as err:
+            self.get_logger().error(f"Échec enregistrement rendez-vous : {err}")
+            return {"ok": False, "error": str(err)}
 
     # ========================================================
     # RETOURS ROS 2 VERS WEBSOCKET (BROADCAST)
