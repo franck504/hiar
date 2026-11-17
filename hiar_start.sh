@@ -66,9 +66,13 @@ for n in $NODES_LIST; do
         echo "  [..] $n (démarrage en cours)"
     fi
 done
+WEB_LOG_FILE="$LOG_DIR/web_$(date +%Y%m%d_%H%M%S).log"
+ln -sf "$WEB_LOG_FILE" "$LOG_DIR/web_latest.log"
 echo "📄 Journal ROS 2 : $LOG_FILE (lien : $LOG_DIR/latest.log)"
+echo "📄 Journal Web   : $WEB_LOG_FILE (lien : $LOG_DIR/web_latest.log)"
+echo "🔎 Logs unifiés  : $PROJECT_ROOT/hiar_logs.sh"
 echo ""
 echo "=========================================================="
 echo "🌐 Lancement du serveur Web HIAR (Port 5001)..."
 echo "=========================================================="
-PORT=5001 exec "$PROJECT_ROOT/web_interface/run_hiar.sh"
+PORT=5001 "$PROJECT_ROOT/web_interface/run_hiar.sh" 2>&1 | tee -a "$WEB_LOG_FILE"

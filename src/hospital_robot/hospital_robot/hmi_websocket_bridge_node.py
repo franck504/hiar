@@ -155,11 +155,11 @@ class HMIWebSocketBridgeNode(Node):
                 try:
                     time.sleep(1.0)
                     if self.intent_parser.llm_engine.is_available():
-                        self.get_logger().info("🔥 Pre-warming LLM Qwen 2.5 in RAM...")
+                        self.get_logger().info("[LLM] 🔥 Pre-warming LLM Qwen 2.5 in RAM...")
                         res = self.intent_parser.llm_engine.infer("Bonjour robot")
-                        self.get_logger().info(f"✅ LLM Qwen 2.5 pre-warmed and ready (latency={res.latency_ms:.0f}ms).")
+                        self.get_logger().info(f"[LLM] ✅ Qwen 2.5 prêt (latency={res.latency_ms:.0f}ms).")
                 except Exception as ex:
-                    self.get_logger().warning(f"LLM pre-warm warning: {ex}")
+                    self.get_logger().warning(f"[LLM] Pre-warm warning: {ex}")
             threading.Thread(target=_prewarm_llm, daemon=True).start()
 
         self._pending_orientation: Optional[Dict[str, Any]] = None
@@ -411,7 +411,7 @@ class HMIWebSocketBridgeNode(Node):
         """Gère une connexion client mobile active."""
         with self._ws_clients_lock:
             self.ws_clients.add(websocket)
-        self.get_logger().info(f"Client connected: {websocket.remote_address}")
+        self.get_logger().info(f"[MOBILE] Client connecté: {websocket.remote_address}")
 
         try:
             # Envoi du message welcome
@@ -432,11 +432,11 @@ class HMIWebSocketBridgeNode(Node):
         except websockets.exceptions.ConnectionClosed:
             pass
         except Exception as exc:
-            self.get_logger().warning(f"Error handling client: {exc}")
+            self.get_logger().warning(f"[MOBILE] Erreur client {websocket.remote_address}: {exc}")
         finally:
             with self._ws_clients_lock:
                 self.ws_clients.discard(websocket)
-            self.get_logger().info("Client disconnected.")
+            self.get_logger().info(f"[MOBILE] Client déconnecté: {websocket.remote_address}")
 
     async def _process_incoming_frame(
         self, websocket: WSConnection, raw_message: str
@@ -458,6 +458,9 @@ class HMIWebSocketBridgeNode(Node):
             return
 
         if msg_type == "hello":
+            self.get_logger().info(
+                f"[MOBILE] Handshake hello: device={data.get('device_id', 'mobile')} role={data.get('role', 'kiosk')}"
+            )
             welcome = make_envelope(
                 "connection/welcome",
                 {"server": "HIAR Central ROS2 Bridge", "status": "ready"},
@@ -476,6 +479,17 @@ class HMIWebSocketBridgeNode(Node):
         elif topic == "ui/action/request":
             await self._handle_ui_action(payload)
 
+        elif topic == "mobile/log":
+            level = str(payload.get("level", "INFO")).upper()
+            msg_text = str(payload.get("message", "")).strip()
+            if msg_text:
+                if level == "ERROR":
+                    self.get_logger().error(f"[MOBILE] {msg_text}")
+                elif level in {"WARN", "WARNING"}:
+                    self.get_logger().warning(f"[MOBILE] {msg_text}")
+                else:
+                    self.get_logger().info(f"[MOBILE] {msg_text}")
+
         elif topic == "ui/state":
             screen = payload.get("screen")
             step = payload.get("step")
@@ -488,7 +502,7 @@ class HMIWebSocketBridgeNode(Node):
                     pass
             if isinstance(payload.get("consultation_data"), dict):
                 self._current_consultation_data.update(payload["consultation_data"])
-            self.get_logger().info(f"Mobile UI state updated: screen={self._current_screen} step={self._current_step}")
+            self.get_logger().info(f"[MOBILE] Écran actif: screen={self._current_screen} step={self._current_step}")
 
     # ========================================================
     # LOGIQUE VOCALE & INTENTS
@@ -497,7 +511,7 @@ class HMIWebSocketBridgeNode(Node):
     async def _handle_voice_stt(self, payload: Dict):
         """Traite la parole transcrite par le microphone du smartphone."""
         text = payload.get("text", "")
-        confidence = float(payload.get("confidence", 1.0))
+        confidence = float(payload.get("confidence", payload.get("conf", 1.0)))
 
         if not text:
             return
@@ -507,10 +521,11 @@ class HMIWebSocketBridgeNode(Node):
         # 0. Anti-rebond temporel (doublon Android STT émis à < 2.5s)
         now = time.time()
         if norm_incoming == self._last_stt_text and (now - self._last_stt_time) < 2.5:
-            self.get_logger().info(f"⏩ Duplicate STT frame suppressed: '{text}' (elapsed={now - self._last_stt_time:.2f}s)")
+            self.get_logger().info(f"[MOBILE] ⏩ Doublon STT ignoré: '{text}' (elapsed={now - self._last_stt_time:.2f}s)")
             return
         self._last_stt_text = norm_incoming
         self._last_stt_time = now
+        self.get_logger().info(f"[MOBILE] 🎤 Voix STT: \"{text}\" (conf={confidence:.2f})")
 
         # Analyse et classification d'intention
         intent = self.intent_parser.parse(text, confidence=confidence)
@@ -669,7 +684,7 @@ class HMIWebSocketBridgeNode(Node):
         action_id = payload.get("action_id", "")
         args = payload.get("args", {})
 
-        self.get_logger().info(f"Tactile action received: {action_id} args={args}")
+        self.get_logger().info(f"[MOBILE] 👆 Action tactile: {action_id} args={args}")
 
         if action_id == "orientation.select":
             dest = args.get("destination", "").upper()
