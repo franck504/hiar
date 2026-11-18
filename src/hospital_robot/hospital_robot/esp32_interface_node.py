@@ -1,3 +1,4 @@
+import glob
 import json
 import time
 
@@ -127,27 +128,40 @@ class ESP32Interface(Node):
         self.get_logger().info('ESP32 interface node started.')
         self.publish_diagnostics()
 
+    def _candidate_serial_ports(self):
+        candidates = [self.port]
+        for pattern in ('/dev/ttyUSB*', '/dev/ttyACM*'):
+            for found in sorted(glob.glob(pattern)):
+                if found not in candidates:
+                    candidates.append(found)
+        return candidates
+
     def _try_connect_serial(self, initial=False):
         if self.serial_connection is not None:
             return True
-        try:
-            self.serial_connection = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                timeout=0.05
-            )
-            self.get_logger().info(f'Connected to ESP32 on {self.port}')
-            self.last_rx_at = time.monotonic()
-            # Demander immédiatement l'état matériel après connexion
-            self._send_health_probe()
-            return True
-        except serial.SerialException as error:
-            self.serial_connection = None
-            now = time.monotonic()
-            if initial or (now - self._last_connect_err_logged_at >= 30.0):
-                self.get_logger().error(f'Unable to connect to ESP32: {error}')
-                self._last_connect_err_logged_at = now
-            return False
+        last_error = None
+        for candidate in self._candidate_serial_ports():
+            try:
+                self.serial_connection = serial.Serial(
+                    port=candidate,
+                    baudrate=self.baudrate,
+                    timeout=0.05
+                )
+                self.port = candidate
+                self.get_logger().info(f'Connected to ESP32 on {self.port}')
+                self.last_rx_at = time.monotonic()
+                # Demander immédiatement l'état matériel après connexion
+                self._send_health_probe()
+                return True
+            except (serial.SerialException, OSError) as error:
+                self.serial_connection = None
+                last_error = error
+
+        now = time.monotonic()
+        if initial or (now - self._last_connect_err_logged_at >= 30.0):
+            self.get_logger().error(f'Unable to connect to ESP32: {last_error}')
+            self._last_connect_err_logged_at = now
+        return False
 
     def _send_health_probe(self):
         if self.serial_connection is None or self.active_vitals_request_id is not None:
@@ -155,7 +169,7 @@ class ESP32Interface(Node):
         try:
             self.serial_connection.write(b'PING\nSTATUS\n')
             self.last_poll_at = time.monotonic()
-        except serial.SerialException as error:
+        except (serial.SerialException, OSError) as error:
             self.get_logger().error(f'Serial health probe error: {error}')
             self.close_serial_connection()
 
@@ -317,7 +331,7 @@ class ESP32Interface(Node):
             self.serial_connection.write(b'MEASURE\n')
             self.get_logger().info(f'Vitals measurement requested: {request_id}')
 
-        except serial.SerialException as error:
+        except (serial.SerialException, OSError) as error:
             self.publish_vitals_result(request_id, 'ERROR,SERIAL_COMMUNICATION')
             self.get_logger().error(f'Vitals measurement serial error: {error}')
             self.close_serial_connection()
@@ -339,7 +353,7 @@ class ESP32Interface(Node):
             self.serial_connection.write(f'{command}\n'.encode('utf-8'))
             self.get_logger().info(f'Sent to ESP32: {command}')
 
-        except serial.SerialException as error:
+        except (serial.SerialException, OSError) as error:
             self.get_logger().error(f'Serial communication error: {error}')
             self.get_logger().error('Communication with ESP32 lost. Robot must STOP.')
             self.close_serial_connection()
@@ -516,7 +530,7 @@ class ESP32Interface(Node):
 
                 self.get_logger().debug(f'ESP32: {response}')
 
-        except serial.SerialException as error:
+        except (serial.SerialException, OSError) as error:
             self.get_logger().error(f'Serial communication error: {error}')
             self.get_logger().error('Communication with ESP32 lost. Robot must STOP.')
             self.close_serial_connection()
@@ -527,7 +541,7 @@ class ESP32Interface(Node):
                 if self.serial_connection.is_open:
                     self.serial_connection.close()
                     self.get_logger().info('ESP32 serial connection closed.')
-            except serial.SerialException as error:
+            except (serial.SerialException, OSError) as error:
                 self.get_logger().error(f'Error closing serial connection: {error}')
             self.serial_connection = None
             self.publish_diagnostics()

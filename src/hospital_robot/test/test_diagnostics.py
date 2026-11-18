@@ -150,3 +150,60 @@ def test_esp32_interface_parses_three_ultrasonic_frames_and_health(monkeypatch):
     assert "ir_left" not in diag["sensors"]
     assert "ir_right" not in diag["sensors"]
     node.destroy_node()
+
+
+def test_esp32_interface_survives_oserror_errno5_and_reconnects(monkeypatch):
+    import sys
+    from unittest.mock import MagicMock
+
+    class _MockSerialException(Exception):
+        pass
+
+    class _ReconnectedSerial:
+        is_open = True
+
+        def write(self, data):
+            pass
+
+        def close(self):
+            self.is_open = False
+
+    fake_serial_mod = MagicMock()
+    fake_serial_mod.SerialException = _MockSerialException
+    fake_serial_mod.Serial.side_effect = _MockSerialException("initial offline")
+    monkeypatch.setitem(sys.modules, "serial", fake_serial_mod)
+
+    from hospital_robot import esp32_interface_node as mod
+
+    monkeypatch.setattr(mod, "serial", fake_serial_mod)
+    node = mod.ESP32Interface()
+
+    class _BrokenSerial:
+        is_open = True
+
+        @property
+        def in_waiting(self):
+            raise OSError(5, "Input/output error")
+
+        def close(self):
+            raise OSError(5, "Input/output error")
+
+    node.serial_connection = _BrokenSerial()
+    # Ne doit PAS lever d'exception
+    node.read_serial()
+    assert node.serial_connection is None
+
+    # Simule une ré-énumération USB sur /dev/ttyUSB1
+    monkeypatch.setattr(mod.glob, "glob", lambda pattern: ["/dev/ttyUSB1"] if "ttyUSB" in pattern else [])
+
+    def _open_port(port, baudrate, timeout):
+        if port == "/dev/ttyUSB1":
+            return _ReconnectedSerial()
+        raise _MockSerialException("port missing")
+
+    fake_serial_mod.Serial.side_effect = _open_port
+    node.diagnostics_tick()
+
+    assert node.serial_connection is not None
+    assert node.port == "/dev/ttyUSB1"
+    node.destroy_node()
