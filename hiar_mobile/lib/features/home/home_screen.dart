@@ -8,6 +8,7 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback onOpenOrientation;
   final VoidCallback onOpenInformation;
   final VoidCallback onOpenConsultation;
+  final VoidCallback? onBack;
   final VoiceState voiceState;
   final String voiceStatus;
   final String? recognizedText;
@@ -22,6 +23,7 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenOrientation,
     required this.onOpenInformation,
     required this.onOpenConsultation,
+    this.onBack,
     this.voiceState = VoiceState.idle,
     this.voiceStatus = "Touchez le micro ou parlez",
     this.recognizedText,
@@ -36,7 +38,8 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return LandscapeScaffold(
       title: "Accueil HIAR",
-      showBack: false,
+      showBack: true,
+      onBack: onBack,
       voiceState: voiceState,
       voiceStatus: voiceStatus,
       recognizedText: recognizedText,

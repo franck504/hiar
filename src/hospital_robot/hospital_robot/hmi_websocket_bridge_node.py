@@ -702,12 +702,62 @@ class HMIWebSocketBridgeNode(Node):
             })
             return
 
-        elif intent.ros_request and intent.intent_type != "ORIENTATION":
+        # 2b. RÈGLE MÉTIER : la prise de mesure (VITALS) par vocal est INTERDITE hors étape 4 de Consultation.
+        # L'utilisateur est redirigé vers la consultation d'abord.
+        vitals_blocked_redirect = False
+        if intent.intent_type == "VITALS" and not (
+            self._current_screen == "consultation" and self._current_step == 4
+        ):
+            vitals_blocked_redirect = True
+            target_step = (
+                self._current_step
+                if (self._current_screen == "consultation" and 1 <= self._current_step <= 3)
+                else 1
+            )
+            self._current_screen = "consultation"
+            self._current_step = target_step
+            self.get_logger().info(
+                f"🚫 [RÈGLE CONSULTATION] Mesure vocale bloquée hors étape 4 → redirection vers consultation étape {target_step}."
+            )
+            redirect_speech = (
+                "Veuillez d'abord compléter les étapes de votre consultation avant de prendre vos constantes."
+                if target_step > 1
+                else "Pour mesurer vos constantes vitales, vous devez d'abord passer par l'étape de consultation. Je vous y conduis."
+            )
+            instruction = {
+                "origin": "voice",
+                "text_to_speak": redirect_speech,
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "consultation",
+                    "step": target_step,
+                    "require_confirmation": False,
+                },
+                "voice_hints": ["Suivant", "Annuler"],
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": "Consultation requise d'abord",
+                },
+            }
+            if is_llm:
+                instruction["llm_source"] = model
+            await self.broadcast("server/instruction", instruction)
+            await self.broadcast(
+                "voice/tts/request",
+                {"text": redirect_speech, "priority": "normal"},
+            )
+            return
+
+        if intent.intent_type == "CONSULTATION":
+            self._current_screen = "consultation"
+            self._current_step = 1
+
+        if intent.ros_request and intent.intent_type != "ORIENTATION":
             self._publish_hmi_request(intent.ros_request)
 
-        # 3. Action ROS 2 Signes vitaux (déclenchement matériel)
+        # 3. Action ROS 2 Signes vitaux (uniquement autorisée à l'étape 4 de Consultation)
         vitals_id = None
-        if intent.intent_type == "VITALS":
+        if intent.intent_type == "VITALS" and not vitals_blocked_redirect:
             vitals_id = str(uuid.uuid4())
             self._publish_vitals_request(vitals_id)
 
@@ -787,7 +837,19 @@ class HMIWebSocketBridgeNode(Node):
 
         self.get_logger().info(f"[MOBILE] 👆 Action tactile: {action_id} args={args}")
 
-        if action_id == "orientation.select":
+        if action_id == "orientation.pending":
+            dest_key = (args.get("destination") or "PHARMACY").upper()
+            dest_label = args.get("label") or self.intent_parser.DEPARTMENTS.get(dest_key, {}).get("label", dest_key)
+            self._pending_orientation = {
+                "destination": dest_key,
+                "label": dest_label,
+                "ros_request": {"category": "ORIENTATION", "destination": dest_key},
+            }
+            self.get_logger().info(
+                f"⏸️ [ORIENTATION TACTILE EN ATTENTE] Destination : {dest_label} ({dest_key}). Attente confirmation."
+            )
+
+        elif action_id == "orientation.select":
             dest = args.get("destination", "").upper()
             if dest:
                 self._active_destination_label = self.intent_parser.DEPARTMENTS.get(dest, {}).get("label", dest)
@@ -979,6 +1041,10 @@ class HMIWebSocketBridgeNode(Node):
                 }
                 await self.broadcast("server/instruction", instruction)
                 await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal"})
+
+        elif action_id == "consult.start":
+            self._current_screen = "consultation"
+            self._current_step = 1
 
         elif action_id == "consult.step_changed":
             step = args.get("step")

@@ -273,3 +273,59 @@ def test_bridge_lifecycle_and_messages(bridge_node):
             assert status_data["payload"]["status"] == "EMERGENCY_STOP"
 
     asyncio.run(_run_test())
+
+
+def test_vitals_voice_requires_consultation_step_4(bridge_node):
+    """La prise de mesure vocale est interdite hors étape 4 de Consultation et redirige vers Consultation."""
+    node, port = bridge_node
+
+    async def _run():
+        uri = f"ws://127.0.0.1:{port}/ws"
+        async with websockets.connect(uri) as ws:
+            await asyncio.wait_for(ws.recv(), timeout=2.0)  # welcome
+
+            # 1. Depuis l'accueil (home), demander ses constantes par vocal -> REDIRECTION consultation étape 1, AUCUN /vitals/request
+            node._current_screen = "home"
+            node._current_step = 1
+            await ws.send(json.dumps({
+                "v": 1, "type": "pub", "topic": "voice/stt/final", "ts": 20001,
+                "payload": {"text": "Prends ma température", "confidence": 0.96},
+            }))
+
+            inst = None
+            for _ in range(3):
+                m = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
+                if m.get("topic") == "server/instruction":
+                    inst = m["payload"]
+                    break
+            assert inst is not None
+            assert inst["instruction_ui"]["screen"] == "consultation"
+            assert inst["instruction_ui"]["step"] == 1
+            assert "consultation" in inst["text_to_speak"].lower()
+            assert len(node.vitals_request_pub.published) == 0
+
+            # 2. Une fois arrivé à l'étape 4 de Consultation, demander par vocal -> AUTORISÉ (/vitals/request publié)
+            await ws.send(json.dumps({
+                "v": 1, "type": "pub", "topic": "ui/action/request", "ts": 20002,
+                "payload": {"action_id": "consult.step_changed", "args": {"step": 4}},
+            }))
+            await asyncio.sleep(0.1)
+
+            await ws.send(json.dumps({
+                "v": 1, "type": "pub", "topic": "voice/stt/final", "ts": 20003,
+                "payload": {"text": "Prends mon pouls", "confidence": 0.96},
+            }))
+
+            inst2 = None
+            for _ in range(3):
+                m = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
+                if m.get("topic") == "server/instruction":
+                    inst2 = m["payload"]
+                    break
+            assert inst2 is not None
+            assert inst2["instruction_ui"]["screen"] == "consultation"
+            assert inst2["instruction_ui"]["step"] == 4
+            assert inst2["value_to_show"]["value"] == "measuring"
+            assert len(node.vitals_request_pub.published) == 1
+
+    asyncio.run(_run())

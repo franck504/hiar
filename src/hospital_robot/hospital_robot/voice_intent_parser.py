@@ -102,7 +102,7 @@ class VoiceIntentParser:
     START_REGEX = r"\b(commencer|commence|debuter|debute|demarrer|demarre|start)\b"
     CONFIRM_YES_REGEX = r"\b(oui|ouais|d'accord|d accord|d'ac|dac|confirmer|confirme|c'est ca|c est ca|exactement|allons[- ]y|vas[- ]y|ok|yes|absolument|volontiers|je veux bien)\b"
     CONFIRM_NO_REGEX = r"\b(non|nan|pas du tout|annuler|annule|non merci|pas maintenant|laisse tomber|laisser tomber|refuser|refuse|plus tard|pas la peine)\b"
-    VITALS_REGEX = r"\b(constantes?|signes? vitaux|pouls|temperature|frequence cardiaque|oxymetre|oxymetrie|saturation|tensiometre)\b"
+    VITALS_REGEX = r"\b(constantes?|signes? vitaux|pouls|temperature|frequence cardiaque|oxymetre|oxymetrie|saturation|tensiometre|mesurer|demarrer la mesure|prise de mesure)\b"
     CONSULTATION_REGEX = r"\b(rendez-vous|rdv|consultation|consulter|medecin|docteur|visite medicale|prendre rdv)\b"
     HOME_REGEX = r"\b(retour.*accueil|page d'accueil|ecran d'accueil|aller.*accueil|revenir.*accueil|retour au menu|menu principal|ecran principal|revenir au debut|accueil principal|quitter|fermer|retour accueil)\b|^accueil$|^menu$|^retour$"
 

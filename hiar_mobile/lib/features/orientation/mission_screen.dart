@@ -42,8 +42,13 @@ class MissionScreen extends StatelessWidget {
 
     return LandscapeScaffold(
       title: "Accompagnement",
-      showBack: isStopped,
-      onBack: onFinish,
+      showBack: true,
+      onBack: () {
+        if (!isStopped) {
+          onStopRobot();
+        }
+        onFinish();
+      },
       voiceState: voiceState,
       voiceStatus: voiceStatus,
       recognizedText: recognizedText,

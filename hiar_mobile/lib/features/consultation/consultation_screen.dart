@@ -1028,7 +1028,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
     return LandscapeScaffold(
       title: "Rendez-vous confirmé",
-      showBack: false,
+      showBack: true,
+      onBack: widget.onFinish,
       voiceState: widget.voiceState,
       voiceStatus: widget.voiceStatus,
       recognizedText: widget.recognizedText,

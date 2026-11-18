@@ -65,23 +65,25 @@ void main() {
     expect(find.byType(AnimatedRobotFace), findsOneWidget);
     expect(find.text("Bonjour !"), findsOneWidget);
 
-    // 2. Home
+    // 2. Home (avec bouton Retour)
     await tester.pumpWidget(
       MaterialApp(
         home: HomeScreen(
           onOpenOrientation: () {},
           onOpenInformation: () {},
           onOpenConsultation: () {},
+          onBack: () {},
         ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(HiarHeroCard), findsOneWidget);
+    expect(find.text("Retour"), findsOneWidget);
     expect(find.text("Orientation"), findsOneWidget);
     expect(find.text("Renseignements"), findsOneWidget);
     expect(find.text("Consultation"), findsOneWidget);
 
-    // 3. Orientation
+    // 3. Orientation (avec bouton Retour)
     await tester.pumpWidget(
       MaterialApp(
         home: OrientationScreen(
@@ -91,23 +93,26 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("Retour"), findsOneWidget);
     expect(find.text("Pharmacie"), findsOneWidget);
     expect(find.text("Radiologie"), findsOneWidget);
 
-    // 4. Mission
+    // 4. Mission (avec bouton Retour même pendant RUNNING)
     await tester.pumpWidget(
       MaterialApp(
         home: MissionScreen(
           destinationLabel: "Pharmacie",
+          missionState: "RUNNING",
           onStopRobot: () {},
           onFinish: () {},
         ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("Retour"), findsOneWidget);
     expect(find.textContaining("Pharmacie"), findsOneWidget);
 
-    // 5. Information + filtre pilule
+    // 5. Information + filtre pilule + bouton Retour
     await tester.pumpWidget(
       MaterialApp(
         home: InformationScreen(
@@ -117,12 +122,13 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("Retour"), findsOneWidget);
     expect(find.text("Toutes les fiches"), findsOneWidget);
     await tester.tap(find.text("Maladies chroniques"));
     await tester.pump();
     expect(find.text("Diabète"), findsOneWidget);
 
-    // 6. Consultation Ticket Reçu festonné (étape 6)
+    // 6. Consultation Ticket Reçu festonné (étape 6 + bouton Retour)
     await tester.pumpWidget(
       MaterialApp(
         home: ConsultationScreen(
@@ -139,6 +145,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("Retour"), findsOneWidget);
     expect(find.byType(HiarReceiptCard), findsOneWidget);
     expect(find.text("A-MAT-3"), findsOneWidget);
     expect(find.text("36.8 °C"), findsOneWidget);

@@ -377,11 +377,10 @@ class _HiarAppState extends State<HiarApp> {
       case 'orientation.select':
         final dest = args['destination']?.toString() ?? 'PHARMACY';
         final label = _resolveDestinationLabel(dest) ?? 'Pharmacie';
-        // Guidage direct : AUCUNE pop-up de confirmation superflue !
+        // Toujours demander confirmation avant de mettre le robot en mouvement
         _selectedDestination = label;
-        _missionState = 'RUNNING';
-        _closeDialogIfOpen();
-        _goToScreen('mission');
+        _goToScreen('orientation');
+        _showOrientationConfirmationDialog(label, dest);
         break;
 
       case 'orientation.confirm':
@@ -499,7 +498,6 @@ class _HiarAppState extends State<HiarApp> {
       }
 
       final targetScreen = ui['screen']?.toString();
-      final requireConfirmation = ui['require_confirmation'] == true;
       final valueDest = (valueToShow != null && valueToShow['field_id']?.toString() == 'destination')
           ? _resolveDestinationLabel(valueToShow['value'])
           : null;
@@ -517,15 +515,12 @@ class _HiarAppState extends State<HiarApp> {
           _closeDialogIfOpen();
           _goToScreen('mission');
         } else if (targetScreen == 'orientation') {
-          if (requireConfirmation && candidateDest != null) {
+          if (candidateDest != null) {
+            // Uniquement pour ORIENTATION : toujours afficher la popup de confirmation avant départ
             _selectedDestination = candidateDest;
             _goToScreen('orientation');
             final targetKey = ui['target']?.toString() ?? fields?['target']?.toString() ?? fields?['pending_destination']?.toString() ?? 'PHARMACY';
             _showOrientationConfirmationDialog(destination, targetKey);
-          } else if (!requireConfirmation && candidateDest != null) {
-            _selectedDestination = candidateDest;
-            _closeDialogIfOpen();
-            _goToScreen('mission');
           } else {
             _closeDialogIfOpen();
             _goToScreen('orientation');
@@ -1101,6 +1096,7 @@ class _HiarAppState extends State<HiarApp> {
                 recognizedText: _recognizedText,
                 voiceTip: _currentVoiceTip,
                 faceExpression: _faceExpression,
+                onBack: () => _goToScreen('splash'),
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
                 onOpenOrientation: () {
@@ -1130,10 +1126,10 @@ class _HiarAppState extends State<HiarApp> {
                   _goToScreen('home');
                 },
                 onDestinationSelected: (key, label) {
+                  // Uniquement pour ORIENTATION : popup de confirmation obligatoire avant départ
                   _selectedDestination = label;
-                  _missionState = 'RUNNING';
-                  _hub.publishAction('orientation.select', {'destination': key});
-                  _goToScreen('mission');
+                  _hub.publishAction('orientation.pending', {'destination': key, 'label': label});
+                  _showOrientationConfirmationDialog(label, key);
                 },
               );
             case 'mission':
