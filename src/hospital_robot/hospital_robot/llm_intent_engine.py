@@ -119,6 +119,11 @@ Règles de classification :
 - HOME : retour menu principal / écran d'accueil.
 - UNKNOWN : incompréhensible ou hors sujet hospitalier."""
 
+# Prompt compact optimisé pour Qwen 2.5 0.5B local (CPU Raspberry Pi 4 : 3x plus rapide)
+COMPACT_LOCAL_SYSTEM_PROMPT = """Assistant robot hospitalier HIAR. Réponds UNIQUEMENT en JSON valide :
+{"intent":"ORIENTATION|INFORMATION|VITALS|CONSULTATION|CONFIRM_YES|CONFIRM_NO|GREETING|THANKS|HOME|UNKNOWN","target":"PHARMACY|LABORATORY|RADIOLOGY|RECEPTION|MALARIA|HIV|DIABETES|HYPERTENSION|TUBERCULOSIS|MENSTRUAL_HEALTH|null","text_to_speak":"phrase courte FR (10 mots max)","screen":"orientation|information|consultation|home"}
+PHARMACY=médicaments/pilules/ordonnance; LABORATORY=sang/analyses; RADIOLOGY=radio/scanner/fracture; RECEPTION=accueil/entrée; VITALS=température/pouls/tension; CONSULTATION=médecin/rdv/symptômes; INFORMATION=paludisme/vih/diabète/hypertension/tuberculose."""
+
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -480,10 +485,16 @@ class OllamaBackend(LLMBackendInterface):
 
     def generate(self, user_prompt: str, config: LLMConfig) -> str:
         url = f"{config.host.rstrip('/')}/api/chat"
+        # Sur CPU Pi, utiliser le prompt compact si on est sur le prompt par défaut
+        sys_prompt = (
+            COMPACT_LOCAL_SYSTEM_PROMPT
+            if config.system_prompt == DEFAULT_SYSTEM_PROMPT
+            else config.system_prompt
+        )
         payload = {
             "model": config.model_name,
             "messages": [
-                {"role": "system", "content": config.system_prompt},
+                {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             "stream": False,
@@ -491,7 +502,8 @@ class OllamaBackend(LLMBackendInterface):
             "keep_alive": "24h",
             "options": {
                 "temperature": config.temperature,
-                "num_predict": config.max_tokens,
+                "num_predict": min(config.max_tokens, 80),
+                "num_ctx": 512,
             },
         }
         data = json.dumps(payload).encode("utf-8")
