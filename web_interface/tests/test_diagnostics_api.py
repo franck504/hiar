@@ -30,9 +30,9 @@ def test_system_diagnostics_returns_live_snapshot(tmp_path, monkeypatch):
         "firmware_diagnostics": "option_b",
         "esp32": {"status": "ok", "port": "/dev/ttyUSB0", "detail": "Connecté"},
         "sensors": {
-            "ultrasonic": {"status": "ok", "distance_cm": 45.2, "detail": "OK"},
-            "ir_left": {"status": "ok", "state": "CLEAR", "raw": 1, "detail": "Libre"},
-            "ir_right": {"status": "ok", "state": "CLEAR", "raw": 1, "detail": "Libre"},
+            "ultrasonic": {"status": "ok", "distance_cm": 45.2, "detail": "45.2 cm"},
+            "ultrasonic_left": {"status": "ok", "distance_cm": 70.4, "detail": "70.4 cm"},
+            "ultrasonic_right": {"status": "ok", "distance_cm": 58.1, "detail": "58.1 cm"},
             "ds18b20": {"status": "ok", "detail": "Sonde détectée"},
             "max30102": {"status": "ok", "detail": "I2C 0x57 OK"},
             "motors": {"status": "ok", "mode": "IDLE", "detail": "PWM prêt"},

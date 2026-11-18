@@ -1264,8 +1264,8 @@ class HMIWebSocketBridgeNode(Node):
             }
             sensors = {
                 "ultrasonic": {"status": "offline", "distance_cm": None, "detail": "ESP32 hors ligne"},
-                "ir_left": {"status": "offline", "state": None, "raw": None, "detail": "ESP32 hors ligne"},
-                "ir_right": {"status": "offline", "state": None, "raw": None, "detail": "ESP32 hors ligne"},
+                "ultrasonic_left": {"status": "offline", "distance_cm": None, "detail": "ESP32 hors ligne"},
+                "ultrasonic_right": {"status": "offline", "distance_cm": None, "detail": "ESP32 hors ligne"},
                 "ds18b20": {"status": "offline", "detail": "ESP32 hors ligne"},
                 "max30102": {"status": "offline", "detail": "ESP32 hors ligne"},
                 "motors": {"status": "offline", "mode": "OFFLINE", "detail": "ESP32 hors ligne"},

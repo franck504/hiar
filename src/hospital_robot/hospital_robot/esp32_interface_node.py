@@ -7,7 +7,6 @@ from rclpy.node import Node
 
 from std_msgs.msg import String
 from std_msgs.msg import Float32
-from std_msgs.msg import Int32
 
 
 def parse_kv_frame(line, expected_prefix):
@@ -69,15 +68,15 @@ class ESP32Interface(Node):
         self.last_pong_at = None
         self.last_dist_cm = None
         self.last_dist_at = None
-        self.last_ir_left = None
-        self.last_ir_left_at = None
-        self.last_ir_left_raw = None
-        self.last_ir_right = None
-        self.last_ir_right_at = None
-        self.last_ir_right_raw = None
+        self.last_dist_left_cm = None
+        self.last_dist_left_at = None
+        self.last_dist_right_cm = None
+        self.last_dist_right_at = None
         self.ds18b20_ready = None
         self.max30102_ready = None
         self.us_reported_ok = None
+        self.us_left_reported_ok = None
+        self.us_right_reported_ok = None
         self.motors_ready = None
         self.motor_mode = 'IDLE'
         self.last_health_at = None
@@ -114,12 +113,12 @@ class ESP32Interface(Node):
             Float32, '/sensors/ultrasonic', 10
         )
 
-        self.ir_left_publisher = self.create_publisher(
-            Int32, '/sensors/ir_left', 10
+        self.ultrasonic_left_publisher = self.create_publisher(
+            Float32, '/sensors/ultrasonic_left', 10
         )
 
-        self.ir_right_publisher = self.create_publisher(
-            Int32, '/sensors/ir_right', 10
+        self.ultrasonic_right_publisher = self.create_publisher(
+            Float32, '/sensors/ultrasonic_right', 10
         )
 
         self.serial_timer = self.create_timer(0.01, self.read_serial)
@@ -201,36 +200,30 @@ class ESP32Interface(Node):
             esp_status = 'warn'
             esp_detail = f'Port ouvert sans réponse ({self.port})'
 
-        # 1. Ultrason HC-SR04
-        dist_age = (now - self.last_dist_at) if self.last_dist_at is not None else None
-        if not esp_alive:
-            us_info = {'status': 'offline', 'distance_cm': None, 'detail': 'ESP32 hors ligne'}
-        elif self.us_reported_ok is False and (dist_age is None or dist_age > 2.5):
-            us_info = {'status': 'absent', 'distance_cm': None, 'detail': 'Timeout / Non détecté'}
-        elif dist_age is not None and dist_age <= 3.0 and self.last_dist_cm is not None:
-            us_info = {
-                'status': 'ok',
-                'distance_cm': round(self.last_dist_cm, 1),
-                'detail': f'{self.last_dist_cm:.1f} cm',
-            }
-        else:
-            us_info = {'status': 'warn', 'distance_cm': None, 'detail': 'Aucun écho récent'}
-
-        # 2. IR Gauche & Droite
-        def _ir_entry(state, last_at, raw_adc):
+        # 1. Capteurs Ultrasons HC-SR04 (Avant, Gauche, Droite)
+        def _us_entry(reported_ok, dist_cm, last_at):
             if not esp_alive:
-                return {'status': 'offline', 'state': None, 'raw': None, 'detail': 'ESP32 hors ligne'}
+                return {'status': 'offline', 'distance_cm': None, 'detail': 'ESP32 hors ligne'}
             age = (now - last_at) if last_at is not None else None
-            if age is None or age > 3.5 or state is None:
-                return {'status': 'warn', 'state': None, 'raw': raw_adc, 'detail': 'Pas de signal récent'}
-            label = 'Libre' if state == 1 else 'Obstacle'
-            detail = f'{label} (ADC {raw_adc})' if raw_adc is not None else label
-            return {'status': 'ok', 'state': state, 'raw': raw_adc, 'detail': detail}
+            if reported_ok is False and (age is None or age > 2.5):
+                return {'status': 'absent', 'distance_cm': None, 'detail': 'Timeout / Non détecté'}
+            if age is not None and age <= 3.0 and dist_cm is not None:
+                return {
+                    'status': 'ok',
+                    'distance_cm': round(dist_cm, 1),
+                    'detail': f'{dist_cm:.1f} cm',
+                }
+            return {'status': 'warn', 'distance_cm': None, 'detail': 'Aucun écho récent'}
 
-        ir_left_info = _ir_entry(self.last_ir_left, self.last_ir_left_at, self.last_ir_left_raw)
-        ir_right_info = _ir_entry(self.last_ir_right, self.last_ir_right_at, self.last_ir_right_raw)
+        us_info = _us_entry(self.us_reported_ok, self.last_dist_cm, self.last_dist_at)
+        us_left_info = _us_entry(
+            self.us_left_reported_ok, self.last_dist_left_cm, self.last_dist_left_at
+        )
+        us_right_info = _us_entry(
+            self.us_right_reported_ok, self.last_dist_right_cm, self.last_dist_right_at
+        )
 
-        # 3. Température DS18B20 (1-Wire)
+        # 2. Température DS18B20 (1-Wire)
         if not esp_alive:
             ds_info = {'status': 'offline', 'detail': 'ESP32 hors ligne'}
         elif self.ds18b20_ready is True:
@@ -240,7 +233,7 @@ class ESP32Interface(Node):
         else:
             ds_info = {'status': 'unknown', 'detail': 'En attente de sonde'}
 
-        # 4. Pouls MAX30102 (I2C 0x57)
+        # 3. Pouls MAX30102 (I2C 0x57)
         if not esp_alive:
             pulse_info = {'status': 'offline', 'detail': 'ESP32 hors ligne'}
         elif self.max30102_ready is True:
@@ -250,7 +243,7 @@ class ESP32Interface(Node):
         else:
             pulse_info = {'status': 'unknown', 'detail': 'En attente de sonde'}
 
-        # 5. Moteurs L298N
+        # 4. Moteurs L298N
         if not esp_alive:
             motors_info = {'status': 'offline', 'mode': 'OFFLINE', 'detail': 'ESP32 hors ligne'}
         elif self.motors_ready is False:
@@ -272,8 +265,8 @@ class ESP32Interface(Node):
             },
             'sensors': {
                 'ultrasonic': us_info,
-                'ir_left': ir_left_info,
-                'ir_right': ir_right_info,
+                'ultrasonic_left': us_left_info,
+                'ultrasonic_right': us_right_info,
                 'ds18b20': ds_info,
                 'max30102': pulse_info,
                 'motors': motors_info,
@@ -375,21 +368,23 @@ class ESP32Interface(Node):
             self.last_dist_cm = dist_val
             self.last_dist_at = now
 
-        ir_l = _to_int_or_none(kv.get('ir_l'))
-        if ir_l in (0, 1):
-            self.last_ir_left = ir_l
-            self.last_ir_left_at = now
-        ir_l_raw = _to_int_or_none(kv.get('ir_l_raw'))
-        if ir_l_raw is not None:
-            self.last_ir_left_raw = ir_l_raw
+        us_l_flag = _to_bool_flag(kv.get('us_l'))
+        if us_l_flag is not None:
+            self.us_left_reported_ok = us_l_flag
 
-        ir_r = _to_int_or_none(kv.get('ir_r'))
-        if ir_r in (0, 1):
-            self.last_ir_right = ir_r
-            self.last_ir_right_at = now
-        ir_r_raw = _to_int_or_none(kv.get('ir_r_raw'))
-        if ir_r_raw is not None:
-            self.last_ir_right_raw = ir_r_raw
+        dist_l_val = _to_float_or_none(kv.get('dist_l'))
+        if dist_l_val is not None and 2.0 <= dist_l_val <= 400.0:
+            self.last_dist_left_cm = dist_l_val
+            self.last_dist_left_at = now
+
+        us_r_flag = _to_bool_flag(kv.get('us_r'))
+        if us_r_flag is not None:
+            self.us_right_reported_ok = us_r_flag
+
+        dist_r_val = _to_float_or_none(kv.get('dist_r'))
+        if dist_r_val is not None and 2.0 <= dist_r_val <= 400.0:
+            self.last_dist_right_cm = dist_r_val
+            self.last_dist_right_at = now
 
         motors_flag = _to_bool_flag(kv.get('motors'))
         if motors_flag is not None:
@@ -453,23 +448,12 @@ class ESP32Interface(Node):
                     self._handle_ready_line(response, now)
                     continue
 
-                if response.startswith('IR_RAW,'):
-                    parts = response.split(',')
-                    if len(parts) == 3:
-                        side = parts[1].upper()
-                        raw_val = _to_int_or_none(parts[2])
-                        if raw_val is not None:
-                            if side == 'LEFT':
-                                self.last_ir_left_raw = raw_val
-                            elif side == 'RIGHT':
-                                self.last_ir_right_raw = raw_val
-                    continue
-
-                if response.startswith('DIST,'):
+                if response.startswith(('DIST,', 'DIST_L,', 'DIST_R,')):
                     parts = response.split(',')
                     if len(parts) != 2:
                         self.get_logger().warning(f'Invalid DIST frame: {response}')
                         continue
+                    prefix = parts[0]
                     try:
                         distance = float(parts[1])
                     except ValueError:
@@ -478,44 +462,27 @@ class ESP32Interface(Node):
                     # HC-SR04 : plage utile 2-400 cm, hors plage = lecture parasite
                     if distance < 2.0 or distance > 400.0:
                         self.get_logger().warning(
-                            f'Ultrasonic reading out of range ignored: {distance:.1f} cm',
+                            f'Ultrasonic reading ({prefix}) out of range ignored: {distance:.1f} cm',
                             throttle_duration_sec=2.0
                         )
                         continue
-                    self.last_dist_cm = distance
-                    self.last_dist_at = now
-                    self.us_reported_ok = True
                     message = Float32()
                     message.data = distance
-                    self.ultrasonic_publisher.publish(message)
-                    continue
-
-                if response.startswith('IR,'):
-                    parts = response.split(',')
-                    if len(parts) != 3:
-                        self.get_logger().warning(f'Invalid IR frame: {response}')
-                        continue
-                    side = parts[1].upper()
-                    try:
-                        state = int(parts[2])
-                    except ValueError:
-                        self.get_logger().warning(f'Invalid IR state: {response}')
-                        continue
-                    if state not in [0, 1]:
-                        self.get_logger().warning(f'Invalid IR state: {response}')
-                        continue
-                    message = Int32()
-                    message.data = state
-                    if side == 'LEFT':
-                        self.last_ir_left = state
-                        self.last_ir_left_at = now
-                        self.ir_left_publisher.publish(message)
-                    elif side == 'RIGHT':
-                        self.last_ir_right = state
-                        self.last_ir_right_at = now
-                        self.ir_right_publisher.publish(message)
-                    else:
-                        self.get_logger().warning(f'Unknown IR side: {side}')
+                    if prefix == 'DIST':
+                        self.last_dist_cm = distance
+                        self.last_dist_at = now
+                        self.us_reported_ok = True
+                        self.ultrasonic_publisher.publish(message)
+                    elif prefix == 'DIST_L':
+                        self.last_dist_left_cm = distance
+                        self.last_dist_left_at = now
+                        self.us_left_reported_ok = True
+                        self.ultrasonic_left_publisher.publish(message)
+                    elif prefix == 'DIST_R':
+                        self.last_dist_right_cm = distance
+                        self.last_dist_right_at = now
+                        self.us_right_reported_ok = True
+                        self.ultrasonic_right_publisher.publish(message)
                     continue
 
                 if response.startswith('RESULT,'):

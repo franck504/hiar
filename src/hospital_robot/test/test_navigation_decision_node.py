@@ -10,14 +10,14 @@ def make_node(state):
     node.state_start_time = 99.0
     node.mission_start_time = None
     node.center_distance = 10.0
-    node.ir_left_state = 0
-    node.ir_right_state = 0
+    node.left_distance = 10.0
+    node.right_distance = 10.0
     node.sensor_stop_sent = False
     node.turn_direction = None
     return node
 
 
-def test_decide_enters_blocked_when_both_ir_sensors_are_blocked():
+def test_decide_enters_blocked_when_all_ultrasonic_sensors_are_blocked():
     node = make_node("DECIDE")
     node.sensors_ready.return_value = True
     node.decide.return_value = "STOP"
@@ -141,10 +141,41 @@ def test_decide_treats_exactly_20_cm_as_clear():
 def test_decide_treats_just_under_20_cm_as_blocked():
     node = make_node("DECIDE")
     node.center_distance = 19.9
-    node.ir_left_state = 0
-    node.ir_right_state = 0
+    node.left_distance = 15.0
+    node.right_distance = 12.0
 
     assert NavigationDecision.decide(node) == "STOP"
+
+
+def test_decide_turns_left_when_only_left_ultrasonic_is_clear():
+    node = make_node("DECIDE")
+    node.center_distance = 15.0
+    node.left_distance = 45.0
+    node.right_distance = 12.0
+
+    assert NavigationDecision.decide(node) == "LEFT"
+
+
+def test_decide_turns_right_when_only_right_ultrasonic_is_clear():
+    node = make_node("DECIDE")
+    node.center_distance = 15.0
+    node.left_distance = 12.0
+    node.right_distance = 50.0
+
+    assert NavigationDecision.decide(node) == "RIGHT"
+
+
+def test_decide_prefers_wider_side_when_both_sides_clear():
+    node = make_node("DECIDE")
+    node.center_distance = 15.0
+    node.left_distance = 30.0
+    node.right_distance = 75.0
+
+    assert NavigationDecision.decide(node) == "RIGHT"
+
+    node.left_distance = 40.0
+    node.right_distance = 42.0
+    assert NavigationDecision.decide(node) == "LEFT"
 
 
 def test_start_is_rejected_without_valid_destination():

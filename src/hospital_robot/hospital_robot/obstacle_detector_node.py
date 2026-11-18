@@ -13,7 +13,7 @@ class ObstacleDetector(Node):
         # Seuil de détection provisoire
         self.obstacle_threshold_cm = 20.0
 
-        # Souscription aux mesures ultrasoniques
+        # Souscription aux 3 capteurs ultrasoniques HC-SR04 (Avant, Gauche, Droite)
         self.ultrasonic_subscription = self.create_subscription(
             Float32,
             '/sensors/ultrasonic',
@@ -21,15 +21,41 @@ class ObstacleDetector(Node):
             10
         )
 
-        # Publication de l'état de détection
+        self.ultrasonic_left_subscription = self.create_subscription(
+            Float32,
+            '/sensors/ultrasonic_left',
+            self.ultrasonic_left_callback,
+            10
+        )
+
+        self.ultrasonic_right_subscription = self.create_subscription(
+            Float32,
+            '/sensors/ultrasonic_right',
+            self.ultrasonic_right_callback,
+            10
+        )
+
+        # Publication des états de détection (Avant sur /sensors/obstacle + côtés)
         self.obstacle_publisher = self.create_publisher(
             String,
             '/sensors/obstacle',
             10
         )
 
+        self.obstacle_left_publisher = self.create_publisher(
+            String,
+            '/sensors/obstacle_left',
+            10
+        )
+
+        self.obstacle_right_publisher = self.create_publisher(
+            String,
+            '/sensors/obstacle_right',
+            10
+        )
+
         self.get_logger().info(
-            'Obstacle detector started.'
+            'Obstacle detector started (3x HC-SR04: FRONT, LEFT, RIGHT).'
         )
 
         self.get_logger().info(
@@ -37,34 +63,33 @@ class ObstacleDetector(Node):
             f'{self.obstacle_threshold_cm:.1f} cm'
         )
 
-    def ultrasonic_callback(self, message):
-
-        distance = message.data
+    def _publish_state(self, distance, publisher, label):
 
         if distance <= 0.0:
             self.get_logger().warning(
-                f'Invalid distance received: {distance:.2f} cm'
+                f'Invalid {label} distance received: {distance:.2f} cm'
             )
             return
 
-        if distance < self.obstacle_threshold_cm:
-
-            state = 'OBSTACLE'
-
-        else:
-
-            state = 'CLEAR'
+        state = 'OBSTACLE' if distance < self.obstacle_threshold_cm else 'CLEAR'
 
         obstacle_message = String()
         obstacle_message.data = state
 
-        self.obstacle_publisher.publish(
-            obstacle_message
-        )
+        publisher.publish(obstacle_message)
 
         self.get_logger().info(
-            f'Distance: {distance:.1f} cm -> {state}'
+            f'{label} distance: {distance:.1f} cm -> {state}'
         )
+
+    def ultrasonic_callback(self, message):
+        self._publish_state(message.data, self.obstacle_publisher, 'FRONT')
+
+    def ultrasonic_left_callback(self, message):
+        self._publish_state(message.data, self.obstacle_left_publisher, 'LEFT')
+
+    def ultrasonic_right_callback(self, message):
+        self._publish_state(message.data, self.obstacle_right_publisher, 'RIGHT')
 
 
 def main(args=None):

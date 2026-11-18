@@ -5,7 +5,6 @@ import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import Float32
-from std_msgs.msg import Int32
 from std_msgs.msg import String
 
 
@@ -13,14 +12,13 @@ from std_msgs.msg import String
 # CONFIGURATION
 # ============================================================
 
-# Distance minimale considérée comme libre devant le robot
+# Distance minimale considérée comme libre devant et sur les côtés
 OBSTACLE_CM = 20.0
+SIDE_OBSTACLE_CM = 20.0
 
-# Fraîcheur maximale d'une mesure ultrason
-CENTER_TIMEOUT_S = 0.4
-
-# Fraîcheur maximale des états IR
-IR_TIMEOUT_S = 0.4
+# Fraîcheur maximale d'une mesure ultrason (cycle 3x HC-SR04 ~105 ms)
+CENTER_TIMEOUT_S = 0.6
+SIDE_TIMEOUT_S = 0.6
 
 # Intervalle entre deux vérifications
 LOOP_PERIOD_S = 0.1
@@ -34,10 +32,6 @@ TURN_DURATION_S = 0.6
 
 # Temps d'arrêt avant de relire les capteurs
 RECHECK_DELAY_S = 0.2
-
-# Nombre de lectures IR identiques nécessaires
-# avant de considérer l'état comme stable
-IR_STABLE_COUNT = 2
 
 
 # ============================================================
@@ -62,33 +56,25 @@ class NavigationDecision(Node):
         self.state_start_time = self.now()
 
         # ----------------------------------------------------
-        # ULTRASON AVANT
+        # ULTRASON AVANT (HC-SR04 GPIO 13/34)
         # ----------------------------------------------------
 
         self.center_distance = None
         self.last_center_time = 0.0
 
         # ----------------------------------------------------
-        # IR GAUCHE
-        # 1 = CLEAR
-        # 0 = OBSTACLE
+        # ULTRASON GAUCHE (HC-SR04 GPIO 2/4)
         # ----------------------------------------------------
 
-        self.ir_left_state = None
-        self.ir_left_candidate = None
-        self.ir_left_count = 0
-        self.last_ir_left_time = 0.0
+        self.left_distance = None
+        self.last_left_time = 0.0
 
         # ----------------------------------------------------
-        # IR DROIT
-        # 1 = CLEAR
-        # 0 = OBSTACLE
+        # ULTRASON DROIT (HC-SR04 GPIO 5/16)
         # ----------------------------------------------------
 
-        self.ir_right_state = None
-        self.ir_right_candidate = None
-        self.ir_right_count = 0
-        self.last_ir_right_time = 0.0
+        self.right_distance = None
+        self.last_right_time = 0.0
 
         # ----------------------------------------------------
         # Gestion des mouvements
@@ -114,19 +100,19 @@ class NavigationDecision(Node):
             10
         )
 
-        # IR gauche
+        # Ultrason gauche
         self.create_subscription(
-            Int32,
-            '/sensors/ir_left',
-            self.ir_left_callback,
+            Float32,
+            '/sensors/ultrasonic_left',
+            self.left_callback,
             10
         )
 
-        # IR droit
+        # Ultrason droit
         self.create_subscription(
-            Int32,
-            '/sensors/ir_right',
-            self.ir_right_callback,
+            Float32,
+            '/sensors/ultrasonic_right',
+            self.right_callback,
             10
         )
 
@@ -190,7 +176,7 @@ class NavigationDecision(Node):
         )
 
         self.get_logger().info(
-            'Sensors: FRONT ultrasonic + LEFT/RIGHT IR.'
+            'Sensors: 3x HC-SR04 ultrasonic (FRONT, LEFT, RIGHT).'
         )
 
     # ========================================================
@@ -302,88 +288,32 @@ class NavigationDecision(Node):
         self.last_center_time = self.now()
 
     # ========================================================
-    # CALLBACK IR GAUCHE
+    # CALLBACK ULTRASON GAUCHE
     # ========================================================
 
-    def ir_left_callback(self, message):
+    def left_callback(self, message):
 
-        state = int(message.data)
+        distance = float(message.data)
 
-        if state not in [0, 1]:
-
-            self.get_logger().warning(
-                f'Invalid LEFT IR state: {state}'
-            )
-
+        if distance <= 0.0:
             return
 
-        self.last_ir_left_time = self.now()
-
-        # Première valeur
-        if self.ir_left_candidate is None:
-
-            self.ir_left_candidate = state
-            self.ir_left_count = 1
-
-            return
-
-        # Même valeur que la candidate
-        if state == self.ir_left_candidate:
-
-            self.ir_left_count += 1
-
-        # Nouvelle valeur
-        else:
-
-            self.ir_left_candidate = state
-            self.ir_left_count = 1
-
-        # État considéré stable
-        if self.ir_left_count >= IR_STABLE_COUNT:
-
-            self.ir_left_state = self.ir_left_candidate
+        self.left_distance = distance
+        self.last_left_time = self.now()
 
     # ========================================================
-    # CALLBACK IR DROIT
+    # CALLBACK ULTRASON DROIT
     # ========================================================
 
-    def ir_right_callback(self, message):
+    def right_callback(self, message):
 
-        state = int(message.data)
+        distance = float(message.data)
 
-        if state not in [0, 1]:
-
-            self.get_logger().warning(
-                f'Invalid RIGHT IR state: {state}'
-            )
-
+        if distance <= 0.0:
             return
 
-        self.last_ir_right_time = self.now()
-
-        # Première valeur
-        if self.ir_right_candidate is None:
-
-            self.ir_right_candidate = state
-            self.ir_right_count = 1
-
-            return
-
-        # Même valeur que la candidate
-        if state == self.ir_right_candidate:
-
-            self.ir_right_count += 1
-
-        # Nouvelle valeur
-        else:
-
-            self.ir_right_candidate = state
-            self.ir_right_count = 1
-
-        # État considéré stable
-        if self.ir_right_count >= IR_STABLE_COUNT:
-
-            self.ir_right_state = self.ir_right_candidate
+        self.right_distance = distance
+        self.last_right_time = self.now()
 
     # ========================================================
     # CALLBACK STATUT ESP32
@@ -496,7 +426,7 @@ class NavigationDecision(Node):
 
         current_time = self.now()
 
-        # Ultrason disponible ?
+        # Ultrason avant disponible ?
         center_ready = (
             self.center_distance is not None
             and
@@ -504,34 +434,33 @@ class NavigationDecision(Node):
             <= CENTER_TIMEOUT_S
         )
 
-        # IR gauche disponible ?
+        # Ultrason gauche disponible ?
         left_ready = (
-            self.ir_left_state is not None
+            self.left_distance is not None
             and
-            current_time - self.last_ir_left_time
-            <= IR_TIMEOUT_S
+            current_time - self.last_left_time
+            <= SIDE_TIMEOUT_S
         )
 
-        # IR droit disponible ?
+        # Ultrason droit disponible ?
         right_ready = (
-            self.ir_right_state is not None
+            self.right_distance is not None
             and
-            current_time - self.last_ir_right_time
-            <= IR_TIMEOUT_S
+            current_time - self.last_right_time
+            <= SIDE_TIMEOUT_S
         )
 
         return center_ready and left_ready and right_ready
 
     # ========================================================
-    # DÉCISION DE NAVIGATION
+    # DÉCISION DE NAVIGATION (3x HC-SR04)
     # ========================================================
 
     def decide(self):
 
         center = self.center_distance
-
-        left = self.ir_left_state
-        right = self.ir_right_state
+        left = self.left_distance
+        right = self.right_distance
 
         # ----------------------------------------------------
         # DEVANT LIBRE
@@ -545,33 +474,29 @@ class NavigationDecision(Node):
         # DEVANT BLOQUÉ
         # ----------------------------------------------------
 
-        # Gauche = libre
-        # Droite = obstacle
-        if left == 1 and right == 0:
+        left_clear = left is not None and left >= SIDE_OBSTACLE_CM
+        right_clear = right is not None and right >= SIDE_OBSTACLE_CM
+
+        # Gauche = libre, Droite = obstacle
+        if left_clear and not right_clear:
 
             return 'LEFT'
 
-        # Gauche = obstacle
-        # Droite = libre
-        if left == 0 and right == 1:
+        # Gauche = obstacle, Droite = libre
+        if right_clear and not left_clear:
 
             return 'RIGHT'
 
-        # Gauche = libre
-        # Droite = libre
-        #
-        # Choix déterministe :
-        # priorité à gauche.
-        if left == 1 and right == 1:
+        # Les deux côtés libres : privilégier le côté le plus dégagé
+        # (priorité à gauche en cas d'égalité à ±5 cm).
+        if left_clear and right_clear:
+
+            if right > left + 5.0:
+                return 'RIGHT'
 
             return 'LEFT'
 
-        # Gauche = obstacle
-        # Droite = obstacle
-        if left == 0 and right == 0:
-
-            return 'STOP'
-
+        # Les deux côtés bloqués
         return 'STOP'
 
     # ========================================================
@@ -726,11 +651,13 @@ class NavigationDecision(Node):
                 decision
             )
 
+            left_str = f'{self.left_distance:.1f} cm' if self.left_distance is not None else 'NA'
+            right_str = f'{self.right_distance:.1f} cm' if self.right_distance is not None else 'NA'
             self.get_logger().info(
                 f'RECHECK: '
                 f'FRONT={self.center_distance:.1f} cm | '
-                f'LEFT={self.ir_left_state} | '
-                f'RIGHT={self.ir_right_state} | '
+                f'LEFT={left_str} | '
+                f'RIGHT={right_str} | '
                 f'DECISION={decision}'
             )
 

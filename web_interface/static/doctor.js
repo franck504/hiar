@@ -283,18 +283,18 @@
     const rosNodes = (data && data.ros_nodes) || {};
     const llm = (data && data.llm) || {};
 
-    const us = sensors.ultrasonic || {};
-    const irL = sensors.ir_left || {};
-    const irR = sensors.ir_right || {};
+    const usFront = sensors.ultrasonic || {};
+    const usLeft = sensors.ultrasonic_left || {};
+    const usRight = sensors.ultrasonic_right || {};
     const temp = sensors.ds18b20 || {};
     const pulse = sensors.max30102 || {};
     const motors = sensors.motors || {};
 
     const cards = [
       makeDiagCard("🔌", "ESP32", esp32.status, esp32.detail || "Non connecté", esp32.port ? "Port : " + esp32.port : ""),
-      makeDiagCard("📏", "Ultrasons HC-SR04", us.status, us.detail || "Inconnu", us.distance_cm != null ? "Distance : " + us.distance_cm + " cm" : ""),
-      makeDiagCard("⬅️", "IR Gauche", irL.status, irL.detail || "Inconnu", irL.raw != null ? "Brut : " + irL.raw : ""),
-      makeDiagCard("➡️", "IR Droite", irR.status, irR.detail || "Inconnu", irR.raw != null ? "Brut : " + irR.raw : ""),
+      makeDiagCard("⬆️", "Ultrason Avant (HC-SR04)", usFront.status, usFront.detail || "Inconnu", usFront.distance_cm != null ? "GPIO 13/34 · " + usFront.distance_cm + " cm" : "GPIO 13/34"),
+      makeDiagCard("⬅️", "Ultrason Gauche (HC-SR04)", usLeft.status, usLeft.detail || "Inconnu", usLeft.distance_cm != null ? "GPIO 2/4 · " + usLeft.distance_cm + " cm" : "GPIO 2/4"),
+      makeDiagCard("➡️", "Ultrason Droite (HC-SR04)", usRight.status, usRight.detail || "Inconnu", usRight.distance_cm != null ? "GPIO 5/16 · " + usRight.distance_cm + " cm" : "GPIO 5/16"),
       makeDiagCard("🌡️", "Température DS18B20", temp.status, temp.detail || "Inconnu", "Bus 1-Wire"),
       makeDiagCard("❤️", "Pouls / SpO2 MAX30102", pulse.status, pulse.detail || "Inconnu", "Bus I²C (0x57)"),
       makeDiagCard("⚙️", "Moteurs & Traction", motors.status, motors.detail || "Inconnu", motors.mode ? "Mode : " + motors.mode : ""),

@@ -866,8 +866,8 @@ def api_system_diagnostics():
             },
             "sensors": {
                 "ultrasonic": {"status": "offline", "distance_cm": None, "detail": "Hors ligne"},
-                "ir_left": {"status": "offline", "state": None, "raw": None, "detail": "Hors ligne"},
-                "ir_right": {"status": "offline", "state": None, "raw": None, "detail": "Hors ligne"},
+                "ultrasonic_left": {"status": "offline", "distance_cm": None, "detail": "Hors ligne"},
+                "ultrasonic_right": {"status": "offline", "distance_cm": None, "detail": "Hors ligne"},
                 "ds18b20": {"status": "offline", "detail": "Hors ligne"},
                 "max30102": {"status": "offline", "detail": "Hors ligne"},
                 "motors": {"status": "offline", "mode": "OFFLINE", "detail": "Hors ligne"},

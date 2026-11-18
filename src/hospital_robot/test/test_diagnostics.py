@@ -37,8 +37,8 @@ def test_bridge_diagnostics_offline_then_online():
         "esp32": {"status": "ok", "port": "/dev/ttyUSB0", "detail": "Connecté (/dev/ttyUSB0)"},
         "sensors": {
             "ultrasonic": {"status": "ok", "distance_cm": 42.5, "detail": "42.5 cm"},
-            "ir_left": {"status": "ok", "state": 1, "raw": 3100, "detail": "Libre (ADC 3100)"},
-            "ir_right": {"status": "ok", "state": 0, "raw": 800, "detail": "Obstacle (ADC 800)"},
+            "ultrasonic_left": {"status": "ok", "distance_cm": 68.0, "detail": "68.0 cm"},
+            "ultrasonic_right": {"status": "ok", "distance_cm": 19.2, "detail": "19.2 cm"},
             "ds18b20": {"status": "ok", "detail": "1-Wire OK (GPIO 23)"},
             "max30102": {"status": "absent", "detail": "Non détecté (I²C 0x57)"},
             "motors": {"status": "ok", "mode": "IDLE", "detail": "Prêt (IDLE)"},
@@ -50,6 +50,8 @@ def test_bridge_diagnostics_offline_then_online():
     assert diag_on["firmware_diagnostics"] == "option_b"
     assert diag_on["esp32"]["status"] == "ok"
     assert diag_on["sensors"]["ultrasonic"]["distance_cm"] == 42.5
+    assert diag_on["sensors"]["ultrasonic_left"]["distance_cm"] == 68.0
+    assert diag_on["sensors"]["ultrasonic_right"]["distance_cm"] == 19.2
     assert diag_on["sensors"]["ds18b20"]["status"] == "ok"
     assert diag_on["sensors"]["max30102"]["status"] == "absent"
     node.destroy_node()
@@ -99,3 +101,52 @@ def test_websocket_diagnostics_subscription_and_refresh():
     finally:
         node.stop_websocket_server()
         node.destroy_node()
+
+
+def test_esp32_interface_parses_three_ultrasonic_frames_and_health(monkeypatch):
+    import sys
+    from unittest.mock import MagicMock
+
+    fake_serial_mod = MagicMock()
+    fake_serial_mod.SerialException = Exception
+    fake_serial_mod.Serial.side_effect = Exception("no usb in test")
+    monkeypatch.setitem(sys.modules, "serial", fake_serial_mod)
+
+    from hospital_robot.esp32_interface_node import ESP32Interface
+
+    node = ESP32Interface()
+
+    class _FakeSerial:
+        def __init__(self, lines):
+            self._lines = list(lines)
+            self.is_open = True
+
+        @property
+        def in_waiting(self):
+            return len(self._lines)
+
+        def readline(self):
+            return self._lines.pop(0) if self._lines else b""
+
+        def close(self):
+            self.is_open = False
+
+    node.serial_connection = _FakeSerial([
+        b"DIST,45.2\n",
+        b"DIST_L,72.3\n",
+        b"DIST_R,18.6\n",
+        b"HEALTH,temp=1,pulse=1,us=1,dist=45.2,us_l=1,dist_l=72.3,us_r=1,dist_r=18.6,motors=1,mode=IDLE\n",
+    ])
+    node.read_serial()
+
+    assert [m.data for m in node.ultrasonic_publisher.published] == [45.2]
+    assert [m.data for m in node.ultrasonic_left_publisher.published] == [72.3]
+    assert [m.data for m in node.ultrasonic_right_publisher.published] == [18.6]
+
+    diag = node.build_diagnostics_dict()
+    assert diag["sensors"]["ultrasonic"]["distance_cm"] == 45.2
+    assert diag["sensors"]["ultrasonic_left"]["distance_cm"] == 72.3
+    assert diag["sensors"]["ultrasonic_right"]["distance_cm"] == 18.6
+    assert "ir_left" not in diag["sensors"]
+    assert "ir_right" not in diag["sensors"]
+    node.destroy_node()

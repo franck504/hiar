@@ -5,10 +5,10 @@
 // Core    : Arduino ESP32 3.x
 // Baud    : 115200
 //
-// Navigation  : L298N + HC-SR04 + IR analogiques
+// Navigation  : L298N + 3x HC-SR04 (Avant GPIO13/34, Gauche GPIO2/4, Droite GPIO5/16)
 // Vitaux      : DS18B20 + MAX30102
 // Diagnostics : Detection dynamique a chaud 1-Wire (DS18B20) + I2C ACK 0x57 (MAX30102)
-//               + Etat HC-SR04 + IR + Moteurs via commandes STATUS et HEALTH
+//               + Etat 3x HC-SR04 + Moteurs via commandes STATUS et HEALTH
 // SpO2        : ESTIMATION par ratio R = (AC/DC rouge) / (AC/DC IR),
 //               formule empirique, NON calibree cliniquement.
 //               Lecture FIFO rouge+IR, LED 0x24, 100 Hz.
@@ -31,6 +31,13 @@
 enum UsState {
   US_IDLE,
   US_WAITING_ECHO
+};
+
+enum UsIndex {
+  US_FRONT = 0,
+  US_LEFT  = 1,
+  US_RIGHT = 2,
+  US_COUNT = 3
 };
 
 enum MotionMode {
@@ -61,35 +68,23 @@ const int MOTOR_B_IN1 = 14;
 const int MOTOR_B_IN2 = 18;
 
 // ============================================
-// HC-SR04
+// CAPTEURS ULTRASONS HC-SR04 (3x OBSTACLES)
+// Avant  : TRIG = GPIO13, ECHO = GPIO34
+// Gauche : TRIG = GPIO2,  ECHO = GPIO4
+// Droite : TRIG = GPIO5,  ECHO = GPIO16
 // ============================================
 
-const int ULTRASONIC_TRIG = 13;
-const int ULTRASONIC_ECHO = 34;
+const int US_FRONT_TRIG = 13;
+const int US_FRONT_ECHO = 34;
 
-const unsigned long ULTRASONIC_TIMEOUT_US = 25000;
-const unsigned long ULTRASONIC_MIN_INTERVAL_US = 60000;
+const int US_LEFT_TRIG  = 2;
+const int US_LEFT_ECHO  = 4;
 
-// ============================================
-// CAPTEURS IR ANALOGIQUES
-// ============================================
+const int US_RIGHT_TRIG = 5;
+const int US_RIGHT_ECHO = 16;
 
-const int IR_LEFT_PIN  = 32;
-const int IR_RIGHT_PIN = 33;
-
-const int IR_LEFT_THRESHOLD  = 1200;
-const int IR_RIGHT_THRESHOLD = 1200;
-
-// 1 = CLEAR ; 0 = OBSTACLE
-
-int lastIrLeftState  = -1;
-int lastIrRightState = -1;
-
-unsigned long lastIrPublish = 0;
-const unsigned long IR_PUBLISH_INTERVAL = 100;
-
-unsigned long lastIrRawPublish = 0;
-const unsigned long IR_RAW_PUBLISH_INTERVAL = 250;
+const unsigned long ULTRASONIC_TIMEOUT_US    = 25000;
+const unsigned long ULTRASONIC_INTER_PING_US = 35000;  // Multiplexage sequentiel (~105 ms / cycle de 3)
 
 // ============================================
 // PWM ET VITESSE
@@ -109,12 +104,11 @@ const int MOTOR_SPEED =
 const unsigned long MAX_MOVE_DURATION = 2000;
 
 const float OBSTACLE_STOP_CM = 25.0f;
+const float SIDE_OBSTACLE_CM = 25.0f;
 
-const unsigned long MAX_DISTANCE_AGE_MS = 200;
+const unsigned long MAX_DISTANCE_AGE_MS = 350;
 
 const int MAX_INVALID_READS = 3;
-
-const unsigned long GUARD_INTERVAL = 60;
 
 const unsigned long REVERSE_PAUSE_MS = 150;
 
@@ -137,10 +131,12 @@ size_t rxLen = 0;
 bool rxDiscard = false;
 
 // ============================================
-// ULTRASON - VARIABLES ISR
+// ULTRASON - VARIABLES ISR (MULTIPLEXAGE 3x HC-SR04)
 // ============================================
 
 volatile UsState usState = US_IDLE;
+volatile int usActiveIdx = US_FRONT;
+volatile int usResultIdx = US_FRONT;
 
 volatile unsigned long usEchoStartUs = 0;
 volatile unsigned long usEchoDurationUs = 0;
@@ -151,6 +147,7 @@ volatile bool usEchoStarted = false;
 
 unsigned long usTriggerTimeUs = 0;
 unsigned long lastUsTriggerUs = 0;
+int usNextIdx = US_FRONT;
 
 // ============================================
 // ETAT MOTEURS
@@ -167,25 +164,28 @@ MotionMode pendingMotion = MODE_IDLE;
 unsigned long pendingSince = 0;
 
 // ============================================
-// GARDE HC-SR04
+// GARDE 3x HC-SR04 (AVANT, GAUCHE, DROITE)
 // ============================================
 
-float guardBuffer[3] = {
-  -1, -1, -1
+struct UltrasonicSensor {
+  const char* serialPrefix;
+  const char* safetyTag;
+  int trigPin;
+  int echoPin;
+  float buffer[3];
+  int bufIdx;
+  int invalidCount;
+  float lastRawCm;
+  float lastFilteredCm;
+  unsigned long lastValidMs;
+  bool hasValid;
 };
 
-int guardBufIdx = 0;
-
-int invalidCount = 0;
-
-unsigned long lastGuardTrigger = 0;
-
-float lastFilteredDistance = -1.0f;
-float lastRawDistance = -1.0f;
-
-unsigned long lastValidDistanceMs = 0;
-
-bool hasValidDistance = false;
+UltrasonicSensor usSensors[US_COUNT] = {
+  {"DIST",   "FRONT", US_FRONT_TRIG, US_FRONT_ECHO, {-1.0f, -1.0f, -1.0f}, 0, 0, -1.0f, -1.0f, 0, false},
+  {"DIST_L", "LEFT",  US_LEFT_TRIG,  US_LEFT_ECHO,  {-1.0f, -1.0f, -1.0f}, 0, 0, -1.0f, -1.0f, 0, false},
+  {"DIST_R", "RIGHT", US_RIGHT_TRIG, US_RIGHT_ECHO, {-1.0f, -1.0f, -1.0f}, 0, 0, -1.0f, -1.0f, 0, false}
+};
 
 // ============================================
 // SIGNES VITAUX - CONSTANTES
@@ -290,19 +290,18 @@ void vitalsUpdate();
 bool vitalsIsBusy();
 
 // ============================================
-// ISR ULTRASON
+// ISR ULTRASONS (3x HC-SR04)
 // ============================================
 
-void IRAM_ATTR ultrasonicISR() {
+void IRAM_ATTR handleUltrasonicEchoISR(int idx, int echoPin) {
 
   unsigned long now = micros();
 
-  if (usState != US_WAITING_ECHO) {
+  if (usState != US_WAITING_ECHO || usActiveIdx != idx) {
     return;
   }
 
-  if (gpio_get_level(
-        (gpio_num_t)ULTRASONIC_ECHO) == 1) {
+  if (gpio_get_level((gpio_num_t)echoPin) == 1) {
 
     usEchoStartUs = now;
     usEchoStarted = true;
@@ -311,6 +310,7 @@ void IRAM_ATTR ultrasonicISR() {
 
     usEchoDurationUs = now - usEchoStartUs;
 
+    usResultIdx = idx;
     usResultValid = true;
     usResultReady = true;
 
@@ -320,20 +320,35 @@ void IRAM_ATTR ultrasonicISR() {
   }
 }
 
+void IRAM_ATTR ultrasonicFrontISR() {
+  handleUltrasonicEchoISR(US_FRONT, US_FRONT_ECHO);
+}
+
+void IRAM_ATTR ultrasonicLeftISR() {
+  handleUltrasonicEchoISR(US_LEFT, US_LEFT_ECHO);
+}
+
+void IRAM_ATTR ultrasonicRightISR() {
+  handleUltrasonicEchoISR(US_RIGHT, US_RIGHT_ECHO);
+}
+
 // ============================================
-// DEMANDE ULTRASON
+// DEMANDE ULTRASON (UN CAPTEUR A LA FOIS)
 // ============================================
 
-bool requestUltrasonic() {
+bool requestUltrasonic(int idx) {
 
-  if (usState != US_IDLE) {
+  if (idx < 0 || idx >= US_COUNT) {
+    return false;
+  }
+
+  if (usState != US_IDLE || usResultReady) {
     return false;
   }
 
   unsigned long now = micros();
 
-  if (now - lastUsTriggerUs <
-      ULTRASONIC_MIN_INTERVAL_US) {
+  if (now - lastUsTriggerUs < ULTRASONIC_INTER_PING_US) {
     return false;
   }
 
@@ -341,6 +356,8 @@ bool requestUltrasonic() {
 
   noInterrupts();
 
+  usActiveIdx = idx;
+  usResultIdx = idx;
   usResultReady = false;
   usResultValid = false;
   usEchoStarted = false;
@@ -351,24 +368,22 @@ bool requestUltrasonic() {
 
   interrupts();
 
-  digitalWrite(ULTRASONIC_TRIG, HIGH);
-
+  int trigPin = usSensors[idx].trigPin;
+  digitalWrite(trigPin, HIGH);
   delayMicroseconds(10);
-
-  digitalWrite(ULTRASONIC_TRIG, LOW);
+  digitalWrite(trigPin, LOW);
 
   return true;
 }
 
 // ============================================
-// MISE A JOUR ULTRASON
+// MISE A JOUR ULTRASON (TIMEOUT)
 // ============================================
 
 void updateUltrasonic() {
 
   if (usState == US_WAITING_ECHO &&
-      micros() - usTriggerTimeUs >
-      ULTRASONIC_TIMEOUT_US) {
+      micros() - usTriggerTimeUs > ULTRASONIC_TIMEOUT_US) {
 
     noInterrupts();
 
@@ -378,6 +393,7 @@ void updateUltrasonic() {
 
       usEchoStarted = false;
 
+      usResultIdx = usActiveIdx;
       usResultValid = false;
       usResultReady = true;
     }
@@ -390,7 +406,7 @@ void updateUltrasonic() {
 // RECUPERATION DISTANCE
 // ============================================
 
-bool getUltrasonicDistance(float &dist) {
+bool getUltrasonicDistance(int &idx, float &dist) {
 
   if (!usResultReady) {
     return false;
@@ -400,8 +416,8 @@ bool getUltrasonicDistance(float &dist) {
 
   usResultReady = false;
 
+  idx = usResultIdx;
   bool valid = usResultValid;
-
   unsigned long dur = usEchoDurationUs;
 
   interrupts();
@@ -510,10 +526,10 @@ void setMotion(MotionMode mode) {
 }
 
 // ============================================
-// DISTANCE FILTREE
+// DISTANCE FILTREE (MEDIANE SUR 3 MESURES)
 // ============================================
 
-float computeGuardDistance() {
+float computeMedian3(const float buf[3]) {
 
   float tmp[3];
 
@@ -521,8 +537,8 @@ float computeGuardDistance() {
 
   for (int i = 0; i < 3; i++) {
 
-    if (guardBuffer[i] >= 0) {
-      tmp[n++] = guardBuffer[i];
+    if (buf[i] >= 0.0f) {
+      tmp[n++] = buf[i];
     }
   }
 
@@ -559,68 +575,89 @@ float computeGuardDistance() {
   return b;
 }
 
+void resetUltrasonicSensor(int idx) {
+  UltrasonicSensor &s = usSensors[idx];
+  s.hasValid = false;
+  s.lastRawCm = -1.0f;
+  s.lastFilteredCm = -1.0f;
+  s.buffer[0] = -1.0f;
+  s.buffer[1] = -1.0f;
+  s.buffer[2] = -1.0f;
+  s.bufIdx = 0;
+}
+
+bool isSensorFresh(int idx, unsigned long maxAgeMs) {
+  const UltrasonicSensor &s = usSensors[idx];
+  return s.hasValid && (millis() - s.lastValidMs <= maxAgeMs);
+}
+
+bool isSensorClear(int idx, float minClearCm) {
+  const UltrasonicSensor &s = usSensors[idx];
+  return isSensorFresh(idx, MAX_DISTANCE_AGE_MS) &&
+         s.lastRawCm >= minClearCm &&
+         s.lastFilteredCm >= minClearCm;
+}
+
 // ============================================
-// GARDE AVANT HC-SR04
+// GARDE OBSTACLES 3x HC-SR04 (SEQUENTIEL)
 // ============================================
 
-void updateForwardGuard() {
+void updateObstacleGuards() {
 
-  float d;
+  int idx = US_FRONT;
+  float d = -1.0f;
 
   unsigned long now = millis();
 
-  if (getUltrasonicDistance(d)) {
+  if (getUltrasonicDistance(idx, d) && idx >= 0 && idx < US_COUNT) {
+
+    UltrasonicSensor &s = usSensors[idx];
 
     if (d < 0.0f) {
 
-      invalidCount++;
+      s.invalidCount++;
 
-      hasValidDistance = false;
+      resetUltrasonicSensor(idx);
 
-      lastRawDistance = -1.0f;
-      lastFilteredDistance = -1.0f;
+      if (idx == US_FRONT) {
+        if (motionMode == MODE_FORWARD) {
 
-      guardBuffer[0] = -1.0f;
-      guardBuffer[1] = -1.0f;
-      guardBuffer[2] = -1.0f;
+          setMotion(MODE_IDLE);
 
-      guardBufIdx = 0;
+          Serial.println("SAFETY,SENSOR_INVALID");
 
-      if (motionMode == MODE_FORWARD) {
+        } else if (s.invalidCount == MAX_INVALID_READS) {
 
-        setMotion(MODE_IDLE);
-
-        Serial.println("SAFETY,SENSOR_INVALID");
-
-      } else if (invalidCount == MAX_INVALID_READS) {
-
-        Serial.println("SAFETY,SENSOR_INVALID");
+          Serial.println("SAFETY,SENSOR_INVALID");
+        }
       }
 
     } else {
 
-      invalidCount = 0;
+      s.invalidCount = 0;
 
-      lastRawDistance = d;
+      s.lastRawCm = d;
 
-      lastValidDistanceMs = now;
+      s.lastValidMs = now;
 
-      hasValidDistance = true;
+      s.hasValid = true;
 
-      guardBuffer[guardBufIdx] = d;
+      s.buffer[s.bufIdx] = d;
 
-      guardBufIdx = (guardBufIdx + 1) % 3;
+      s.bufIdx = (s.bufIdx + 1) % 3;
 
-      lastFilteredDistance = computeGuardDistance();
+      s.lastFilteredCm = computeMedian3(s.buffer);
 
       Serial.printf(
-        "DIST,%.1f\n",
-        lastFilteredDistance
+        "%s,%.1f\n",
+        s.serialPrefix,
+        s.lastFilteredCm
       );
 
-      if (motionMode == MODE_FORWARD &&
+      if (idx == US_FRONT &&
+          motionMode == MODE_FORWARD &&
           (d < OBSTACLE_STOP_CM ||
-           lastFilteredDistance < OBSTACLE_STOP_CM)) {
+           s.lastFilteredCm < OBSTACLE_STOP_CM)) {
 
         setMotion(MODE_IDLE);
 
@@ -634,104 +671,25 @@ void updateForwardGuard() {
 
   now = millis();
 
-  if (hasValidDistance &&
-      now - lastValidDistanceMs >
-      MAX_DISTANCE_AGE_MS) {
+  for (int i = 0; i < US_COUNT; i++) {
 
-    hasValidDistance = false;
+    UltrasonicSensor &s = usSensors[i];
 
-    lastRawDistance = -1.0f;
-    lastFilteredDistance = -1.0f;
+    if (s.hasValid && now - s.lastValidMs > MAX_DISTANCE_AGE_MS) {
 
-    guardBuffer[0] = -1.0f;
-    guardBuffer[1] = -1.0f;
-    guardBuffer[2] = -1.0f;
+      resetUltrasonicSensor(i);
 
-    guardBufIdx = 0;
+      if (i == US_FRONT && motionMode == MODE_FORWARD) {
 
-    if (motionMode == MODE_FORWARD) {
+        setMotion(MODE_IDLE);
 
-      setMotion(MODE_IDLE);
-
-      Serial.println("SAFETY,SENSOR_STALE");
+        Serial.println("SAFETY,SENSOR_STALE");
+      }
     }
   }
 
-  if (now - lastGuardTrigger < GUARD_INTERVAL) {
-    return;
-  }
-
-  if (requestUltrasonic()) {
-    lastGuardTrigger = now;
-  }
-}
-
-// ============================================
-// LECTURE IR
-// ============================================
-
-int readIrState(int pin) {
-
-  int rawValue = analogRead(pin);
-
-  int threshold =
-    (pin == IR_LEFT_PIN)
-      ? IR_LEFT_THRESHOLD
-      : IR_RIGHT_THRESHOLD;
-
-  return rawValue > threshold ? 1 : 0;
-}
-
-// ============================================
-// PUBLICATION IR
-// ============================================
-
-void publishIrStates() {
-
-  unsigned long now = millis();
-
-  int leftRaw = analogRead(IR_LEFT_PIN);
-  int rightRaw = analogRead(IR_RIGHT_PIN);
-
-  int leftState =
-    leftRaw > IR_LEFT_THRESHOLD ? 1 : 0;
-
-  int rightState =
-    rightRaw > IR_RIGHT_THRESHOLD ? 1 : 0;
-
-  if (now - lastIrRawPublish >=
-      IR_RAW_PUBLISH_INTERVAL) {
-
-    Serial.print("IR_RAW,LEFT,");
-    Serial.println(leftRaw);
-
-    Serial.print("IR_RAW,RIGHT,");
-    Serial.println(rightRaw);
-
-    lastIrRawPublish = now;
-  }
-
-  bool publishPeriodic =
-    (now - lastIrPublish >= IR_PUBLISH_INTERVAL);
-
-  if (leftState != lastIrLeftState ||
-      publishPeriodic) {
-
-    Serial.printf("IR,LEFT,%d\n", leftState);
-
-    lastIrLeftState = leftState;
-  }
-
-  if (rightState != lastIrRightState ||
-      publishPeriodic) {
-
-    Serial.printf("IR,RIGHT,%d\n", rightState);
-
-    lastIrRightState = rightState;
-  }
-
-  if (publishPeriodic) {
-    lastIrPublish = now;
+  if (requestUltrasonic(usNextIdx)) {
+    usNextIdx = (usNextIdx + 1) % US_COUNT;
   }
 }
 
@@ -753,11 +711,7 @@ bool vitalsIsBusy() {
 
 bool forwardSafetyClear() {
 
-  return hasValidDistance &&
-         millis() - lastValidDistanceMs <=
-         MAX_DISTANCE_AGE_MS &&
-         lastRawDistance >= OBSTACLE_STOP_CM &&
-         lastFilteredDistance >= OBSTACLE_STOP_CM;
+  return isSensorClear(US_FRONT, OBSTACLE_STOP_CM);
 }
 
 // ============================================
@@ -850,7 +804,7 @@ void updatePendingMotion() {
 }
 
 // ============================================
-// DECISION AUTONOME
+// DECISION AUTONOME (3x HC-SR04)
 // ============================================
 
 void decideAutonomousMotion() {
@@ -859,9 +813,7 @@ void decideAutonomousMotion() {
 
   if (vitalsIsBusy()) return;
 
-  if (!hasValidDistance ||
-      millis() - lastValidDistanceMs >
-      MAX_DISTANCE_AGE_MS) {
+  if (!isSensorFresh(US_FRONT, MAX_DISTANCE_AGE_MS)) {
 
     if (motionMode == MODE_FORWARD) {
 
@@ -873,12 +825,9 @@ void decideAutonomousMotion() {
     return;
   }
 
-  bool frontClear =
-    lastRawDistance >= OBSTACLE_STOP_CM &&
-    lastFilteredDistance >= OBSTACLE_STOP_CM;
-
-  int irLeft = readIrState(IR_LEFT_PIN);
-  int irRight = readIrState(IR_RIGHT_PIN);
+  bool frontClear = isSensorClear(US_FRONT, OBSTACLE_STOP_CM);
+  bool leftClear  = isSensorClear(US_LEFT, SIDE_OBSTACLE_CM);
+  bool rightClear = isSensorClear(US_RIGHT, SIDE_OBSTACLE_CM);
 
   if (frontClear) {
 
@@ -891,7 +840,7 @@ void decideAutonomousMotion() {
 
   } else {
 
-    if (irLeft == 1 && irRight == 0) {
+    if (leftClear && !rightClear) {
 
       if (motionMode != MODE_LEFT) {
 
@@ -900,7 +849,7 @@ void decideAutonomousMotion() {
         Serial.println("AUTO,LEFT");
       }
 
-    } else if (irRight == 1 && irLeft == 0) {
+    } else if (rightClear && !leftClear) {
 
       if (motionMode != MODE_RIGHT) {
 
@@ -909,13 +858,26 @@ void decideAutonomousMotion() {
         Serial.println("AUTO,RIGHT");
       }
 
-    } else if (irLeft == 1 && irRight == 1) {
+    } else if (leftClear && rightClear) {
 
-      if (motionMode != MODE_LEFT) {
+      if (usSensors[US_RIGHT].lastFilteredCm >
+          usSensors[US_LEFT].lastFilteredCm + 5.0f) {
 
-        requestMotion(MODE_LEFT);
+        if (motionMode != MODE_RIGHT) {
 
-        Serial.println("AUTO,LEFT_PREF");
+          requestMotion(MODE_RIGHT);
+
+          Serial.println("AUTO,RIGHT_WIDER");
+        }
+
+      } else {
+
+        if (motionMode != MODE_LEFT) {
+
+          requestMotion(MODE_LEFT);
+
+          Serial.println("AUTO,LEFT_PREF");
+        }
       }
 
     } else {
@@ -1102,26 +1064,23 @@ void printHealthStatus(bool probe) {
     vitalsProbeSensors();
   }
 
-  unsigned long now = millis();
-  bool usHealthy = hasValidDistance &&
-                   (now - lastValidDistanceMs <= 2000) &&
-                   (invalidCount < MAX_INVALID_READS);
-
-  int irLeftRaw = analogRead(IR_LEFT_PIN);
-  int irRightRaw = analogRead(IR_RIGHT_PIN);
-  int irLeftState = (irLeftRaw > IR_LEFT_THRESHOLD) ? 1 : 0;
-  int irRightState = (irRightRaw > IR_RIGHT_THRESHOLD) ? 1 : 0;
+  bool usFrontHealthy = isSensorFresh(US_FRONT, 2000) &&
+                        (usSensors[US_FRONT].invalidCount < MAX_INVALID_READS);
+  bool usLeftHealthy  = isSensorFresh(US_LEFT, 2000) &&
+                        (usSensors[US_LEFT].invalidCount < MAX_INVALID_READS);
+  bool usRightHealthy = isSensorFresh(US_RIGHT, 2000) &&
+                        (usSensors[US_RIGHT].invalidCount < MAX_INVALID_READS);
 
   Serial.printf(
-    "HEALTH,temp=%d,pulse=%d,us=%d,dist=%.1f,ir_l=%d,ir_r=%d,ir_l_raw=%d,ir_r_raw=%d,motors=%d,mode=%s\n",
+    "HEALTH,temp=%d,pulse=%d,us=%d,dist=%.1f,us_l=%d,dist_l=%.1f,us_r=%d,dist_r=%.1f,motors=%d,mode=%s\n",
     vitalsTempReady ? 1 : 0,
     vitalsPulseReady ? 1 : 0,
-    usHealthy ? 1 : 0,
-    usHealthy ? lastFilteredDistance : -1.0f,
-    irLeftState,
-    irRightState,
-    irLeftRaw,
-    irRightRaw,
+    usFrontHealthy ? 1 : 0,
+    usFrontHealthy ? usSensors[US_FRONT].lastFilteredCm : -1.0f,
+    usLeftHealthy ? 1 : 0,
+    usLeftHealthy ? usSensors[US_LEFT].lastFilteredCm : -1.0f,
+    usRightHealthy ? 1 : 0,
+    usRightHealthy ? usSensors[US_RIGHT].lastFilteredCm : -1.0f,
     (pwmAReady && pwmBReady) ? 1 : 0,
     motionModeLabel(motionMode)
   );
@@ -1749,28 +1708,32 @@ void setup() {
     );
 
   // ----------------------------------------
-  // HC-SR04
+  // 3x HC-SR04 (AVANT, GAUCHE, DROITE)
   // ----------------------------------------
 
-  pinMode(ULTRASONIC_TRIG, OUTPUT);
-
-  pinMode(ULTRASONIC_ECHO, INPUT);
-
-  digitalWrite(ULTRASONIC_TRIG, LOW);
+  for (int i = 0; i < US_COUNT; i++) {
+    pinMode(usSensors[i].trigPin, OUTPUT);
+    pinMode(usSensors[i].echoPin, INPUT);
+    digitalWrite(usSensors[i].trigPin, LOW);
+  }
 
   attachInterrupt(
-    digitalPinToInterrupt(ULTRASONIC_ECHO),
-    ultrasonicISR,
+    digitalPinToInterrupt(US_FRONT_ECHO),
+    ultrasonicFrontISR,
     CHANGE
   );
 
-  // ----------------------------------------
-  // CAPTEURS IR
-  // ----------------------------------------
+  attachInterrupt(
+    digitalPinToInterrupt(US_LEFT_ECHO),
+    ultrasonicLeftISR,
+    CHANGE
+  );
 
-  pinMode(IR_LEFT_PIN, INPUT);
-
-  pinMode(IR_RIGHT_PIN, INPUT);
+  attachInterrupt(
+    digitalPinToInterrupt(US_RIGHT_ECHO),
+    ultrasonicRightISR,
+    CHANGE
+  );
 
   // ----------------------------------------
   // DS18B20
@@ -1830,25 +1793,28 @@ void setup() {
   );
 
   Serial.printf(
-    "Obstacle stop: %.0f cm\n",
-    OBSTACLE_STOP_CM
+    "Obstacle stop: Avant %.0f cm | Cotes %.0f cm\n",
+    OBSTACLE_STOP_CM,
+    SIDE_OBSTACLE_CM
   );
 
   Serial.printf(
-    "HC-SR04 TRIG: GPIO%d, ECHO: GPIO%d\n",
-    ULTRASONIC_TRIG,
-    ULTRASONIC_ECHO
+    "HC-SR04 AVANT  TRIG: GPIO%d, ECHO: GPIO%d\n",
+    US_FRONT_TRIG,
+    US_FRONT_ECHO
   );
 
   Serial.printf(
-    "IR LEFT: GPIO%d thr=%d | RIGHT: GPIO%d thr=%d\n",
-    IR_LEFT_PIN,
-    IR_LEFT_THRESHOLD,
-    IR_RIGHT_PIN,
-    IR_RIGHT_THRESHOLD
+    "HC-SR04 GAUCHE TRIG: GPIO%d, ECHO: GPIO%d\n",
+    US_LEFT_TRIG,
+    US_LEFT_ECHO
   );
 
-  Serial.println("IR logic: 1=CLEAR, 0=OBSTACLE");
+  Serial.printf(
+    "HC-SR04 DROITE TRIG: GPIO%d, ECHO: GPIO%d\n",
+    US_RIGHT_TRIG,
+    US_RIGHT_ECHO
+  );
 
   Serial.printf(
     "DS18B20: GPIO%d ready=%d | MAX30102 ready=%d\n",
@@ -1904,12 +1870,10 @@ void loop() {
   }
 
   // ----------------------------------------
-  // CAPTEURS ET SECURITE
+  // CAPTEURS ET SECURITE (3x HC-SR04)
   // ----------------------------------------
 
-  publishIrStates();
-
-  updateForwardGuard();
+  updateObstacleGuards();
 
   decideAutonomousMotion();
 
