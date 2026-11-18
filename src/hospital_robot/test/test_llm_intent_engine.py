@@ -508,3 +508,99 @@ class TestVoiceIntentParserWithLLM:
         assert intent.intent_type == "UNKNOWN"
         instruction = parser.build_instruction(intent)
         assert "Je n'ai pas bien compris votre demande" in instruction["text_to_speak"]
+
+
+class TestGeminiSoloMode:
+    def test_gemini_solo_disables_cache_and_calls_gemini_every_time(self):
+        gemini = GeminiBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="gemini", cache_enabled=False)
+        engine = LLMIntentEngine(config=cfg, backend_override=gemini)
+
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                _make_gemini_ok({
+                    "intent": "CONFIRM_YES",
+                    "target": None,
+                    "text_to_speak": "Parfait !",
+                    "screen": "mission",
+                }),
+                _make_gemini_ok({
+                    "intent": "CONFIRM_YES",
+                    "target": None,
+                    "text_to_speak": "C'est parti !",
+                    "screen": "mission",
+                }),
+            ],
+        ) as mock_open:
+            r1 = engine.infer("Oui", current_screen="orientation")
+            r2 = engine.infer("Oui", current_screen="orientation")
+
+        assert mock_open.call_count == 2
+        assert r1.cache_hit is False and r2.cache_hit is False
+        assert r1.backend_used == "gemini_key#1"
+        assert r2.backend_used == "gemini_key#1"
+
+    def test_gemini_solo_never_falls_back_to_deterministic_regex_on_error(self):
+        gemini = GeminiBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="gemini", cache_enabled=False)
+        engine = LLMIntentEngine(config=cfg, backend_override=gemini)
+        parser = VoiceIntentParser(
+            enable_llm=True,
+            llm_engine=engine,
+            enable_deterministic_fallback=False,
+        )
+
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("gemini timeout")):
+            intent = parser.parse("Emmène-moi à la pharmacie", current_screen="home")
+
+        assert intent.intent_type == "UNKNOWN"
+        assert intent.details.get("deterministic_fallback") is None
+        assert intent.details.get("llm_error")
+        instruction = parser.build_instruction(intent)
+        assert "Gemini" in instruction["text_to_speak"]
+
+    def test_gemini_solo_preserves_gemini_speech_on_unknown_intent(self):
+        gemini = GeminiBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="gemini", cache_enabled=False)
+        engine = LLMIntentEngine(config=cfg, backend_override=gemini)
+        parser = VoiceIntentParser(
+            enable_llm=True,
+            llm_engine=engine,
+            enable_deterministic_fallback=False,
+        )
+
+        with patch(
+            "urllib.request.urlopen",
+            return_value=_make_gemini_ok({
+                "intent": "UNKNOWN",
+                "target": None,
+                "text_to_speak": "Je suis HIAR et je peux surtout vous guider dans l'hôpital.",
+                "screen": "home",
+            }),
+        ):
+            intent = parser.parse("Quelle est la météo aujourd'hui ?", current_screen="home")
+
+        assert intent.intent_type == "UNKNOWN"
+        assert intent.details.get("llm_generated") is True
+        instruction = parser.build_instruction(intent)
+        assert instruction["text_to_speak"] == "Je suis HIAR et je peux surtout vous guider dans l'hôpital."
+
+    def test_bridge_forces_gemini_solo_even_if_env_sets_hybrid(self, monkeypatch):
+        import socket
+        from hospital_robot.hmi_websocket_bridge_node import HMIWebSocketBridgeNode
+
+        monkeypatch.setenv("HIAR_LLM_BACKEND", "hybrid_gemini_qwen")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+
+        node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
+        try:
+            assert isinstance(node.intent_parser.llm_engine._backend, GeminiBackend)
+            assert node.intent_parser.llm_engine.config.backend == "gemini"
+            assert node.intent_parser.llm_engine.config.cache_enabled is False
+            assert node.intent_parser.enable_deterministic_fallback is False
+            assert node._llm_prewarming is False
+        finally:
+            node.destroy_node()

@@ -37,6 +37,36 @@ def bridge_node():
     port = get_free_port()
     node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
 
+    # Vérifie que la branche feature/gemini-solo démarre bien en mode GEMINI SOLO
+    from hospital_robot.llm_intent_engine import GeminiBackend, MockBackend
+    assert isinstance(node.intent_parser.llm_engine._backend, GeminiBackend)
+    assert node.intent_parser.llm_engine.config.cache_enabled is False
+    assert node.intent_parser.enable_deterministic_fallback is False
+
+    # Stub hors ligne du backend Gemini pour des tests WebSocket rapides et reproductibles
+    stub_gemini = MockBackend(canned_responses={
+        "oui": json.dumps({
+            "intent": "CONFIRM_YES",
+            "target": None,
+            "text_to_speak": "Très bien, suivez-moi vers Pharmacie.",
+            "screen": "mission",
+        }),
+        "temperature": json.dumps({
+            "intent": "VITALS",
+            "target": "VITAL_SIGNS",
+            "text_to_speak": "Préparons la mesure de votre température.",
+            "screen": "consultation",
+        }),
+        "pouls": json.dumps({
+            "intent": "VITALS",
+            "target": "VITAL_SIGNS",
+            "text_to_speak": "Veuillez poser votre index sur le capteur de constantes.",
+            "screen": "consultation",
+        }),
+    })
+    stub_gemini._last_backend = "gemini_key#1"
+    node.intent_parser.llm_engine._backend = stub_gemini
+
     # Enregistreur de messages publiés sur les publishers ROS 2
     class _PubRecorder:
         def __init__(self, orig_pub):

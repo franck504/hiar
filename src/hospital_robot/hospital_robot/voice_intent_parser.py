@@ -138,9 +138,11 @@ class VoiceIntentParser:
         enable_llm: bool = True,
         llm_config: Optional[Any] = None,
         llm_engine: Optional[Any] = None,
+        enable_deterministic_fallback: bool = True,
     ):
         """Initialise le parseur d'intentions avec support optionnel d'un LLM."""
         self.enable_llm = enable_llm
+        self.enable_deterministic_fallback = enable_deterministic_fallback
         if llm_engine is not None:
             self.llm_engine = llm_engine
         elif enable_llm and LLMIntentEngine is not None:
@@ -187,32 +189,55 @@ class VoiceIntentParser:
                 ros_command="STOP",
             )
 
-        # 2-4. CACHE LRU → GEMINI API (rotation clés) → QWEN LOCAL (secours)
+        # 2-4. TRAITEMENT LLM (Gemini solo si cache/Qwen désactivés, sinon hybride)
         llm_attempted = False
         llm_latency_ms = 0.0
         llm_backend_used = ""
-        if use_llm and self.enable_llm and self.llm_engine and self.llm_engine.is_available():
-            llm_attempted = True
-            try:
-                llm_res = self.llm_engine.infer(raw_text, current_screen=current_screen)
-                llm_latency_ms = getattr(llm_res, "latency_ms", 0.0) if llm_res else 0.0
-                llm_backend_used = getattr(llm_res, "backend_used", "") if llm_res else ""
-                if llm_res and llm_res.success:
-                    intent = self._convert_llm_response(llm_res, confidence, raw_text)
-                    if intent is not None:
-                        return intent
-            except Exception as e:
-                logger.warning(f"Error during LLM inference: {e}")
+        llm_error: Optional[str] = None
+        if use_llm and self.enable_llm and self.llm_engine:
+            if self.llm_engine.is_available():
+                llm_attempted = True
+                try:
+                    llm_res = self.llm_engine.infer(raw_text, current_screen=current_screen)
+                    llm_latency_ms = getattr(llm_res, "latency_ms", 0.0) if llm_res else 0.0
+                    llm_backend_used = getattr(llm_res, "backend_used", "") if llm_res else ""
+                    llm_error = getattr(llm_res, "error", None) if llm_res else None
+                    if llm_res and llm_res.success:
+                        intent = self._convert_llm_response(llm_res, confidence, raw_text)
+                        if intent is not None:
+                            return intent
+                        # En mode Gemini solo, conserver la réponse vocale de Gemini même sur UNKNOWN
+                        if not self.enable_deterministic_fallback and llm_res.text_to_speak:
+                            return ParsedIntent(
+                                intent_type="UNKNOWN",
+                                confidence=confidence,
+                                details={
+                                    "llm_text_to_speak": llm_res.text_to_speak,
+                                    "llm_generated": True,
+                                    "cache_hit": bool(getattr(llm_res, "cache_hit", False)),
+                                    "backend_used": llm_backend_used,
+                                    "original_text": raw_text,
+                                    "latency_ms": llm_latency_ms,
+                                    "model": self._active_model_label(llm_backend_used),
+                                },
+                            )
+                except Exception as e:
+                    llm_error = str(e)
+                    logger.warning(f"Error during LLM inference: {e}")
+            elif not self.enable_deterministic_fallback:
+                llm_attempted = True
+                llm_error = "Gemini indisponible (aucune clé active ou toutes en pause)"
 
-        # 5. FILET DE SÉCURITÉ DÉTERMINISTE (si LLM désactivé, hors ligne, erreur ou UNKNOWN)
-        det_intent = self._parse_deterministic(norm, confidence)
-        if det_intent is not None:
-            if llm_attempted:
-                det_intent.details["deterministic_fallback"] = True
-                det_intent.details["llm_attempted"] = True
-                det_intent.details["latency_ms"] = llm_latency_ms
-                det_intent.details["backend_used"] = llm_backend_used
-            return det_intent
+        # 5. FILET DE SÉCURITÉ DÉTERMINISTE (uniquement si activé)
+        if self.enable_deterministic_fallback:
+            det_intent = self._parse_deterministic(norm, confidence)
+            if det_intent is not None:
+                if llm_attempted:
+                    det_intent.details["deterministic_fallback"] = True
+                    det_intent.details["llm_attempted"] = True
+                    det_intent.details["latency_ms"] = llm_latency_ms
+                    det_intent.details["backend_used"] = llm_backend_used
+                return det_intent
 
         # 6. INCONNU / NON ACTIONNABLE DÉFINITIF
         details: Dict[str, Any] = {"original_text": raw_text}
@@ -221,6 +246,12 @@ class VoiceIntentParser:
             details["latency_ms"] = llm_latency_ms
             details["backend_used"] = llm_backend_used
             details["model"] = self._active_model_label(llm_backend_used)
+            if llm_error:
+                details["llm_error"] = llm_error
+                if not self.enable_deterministic_fallback:
+                    details["llm_text_to_speak"] = (
+                        "Le service Gemini est momentanément indisponible. Veuillez réessayer."
+                    )
         return ParsedIntent(
             intent_type="UNKNOWN",
             confidence=confidence,
@@ -431,14 +462,15 @@ class VoiceIntentParser:
                 "model": model_name,
             }
 
-        norm = normalize_text(raw_text)
-        if any(w in norm for w in ["qui es-tu", "tu es qui", "qui etes-vous", "vous etes qui", "presente-toi", "ton nom"]):
-            return ParsedIntent(
-                intent_type="GREETING",
-                confidence=confidence,
-                label="Bonjour",
-                details=_make_details("home"),
-            )
+        if self.enable_deterministic_fallback:
+            norm = normalize_text(raw_text)
+            if any(w in norm for w in ["qui es-tu", "tu es qui", "qui etes-vous", "vous etes qui", "presente-toi", "ton nom"]):
+                return ParsedIntent(
+                    intent_type="GREETING",
+                    confidence=confidence,
+                    label="Bonjour",
+                    details=_make_details("home"),
+                )
 
         if intent_type == "CONFIRM_YES":
             return ParsedIntent(

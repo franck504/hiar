@@ -148,6 +148,7 @@ class LLMConfig:
     gemini_timeout_sec: float = 8.0
     gemini_cooldown_sec: int = 60
     # --- Cache LRU ---
+    cache_enabled: bool = True
     cache_ttl_min: int = 10
     cache_max_entries: int = 64
 
@@ -821,10 +822,10 @@ class LLMIntentEngine:
             total_keys = b.key_count
             avail_keys = b.available_key_count()
             if total_keys == 0:
-                return "offline", "Aucune clé Gemini configurée"
+                return "offline", "Gemini SOLO — aucune clé configurée"
             if avail_keys > 0:
-                return "ok", f"Gemini seul ({avail_keys}/{total_keys} clé(s) actives)"
-            return "warn", f"Gemini en pause ({b.cooldown_status()})"
+                return "ok", f"Gemini SOLO ({avail_keys}/{total_keys} clé(s) actives)"
+            return "warn", f"Gemini SOLO en pause ({b.cooldown_status()})"
 
         if isinstance(b, OllamaBackend):
             if b.is_available(self.config):
@@ -855,8 +856,8 @@ class LLMIntentEngine:
 
         screen_norm = (current_screen or "").lower().strip()
 
-        # 1. Cache LRU (sauf écrans de consultation)
-        use_cache = screen_norm not in self._NO_CACHE_SCREENS
+        # 1. Cache LRU (uniquement si activé et hors écrans de consultation)
+        use_cache = self.config.cache_enabled and (screen_norm not in self._NO_CACHE_SCREENS)
         if use_cache:
             cached = self._cache.get(clean_text, screen_norm)
             if cached is not None:
