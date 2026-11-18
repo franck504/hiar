@@ -604,3 +604,66 @@ class TestGeminiSoloMode:
             assert node._llm_prewarming is False
         finally:
             node.destroy_node()
+
+    def test_prompt_contains_app_routing_map_and_consultation_intents_work(self):
+        from hospital_robot.llm_intent_engine import DEFAULT_SYSTEM_PROMPT
+
+        assert "CARTE DE ROUTAGE DE L'APPLICATION HIAR" in DEFAULT_SYSTEM_PROMPT
+        assert "LOGIQUE SIMPLE DE CLASSIFICATION" in DEFAULT_SYSTEM_PROMPT
+        assert "Étape 4" in DEFAULT_SYSTEM_PROMPT
+        assert "CONSULTATION_STEP" in DEFAULT_SYSTEM_PROMPT
+        assert "CONSULTATION_REASON" in DEFAULT_SYSTEM_PROMPT
+
+        gemini = GeminiBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="gemini", cache_enabled=False)
+        engine = LLMIntentEngine(config=cfg, backend_override=gemini)
+        parser = VoiceIntentParser(
+            enable_llm=True,
+            llm_engine=engine,
+            enable_deterministic_fallback=False,
+        )
+
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                _make_gemini_ok({
+                    "intent": "CONSULTATION_REASON",
+                    "target": "SUIVI_MEDICAL",
+                    "text_to_speak": "Très bien, je sélectionne un suivi médical.",
+                    "screen": "consultation",
+                }),
+                _make_gemini_ok({
+                    "intent": "CONSULTATION_STEP",
+                    "target": "NEXT",
+                    "text_to_speak": "Passons à l'étape suivante.",
+                    "screen": "consultation",
+                }),
+            ],
+        ):
+            i_reason = parser.parse("C'est pour un suivi", current_screen="consultation (étape 1/6: choix du motif)")
+            i_step = parser.parse("Suivant", current_screen="consultation (étape 2/6: choix médecin et créneau)")
+
+        assert i_reason.intent_type == "CONSULTATION_REASON"
+        assert i_reason.target_value == "suivi_medical"
+        assert i_step.intent_type == "CONSULTATION_STEP"
+        assert i_step.target_value == "next"
+
+    def test_bridge_builds_rich_screen_context_for_gemini(self):
+        import socket
+        from hospital_robot.hmi_websocket_bridge_node import HMIWebSocketBridgeNode
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+
+        node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
+        try:
+            node._current_screen = "consultation"
+            node._current_step = 4
+            assert "étape 4/6" in node._build_screen_context()
+
+            node._pending_orientation = {"destination": "LABORATORY", "label": "Laboratoire d'analyses"}
+            assert "attente confirmation" in node._build_screen_context()
+            assert "Laboratoire d'analyses" in node._build_screen_context()
+        finally:
+            node.destroy_node()

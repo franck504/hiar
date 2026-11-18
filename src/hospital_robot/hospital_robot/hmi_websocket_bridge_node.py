@@ -569,6 +569,29 @@ class HMIWebSocketBridgeNode(Node):
     # LOGIQUE VOCALE & INTENTS
     # ========================================================
 
+    def _build_screen_context(self) -> str:
+        """Construit un contexte d'écran précis (écran + étape / attente) pour Gemini."""
+        if self._pending_orientation:
+            dest_label = self._pending_orientation.get("label") or self._pending_orientation.get("destination", "")
+            return f"orientation (attente confirmation Oui/Non pour: {dest_label})"
+
+        if self._current_screen == "consultation":
+            step_labels = {
+                1: "étape 1/6: choix du motif",
+                2: "étape 2/6: choix médecin et créneau",
+                3: "étape 3/6: identité patient",
+                4: "étape 4/6: mesure des constantes vitales",
+                5: "étape 5/6: récapitulatif et confirmation RDV",
+                6: "étape 6/6: ticket de passage",
+            }
+            step_desc = step_labels.get(self._current_step, f"étape {self._current_step}/6")
+            return f"consultation ({step_desc})"
+
+        if self._current_screen == "mission" and self._active_destination_label:
+            return f"mission (guidage en cours vers: {self._active_destination_label})"
+
+        return self._current_screen or "home"
+
     async def _handle_voice_stt(self, payload: Dict):
         """Traite la parole transcrite par le microphone du smartphone."""
         text = payload.get("text", "")
@@ -588,11 +611,12 @@ class HMIWebSocketBridgeNode(Node):
         self._last_stt_time = now
         self.get_logger().info(f"[MOBILE] 🎤 Voix STT: \"{text}\" (conf={confidence:.2f})")
 
-        # Analyse et classification d'intention (avec contexte écran courant)
+        # Analyse et classification d'intention (avec contexte détaillé écran + étape)
+        screen_context = self._build_screen_context()
         intent = self.intent_parser.parse(
             text,
             confidence=confidence,
-            current_screen=self._current_screen,
+            current_screen=screen_context,
         )
 
         # Filtrage des fragments isolés ("je", "le", etc.) : on attend la suite sans parler

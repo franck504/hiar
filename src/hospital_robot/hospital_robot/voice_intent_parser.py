@@ -584,6 +584,34 @@ class VoiceIntentParser:
                 details=_make_details("consultation"),
             )
 
+        if intent_type == "CONSULTATION_REASON":
+            is_suivi = (target or "").upper() in ("SUIVI_MEDICAL", "SUIVI")
+            return ParsedIntent(
+                intent_type="CONSULTATION_REASON",
+                confidence=confidence,
+                target_value="suivi_medical" if is_suivi else "consultation_generale",
+                label="Suivi médical" if is_suivi else "Consultation générale",
+                details=_make_details("consultation"),
+            )
+
+        if intent_type == "CONSULTATION_STEP":
+            is_prev = (target or "").upper() in ("PREV", "PREVIOUS", "PRECEDENT")
+            return ParsedIntent(
+                intent_type="CONSULTATION_STEP",
+                confidence=confidence,
+                target_value="prev" if is_prev else "next",
+                label="Précédent" if is_prev else "Suivant",
+                details=_make_details("consultation"),
+            )
+
+        if intent_type == "CONSULTATION_TICKET":
+            return ParsedIntent(
+                intent_type="CONSULTATION_TICKET",
+                confidence=confidence,
+                label="Ticket",
+                details=_make_details("consultation"),
+            )
+
         if intent_type == "GREETING":
             return ParsedIntent(
                 intent_type="GREETING",
