@@ -11,7 +11,14 @@ import 'package:hiar_mobile/ui/components/hiar_surfaces.dart';
 import 'package:hiar_mobile/ui/rail/voice_rail.dart';
 
 void main() {
-  testWidgets('AnimatedRobotFace s anime et se demonte sans fuite de timer', (tester) async {
+  testWidgets('AnimatedRobotFace s anime et couvre toutes les formes de bouche sans fuite', (tester) async {
+    expect(mouthShapeForExpression(RobotFaceExpression.idle), RobotMouthShape.closed);
+    expect(mouthShapeForExpression(RobotFaceExpression.listening), RobotMouthShape.gentleSmile);
+    expect(mouthShapeForExpression(RobotFaceExpression.happy), RobotMouthShape.bigSmile);
+    expect(mouthShapeForExpression(RobotFaceExpression.speaking), RobotMouthShape.talking);
+    expect(mouthShapeForExpression(RobotFaceExpression.thinking), RobotMouthShape.thinking);
+    expect(mouthShapeForExpression(RobotFaceExpression.emergency), RobotMouthShape.alert);
+
     for (final expr in RobotFaceExpression.values) {
       await tester.pumpWidget(
         MaterialApp(
@@ -25,7 +32,7 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 220));
     }
     await tester.pumpWidget(const SizedBox());
   });

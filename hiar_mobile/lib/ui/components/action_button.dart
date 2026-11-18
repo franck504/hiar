@@ -71,7 +71,7 @@ class ActionButton extends StatelessWidget {
       gradient = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFFD6F4EE), Colors.white],
+        colors: [Color(0xFFD2E7FF), Colors.white],
       );
       foregroundColor = HiarColors.marine;
       border = Border.all(color: HiarColors.azur, width: 2.0);

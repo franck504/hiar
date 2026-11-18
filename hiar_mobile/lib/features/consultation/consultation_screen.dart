@@ -1070,7 +1070,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                                 color: Colors.white,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.check_circle, color: HiarColors.emerald, size: 24),
+                              child: const Icon(Icons.check_circle, color: HiarColors.ok, size: 24),
                             ),
                             const SizedBox(width: 10),
                             Expanded(

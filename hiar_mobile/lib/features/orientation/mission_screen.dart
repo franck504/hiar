@@ -207,7 +207,7 @@ class MissionScreen extends StatelessWidget {
                                 height: 48,
                                 child: ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: HiarColors.emerald,
+                                    backgroundColor: HiarColors.ok,
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(999),

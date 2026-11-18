@@ -130,7 +130,7 @@ class HiarGlassCard extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: highlighted
-              ? const [Color(0xFFE0F7F4), Colors.white]
+              ? const [Color(0xFFD6E9FF), Colors.white]
               : const [HiarColors.glassMintTop, HiarColors.glassWhiteBottom],
         ),
         borderRadius: BorderRadius.circular(borderRadius),

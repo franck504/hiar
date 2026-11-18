@@ -62,9 +62,9 @@ class VoiceRail extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFFCDE9FC),
-            Color(0xFFD5F2EE),
-            Color(0xFFE7F7F5),
+            Color(0xFFC6E1FF),
+            Color(0xFFD9ECFF),
+            Color(0xFFECF5FF),
           ],
         ),
         border: Border(
@@ -286,7 +286,7 @@ class VoiceRail extends StatelessWidget {
                       height: 8,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isRobotConnected ? HiarColors.emerald : HiarColors.err,
+                        color: isRobotConnected ? HiarColors.ok : HiarColors.err,
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -321,7 +321,7 @@ class VoiceRail extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: isThinking
-                ? const [Color(0xFF17827F), Color(0xFF20C9E8)]
+                ? const [HiarColors.azur, HiarColors.cyan]
                 : (isListening
                     ? const [HiarColors.slateTealEnd, HiarColors.cyan]
                     : const [HiarColors.slateTealStart, HiarColors.slateTealEnd]),
