@@ -59,24 +59,19 @@ class VoiceRail extends StatelessWidget {
       width: 248,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [
-            Color(0xFFC6E1FF),
-            Color(0xFFD9ECFF),
-            Color(0xFFECF5FF),
+            HiarColors.primaryLight,
+            HiarColors.primarySoft,
+            HiarColors.turquoisePale,
           ],
+          stops: [0.0, 0.55, 1.0],
         ),
         border: Border(
-          right: BorderSide(color: Colors.white.withOpacity(0.85), width: 1.5),
+          right: BorderSide(color: Colors.white.withOpacity(0.65), width: 1.5),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: HiarColors.slateTealStart.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(3, 0),
-          ),
-        ],
+        boxShadow: HiarShadows.card,
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),

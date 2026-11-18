@@ -53,50 +53,24 @@ class ActionButton extends StatelessWidget {
         ),
       ];
     } else if (isPrimary) {
-      gradient = const LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [HiarColors.slateTealStart, HiarColors.slateTealEnd],
-      );
+      gradient = HiarGradients.heroDark;
       foregroundColor = Colors.white;
-      border = Border.all(color: Colors.white.withOpacity(0.22), width: 1.2);
-      shadows = [
-        BoxShadow(
-          color: HiarColors.slateTealStart.withOpacity(0.24),
-          blurRadius: 14,
-          offset: const Offset(0, 5),
-        ),
-      ];
+      border = Border.all(color: Colors.white.withOpacity(0.24), width: 1.2);
+      shadows = HiarShadows.floating;
     } else if (isActive) {
-      gradient = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFFD2E7FF), Colors.white],
-      );
-      foregroundColor = HiarColors.marine;
-      border = Border.all(color: HiarColors.azur, width: 2.0);
-      shadows = [
-        BoxShadow(
-          color: HiarColors.azur.withOpacity(0.18),
-          blurRadius: 14,
-          offset: const Offset(0, 4),
-        ),
-      ];
+      gradient = HiarGradients.medicalCard;
+      foregroundColor = HiarColors.textPrimary;
+      border = Border.all(color: HiarColors.secondary, width: 1.8);
+      shadows = HiarShadows.floating;
     } else {
       gradient = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [HiarColors.glassMintTop, HiarColors.glassWhiteBottom],
+        colors: [HiarColors.surfaceSoft, HiarColors.surface],
       );
-      foregroundColor = HiarColors.marine;
-      border = Border.all(color: Colors.white.withOpacity(0.92), width: 1.4);
-      shadows = [
-        BoxShadow(
-          color: HiarColors.slateTealStart.withOpacity(0.08),
-          blurRadius: 12,
-          offset: const Offset(0, 4),
-        ),
-      ];
+      foregroundColor = HiarColors.textPrimary;
+      border = Border.all(color: Colors.white.withOpacity(0.75), width: 1.3);
+      shadows = HiarShadows.card;
     }
 
     return Material(

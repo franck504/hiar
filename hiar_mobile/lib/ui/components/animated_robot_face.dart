@@ -244,7 +244,7 @@ class _AnimatedRobotFaceState extends State<AnimatedRobotFace>
                       end: Alignment.bottomRight,
                       colors: isEmergency
                           ? const [Color(0xFF4C1414), Color(0xFF8A1C1C)]
-                          : const [Color(0xFF0A2447), Color(0xFF1558B8)],
+                          : const [HiarColors.textPrimary, HiarColors.secondaryDark, HiarColors.secondary],
                     ),
                     borderRadius: BorderRadius.circular(radius),
                     border: Border.all(

@@ -1072,10 +1072,8 @@ class _HiarAppState extends State<HiarApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Inter',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: HiarColors.azur,
-          primary: HiarColors.azur,
-        ),
+        colorScheme: HiarColors.colorScheme,
+        scaffoldBackgroundColor: HiarColors.background,
         useMaterial3: true,
       ),
       home: Builder(

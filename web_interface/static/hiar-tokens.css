@@ -1,46 +1,98 @@
-/* HIAR - charte graphique unique (chargée en premier sur toutes les pages) */
+/* HIAR — Charte graphique officielle (Design Tokens unifiés Mobile + Web) */
 @font-face {
   font-family: "Inter";
   src: url("/static/fonts/inter-latin-wght-normal.woff2") format("woff2");
-  font-weight: 100 900; font-display: swap;
+  font-weight: 100 900;
+  font-display: swap;
 }
 @font-face {
   font-family: "Plus Jakarta Sans";
   src: url("/static/fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2");
-  font-weight: 200 800; font-display: swap;
+  font-weight: 200 800;
+  font-display: swap;
 }
 
 :root {
-  /* 3 couleurs de base */
-  --marine: #0B2545;
-  --azur: #1A73C8;
-  --brume: #F3F7FB;
-  --azur-soft: #DCEBFA;
-  --text-2: #51657D;
+  /* 1. Palette principale */
+  --primary: #82DFF7;
+  --primary-light: #D9ECFB;
+  --primary-soft: #C4E7FA;
 
-  /* 3 statuts */
-  --wait: #B45309;  --wait-bg: #FEF3C7;
-  --err:  #B91C1C;  --err-bg:  #FEE2E2;
-  --ok:   #15803D;  --ok-bg:   #DCFCE7;
+  /* 2. Secondary (Teal médical & Turquoise doux) */
+  --secondary: #2C7777;
+  --secondary-light: #A7D6DA;
+  --secondary-dark: #3B6E71;
 
+  /* 3. Accents & statuts */
+  --accent-cyan: #9ADFF7;
+  --accent-mint: #ECFFF9;
+  --success: #2B8F83;
+  --cyan-pale: #D0F0FB;
+  --turquoise-pale: #B3E3F1;
+  --turquoise-light: #9DCFCF;
+
+  /* 4. Surfaces & backgrounds */
+  --background: #F4F8FB;
+  --background-off: #F8F9FE;
+  --background-blue: #D9ECFB;
+  --surface: #FFFFFF;
+  --surface-soft: #E7F2F9;
+
+  /* 5. Textes & fonctionnels */
+  --text-primary: #19313A;
+  --text-secondary: #32545D;
+  --text-slate: #526B7D;
+  --text-muted: #8AA6A7;
+
+  /* 6. Bordures & séparateurs */
+  --border: #D0E5EF;
+  --divider: #E6EEF2;
+  --border-glass: rgba(255, 255, 255, 0.65);
+
+  /* 7. Dégradés officiels */
+  --gradient-main: linear-gradient(135deg, #D9ECFB 0%, #C4E7FA 45%, #82DFF7 100%);
+  --gradient-canvas: linear-gradient(135deg, #D9ECFB 0%, #E7F2F9 45%, #F4F8FB 100%);
+  --gradient-teal: linear-gradient(135deg, #B3E3F1 0%, #A7D6DA 50%, #9DCFCF 100%);
+  --gradient-medical: linear-gradient(135deg, #ECFFF9 0%, #C8F1E7 50%, #82DFF7 100%);
+  --gradient-hero: linear-gradient(135deg, #19313A 0%, #3B6E71 50%, #2C7777 100%);
+
+  /* 8. Ombres douces */
+  --shadow-card: 0 8px 24px rgba(38, 93, 119, 0.10);
+  --shadow-floating: 0 12px 30px rgba(38, 93, 119, 0.14);
+  --shadow-btn: 0 4px 12px rgba(38, 93, 119, 0.10);
+
+  /* Typographie */
   --font-body: "Inter", system-ui, "Segoe UI", Arial, sans-serif;
   --font-title: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
 
-  /* alias : les anciens fichiers CSS continuent de fonctionner */
-  --bg: var(--brume);
-  --surface: #FFFFFF;
-  --text: var(--marine);
-  --muted: var(--text-2);
-  --primary: var(--azur);
-  --primary-dark: #145A9E;
+  /* Statuts sémantiques */
+  --ok: var(--success);
+  --ok-bg: var(--accent-mint);
+  --wait: #B45309;
+  --wait-bg: #FEF3C7;
+  --err: #DC2626;
+  --err-bg: #FEE2E2;
+
+  /* Alias de compatibilité pour les feuilles CSS existantes */
+  --marine: var(--text-primary);
+  --azur: var(--secondary);
+  --brume: var(--background);
+  --azur-soft: var(--surface-soft);
+  --text-2: var(--text-secondary);
+  --bg: var(--background);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --primary-dark: var(--secondary-dark);
   --on-primary: #FFFFFF;
-  --tint: var(--azur-soft);
-  --soft-teal: var(--azur-soft);
-  --border: #D5E1EE;
+  --tint: var(--cyan-pale);
+  --soft-teal: var(--surface-soft);
   --danger: var(--err);
   --warn: var(--wait);
   --warning: var(--wait);
-  --shadow: 0 8px 24px rgba(11, 37, 69, 0.08);
+  --shadow: var(--shadow-card);
 }
 
-h1, h2, h3 { font-family: var(--font-title); }
+h1, h2, h3 {
+  font-family: var(--font-title);
+  color: var(--text-primary);
+}

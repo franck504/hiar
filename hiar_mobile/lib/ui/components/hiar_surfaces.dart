@@ -18,16 +18,7 @@ class HiarAtmosphericBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            HiarColors.iceTop,
-            HiarColors.mintSoft,
-            HiarColors.canvasBottom,
-          ],
-          stops: [0.0, 0.48, 1.0],
-        ),
+        gradient: HiarGradients.mainBackground,
       ),
       child: showHalftone
           ? CustomPaint(
@@ -81,22 +72,10 @@ class HiarHeroCard extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            HiarColors.slateTealStart,
-            HiarColors.slateTealEnd,
-          ],
-        ),
+        gradient: HiarGradients.heroDark,
         borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: [
-          BoxShadow(
-            color: HiarColors.slateTealStart.withOpacity(0.22),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        border: Border.all(color: Colors.white.withOpacity(0.22), width: 1.0),
+        boxShadow: HiarShadows.floating,
       ),
       child: child,
     );
@@ -126,25 +105,19 @@ class HiarGlassCard extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       padding: padding,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: highlighted
-              ? const [Color(0xFFD6E9FF), Colors.white]
-              : const [HiarColors.glassMintTop, HiarColors.glassWhiteBottom],
-        ),
+        gradient: highlighted
+            ? HiarGradients.medicalCard
+            : const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [HiarColors.surfaceSoft, HiarColors.surface],
+              ),
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-          color: highlighted ? HiarColors.azur : Colors.white.withOpacity(0.9),
-          width: highlighted ? 2.0 : 1.3,
+          color: highlighted ? HiarColors.secondary : Colors.white.withOpacity(0.75),
+          width: highlighted ? 1.8 : 1.2,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: HiarColors.slateTealStart.withOpacity(highlighted ? 0.14 : 0.08),
-            blurRadius: highlighted ? 14 : 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: highlighted ? HiarShadows.floating : HiarShadows.card,
       ),
       child: child,
     );
