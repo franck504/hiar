@@ -84,6 +84,10 @@ class ESP32Interface(Node):
         self.last_poll_at = 0.0
         self.firmware_has_health = False
 
+        # Inversion matérielle de direction (compense le sens des moteurs gauche/droite)
+        self.declare_parameter('invert_steering', True)
+        self.invert_steering = self.get_parameter('invert_steering').value
+
         self._try_connect_serial(initial=True)
 
         self.command_subscription = self.create_subscription(
@@ -349,9 +353,22 @@ class ESP32Interface(Node):
             self.get_logger().error('ESP32 is not connected.')
             return
 
+        # Inversion de direction gauche/droite pour compenser le câblage moteur
+        serial_cmd = command
+        if getattr(self, 'invert_steering', False):
+            if command == 'LEFT':
+                serial_cmd = 'RIGHT'
+            elif command == 'RIGHT':
+                serial_cmd = 'LEFT'
+
         try:
-            self.serial_connection.write(f'{command}\n'.encode('utf-8'))
-            self.get_logger().info(f'Sent to ESP32: {command}')
+            self.serial_connection.write(f'{serial_cmd}\n'.encode('utf-8'))
+            if serial_cmd != command:
+                self.get_logger().info(
+                    f'Sent to ESP32: {serial_cmd} (inverted steering from {command})'
+                )
+            else:
+                self.get_logger().info(f'Sent to ESP32: {serial_cmd}')
 
         except (serial.SerialException, OSError) as error:
             self.get_logger().error(f'Serial communication error: {error}')
