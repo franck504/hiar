@@ -43,6 +43,7 @@ dependencies:
   flutter_svg: ^2.4.0
   speech_to_text: ^7.5.0
   flutter_tts: ^4.2.5
+  video_player: ^2.14.1
 
 dev_dependencies:
   flutter_test:
@@ -71,6 +72,7 @@ flutter:
     - assets/content/
     - assets/brand/
     - assets/icon/
+    - assets/videos/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

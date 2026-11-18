@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../ui/components/landscape_scaffold.dart';
 import '../../ui/components/action_button.dart';
+import '../../ui/components/vitals_tutorial_player.dart';
 import '../../ui/rail/voice_rail.dart';
 import '../../ui/theme/hiar_colors.dart';
 
@@ -61,6 +62,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   double? _temperatureC;
   int? _heartRateBpm;
   int? _spo2Percent;
+  int _tutorialIndex = 0;
 
   // Ticket généré
   String? _ticketLabel;
@@ -519,123 +521,160 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     );
   }
 
-  // Étape 4 : Signes vitaux dynamiques
+  // Étape 4 : Signes vitaux dynamiques + tutoriels vidéo embarqués
   Widget _buildVitalsStep() {
     final bool hasMeasured = _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Bandeau d'état logique de la mesure
-            _buildVitalsStatusBanner(),
-            const SizedBox(height: 8),
+    final tutorialWidget = VitalsTutorialPlayer(
+      initialIndex: _tutorialIndex,
+      isMeasuring: _vitalsRunning,
+      isCompleted: _vitalsSuccess || hasMeasured,
+      onStartMeasure: _vitalsRunning ? null : _startVitalsMeasurement,
+    );
 
-            // Température
-            _buildVitalCard(
-              icon: Icons.thermostat,
-              iconColor: HiarColors.azur,
-              title: "Température corporelle",
-              subtitle: "Capteur DS18B20 (ID: temperature)",
-              valueText: _temperatureC != null ? "${_temperatureC!.toStringAsFixed(1)} °C" : "—",
-              isMeasuring: _vitalsRunning,
-              isMeasured: _temperatureC != null,
-            ),
-            const SizedBox(height: 6),
+    final vitalsControlsColumn = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Bandeau d'état logique de la mesure
+        _buildVitalsStatusBanner(),
+        const SizedBox(height: 8),
 
-            // Fréquence cardiaque
-            _buildVitalCard(
-              icon: Icons.favorite,
-              iconColor: HiarColors.err,
-              title: "Fréquence cardiaque",
-              subtitle: "Capteur MAX30102 (ID: heart_rate)",
-              valueText: _heartRateBpm != null ? "$_heartRateBpm BPM" : "—",
-              isMeasuring: _vitalsRunning,
-              isMeasured: _heartRateBpm != null,
-            ),
-            const SizedBox(height: 6),
-
-            // Oxygénation SpO2
-            _buildVitalCard(
-              icon: Icons.air,
-              iconColor: HiarColors.cyan,
-              title: "Oxygénation sanguine (SpO2)",
-              subtitle: "Capteur MAX30102 (ID: spo2)",
-              valueText: _spo2Percent != null ? "$_spo2Percent %" : "—",
-              isMeasuring: _vitalsRunning,
-              isMeasured: _spo2Percent != null,
-            ),
-            const SizedBox(height: 10),
-
-            // Bouton de déclenchement logique
-            if (_vitalsRunning)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: HiarColors.azur.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: HiarColors.azur.withOpacity(0.3)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: HiarColors.azur),
-                    ),
-                    SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        "Mesure en cours (gardez votre doigt immobile)…",
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: HiarColors.azur),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else if (!hasMeasured && _vitalsError == null)
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: HiarColors.azur,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.sensors, size: 20),
-                label: const Text(
-                  "Démarrer la mesure des constantes (🎤 « Mesurer »)",
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onPressed: _startVitalsMeasurement,
-              )
-            else
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.refresh, size: 18),
-                label: Text(
-                  _vitalsError != null ? "Réessayer la mesure" : "Reprendre la mesure (🎤 « Mesurer »)",
-                  style: const TextStyle(fontSize: 13),
-                ),
-                onPressed: _startVitalsMeasurement,
-              ),
-
-            const SizedBox(height: 6),
-            const Text(
-              "La prise de constantes est facultative pour la consultation.",
-              style: TextStyle(color: HiarColors.text2, fontSize: 11, fontStyle: FontStyle.italic),
-            ),
-          ],
+        // Température (clic → affiche le tutoriel sonde DS18B20)
+        _buildVitalCard(
+          icon: Icons.thermostat,
+          iconColor: HiarColors.azur,
+          title: "Température corporelle",
+          subtitle: "Sonde DS18B20 · Tenez dans la main",
+          valueText: _temperatureC != null ? "${_temperatureC!.toStringAsFixed(1)} °C" : "—",
+          isMeasuring: _vitalsRunning,
+          isMeasured: _temperatureC != null,
+          onTap: () => setState(() => _tutorialIndex = 0),
         ),
-      ),
+        const SizedBox(height: 6),
+
+        // Fréquence cardiaque (clic → affiche le tutoriel capteur MAX30102)
+        _buildVitalCard(
+          icon: Icons.favorite,
+          iconColor: HiarColors.err,
+          title: "Fréquence cardiaque",
+          subtitle: "Capteur MAX30102 · Posez l'index",
+          valueText: _heartRateBpm != null ? "$_heartRateBpm BPM" : "—",
+          isMeasuring: _vitalsRunning,
+          isMeasured: _heartRateBpm != null,
+          onTap: () => setState(() => _tutorialIndex = 1),
+        ),
+        const SizedBox(height: 6),
+
+        // Oxygénation SpO2 (clic → affiche le tutoriel capteur MAX30102)
+        _buildVitalCard(
+          icon: Icons.air,
+          iconColor: HiarColors.cyan,
+          title: "Oxygénation sanguine (SpO2)",
+          subtitle: "Capteur MAX30102 · Posez l'index",
+          valueText: _spo2Percent != null ? "$_spo2Percent %" : "—",
+          isMeasuring: _vitalsRunning,
+          isMeasured: _spo2Percent != null,
+          onTap: () => setState(() => _tutorialIndex = 1),
+        ),
+        const SizedBox(height: 10),
+
+        // Bouton de déclenchement logique
+        Center(
+          child: _vitalsRunning
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: HiarColors.azur.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: HiarColors.azur.withOpacity(0.3)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: HiarColors.azur),
+                      ),
+                      SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          "Mesure en cours (restez immobile)…",
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: HiarColors.azur),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : (!hasMeasured && _vitalsError == null)
+                  ? ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: HiarColors.azur,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.sensors, size: 18),
+                      label: const Text(
+                        "Démarrer la mesure des constantes (🎤 « Mesurer »)",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                      ),
+                      onPressed: _startVitalsMeasurement,
+                    )
+                  : OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.refresh, size: 17),
+                      label: Text(
+                        _vitalsError != null ? "Réessayer la mesure" : "Reprendre la mesure (🎤 « Mesurer »)",
+                        style: const TextStyle(fontSize: 12.5),
+                      ),
+                      onPressed: _startVitalsMeasurement,
+                    ),
+        ),
+
+        const SizedBox(height: 6),
+        const Text(
+          "La prise de constantes est facultative pour la consultation.",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: HiarColors.text2, fontSize: 11, fontStyle: FontStyle.italic),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool sideBySide = constraints.maxWidth >= 520;
+        if (sideBySide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 48, child: tutorialWidget),
+              const SizedBox(width: 14),
+              Expanded(flex: 52, child: vitalsControlsColumn),
+            ],
+          );
+        }
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                tutorialWidget,
+                const SizedBox(height: 10),
+                vitalsControlsColumn,
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -731,7 +770,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                "Posez votre index sur le capteur du robot puis appuyez sur « Démarrer la mesure ».",
+                "Suivez le guide vidéo puis appuyez sur « Démarrer la mesure ».",
                 style: TextStyle(fontSize: 12, color: HiarColors.text2),
               ),
             ),
@@ -749,9 +788,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     required String valueText,
     required bool isMeasuring,
     required bool isMeasured,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    final card = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -763,13 +803,13 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, color: iconColor, size: 28),
-          const SizedBox(width: 12),
+          Icon(icon, color: iconColor, size: 26),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                 Text(subtitle, style: const TextStyle(color: HiarColors.text2, fontSize: 11)),
               ],
             ),
@@ -795,7 +835,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                 valueText,
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
-                  fontSize: 17,
+                  fontSize: 16,
                   color: isMeasured ? HiarColors.ok : HiarColors.text2,
                 ),
               ),
@@ -803,6 +843,12 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
           ),
         ],
       ),
+    );
+    if (onTap == null) return card;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: card,
     );
   }
 
