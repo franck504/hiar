@@ -224,6 +224,7 @@ class HMIWebSocketBridgeNode(Node):
             threading.Thread(target=_prewarm_llm, daemon=True).start()
 
         self._pending_orientation: Optional[Dict[str, Any]] = None
+        self._active_destination_label: Optional[str] = None
         self._current_screen: str = "home"
         self._current_step: int = 1
         self._current_consultation_data: Dict[str, Any] = {}
@@ -658,6 +659,7 @@ class HMIWebSocketBridgeNode(Node):
                 confirmed_dest_label = self._pending_orientation.get("label", "votre destination")
                 self.get_logger().info(f"✅ [ORIENTATION CONFIRMÉE] Guidage validé vers {confirmed_dest_label} ! Publication sur /hmi/request.")
                 self._pending_orientation = None
+                self._active_destination_label = confirmed_dest_label
                 if req:
                     self._publish_hmi_request(req)
                 intent.label = confirmed_dest_label
@@ -716,6 +718,15 @@ class HMIWebSocketBridgeNode(Node):
         if instruction:
             if is_llm:
                 instruction["llm_source"] = model
+            if intent.intent_type == "FINISH":
+                self._active_destination_label = None
+            ui_block = instruction.get("instruction_ui")
+            if isinstance(ui_block, dict) and ui_block.get("screen") == "mission":
+                if not ui_block.get("destination") and self._active_destination_label:
+                    ui_block["destination"] = self._active_destination_label
+                    fields_block = instruction.setdefault("fields", {})
+                    if isinstance(fields_block, dict) and not fields_block.get("destination"):
+                        fields_block["destination"] = self._active_destination_label
             if intent.intent_type == "CONSULTATION_TICKET" and self._last_ticket_label:
                 instruction["text_to_speak"] = f"Votre rendez-vous est confirmé. Voici votre ticket de passage numéro {self._last_ticket_label}."
                 if "fields" in instruction:
@@ -779,6 +790,7 @@ class HMIWebSocketBridgeNode(Node):
         if action_id == "orientation.select":
             dest = args.get("destination", "").upper()
             if dest:
+                self._active_destination_label = self.intent_parser.DEPARTMENTS.get(dest, {}).get("label", dest)
                 self._publish_hmi_request({"category": "ORIENTATION", "destination": dest})
 
         elif action_id == "orientation.confirm":
@@ -788,6 +800,7 @@ class HMIWebSocketBridgeNode(Node):
             dest_key = (dest_key or "PHARMACY").upper()
             dest_label = self.intent_parser.DEPARTMENTS.get(dest_key, {}).get("label", dest_key)
             self._pending_orientation = None
+            self._active_destination_label = dest_label
 
             self._publish_hmi_request({"category": "ORIENTATION", "destination": dest_key})
 

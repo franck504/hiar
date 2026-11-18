@@ -291,6 +291,40 @@ class _HiarAppState extends State<HiarApp> {
     }
   }
 
+  static const Set<String> _invalidDestinationTokens = {
+    'RUNNING',
+    'STOPPED',
+    'STARTING',
+    'TIMEOUT',
+    'EMERGENCY_STOP',
+    'IDLE',
+    'BLOCKED',
+    'ORIENTATION',
+    'NULL',
+    'NONE',
+  };
+
+  /// Valide et normalise un libellé de destination (rejette les états comme RUNNING/STOPPED).
+  String? _resolveDestinationLabel(dynamic raw) {
+    if (raw == null) return null;
+    final trimmed = raw.toString().trim();
+    if (trimmed.isEmpty) return null;
+    final upper = trimmed.toUpperCase();
+    if (_invalidDestinationTokens.contains(upper)) return null;
+    switch (upper) {
+      case 'PHARMACY':
+        return 'Pharmacie';
+      case 'LABORATORY':
+        return "Laboratoire d'analyses";
+      case 'RADIOLOGY':
+        return 'Radiologie';
+      case 'RECEPTION':
+        return 'Accueil';
+      default:
+        return trimmed;
+    }
+  }
+
   /// Exécute une action envoyée par le Raspberry Pi 4
   void _handleServerAction(String actionId, Map<String, dynamic> args) {
     if (!mounted) return;
@@ -342,7 +376,7 @@ class _HiarAppState extends State<HiarApp> {
 
       case 'orientation.select':
         final dest = args['destination']?.toString() ?? 'PHARMACY';
-        final label = dest == 'PHARMACY' ? 'Pharmacie' : (dest == 'LABORATORY' ? 'Laboratoire' : 'Réception');
+        final label = _resolveDestinationLabel(dest) ?? 'Pharmacie';
         // Guidage direct : AUCUNE pop-up de confirmation superflue !
         _selectedDestination = label;
         _missionState = 'RUNNING';
@@ -406,8 +440,14 @@ class _HiarAppState extends State<HiarApp> {
         if (fid == 'consultation_step' && valueToShow['value'] != null) {
           _consultationStep = int.tryParse(valueToShow['value'].toString()) ?? _consultationStep;
         }
-        if (fid == 'destination' && valueToShow['value'] != null) {
-          _selectedDestination = valueToShow['value'].toString();
+        if (fid == 'destination') {
+          final resolved = _resolveDestinationLabel(valueToShow['value']);
+          if (resolved != null) {
+            _selectedDestination = resolved;
+          }
+        }
+        if (fid == 'mission_state' && valueToShow['value'] != null) {
+          _missionState = valueToShow['value'].toString();
         }
       }
 
@@ -416,8 +456,9 @@ class _HiarAppState extends State<HiarApp> {
         if (fields['consultation_step'] != null) {
           _consultationStep = int.tryParse(fields['consultation_step'].toString()) ?? _consultationStep;
         }
-        if (fields['destination'] != null) {
-          _selectedDestination = fields['destination'].toString();
+        final fieldDest = _resolveDestinationLabel(fields['destination']);
+        if (fieldDest != null) {
+          _selectedDestination = fieldDest;
         }
       }
 
@@ -459,22 +500,30 @@ class _HiarAppState extends State<HiarApp> {
 
       final targetScreen = ui['screen']?.toString();
       final requireConfirmation = ui['require_confirmation'] == true;
-      final destination = ui['destination']?.toString() ?? valueToShow?['value']?.toString() ?? _selectedDestination;
+      final valueDest = (valueToShow != null && valueToShow['field_id']?.toString() == 'destination')
+          ? _resolveDestinationLabel(valueToShow['value'])
+          : null;
+      final candidateDest = _resolveDestinationLabel(ui['destination']) ??
+          _resolveDestinationLabel(fields?['destination']) ??
+          valueDest;
+      final destination = candidateDest ?? _selectedDestination;
 
       // Règle : Si commande vocale ou confirmation non requise -> AUCUNE POP-UP !
       if (targetScreen != null) {
         if (targetScreen == 'mission') {
-          _selectedDestination = destination;
+          if (candidateDest != null) {
+            _selectedDestination = candidateDest;
+          }
           _closeDialogIfOpen();
           _goToScreen('mission');
         } else if (targetScreen == 'orientation') {
-          if (requireConfirmation && destination.isNotEmpty && destination != 'null' && destination != 'ORIENTATION') {
-            _selectedDestination = destination;
+          if (requireConfirmation && candidateDest != null) {
+            _selectedDestination = candidateDest;
             _goToScreen('orientation');
             final targetKey = ui['target']?.toString() ?? fields?['target']?.toString() ?? fields?['pending_destination']?.toString() ?? 'PHARMACY';
             _showOrientationConfirmationDialog(destination, targetKey);
-          } else if (!requireConfirmation && destination.isNotEmpty && destination != 'null' && destination != 'ORIENTATION') {
-            _selectedDestination = destination;
+          } else if (!requireConfirmation && candidateDest != null) {
+            _selectedDestination = candidateDest;
             _closeDialogIfOpen();
             _goToScreen('mission');
           } else {
