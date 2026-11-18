@@ -11,7 +11,6 @@ import 'features/orientation/orientation_screen.dart';
 import 'features/orientation/mission_screen.dart';
 import 'features/information/information_screen.dart';
 import 'features/consultation/consultation_screen.dart';
-import 'ui/components/sensor_monitor_panel.dart';
 import 'ui/rail/voice_rail.dart';
 import 'ui/theme/hiar_colors.dart';
 import 'voice/voice_service.dart';
@@ -47,7 +46,10 @@ class _HiarAppState extends State<HiarApp> {
   String _voiceStatus = "J'écoute en continu…";
   String? _currentVoiceTip;
   String? _recognizedText;
+  String? _faceExpression;
   bool _isRobotConnected = false;
+  bool _awaitingVoiceResponse = false;
+  Timer? _voiceResponseTimeoutTimer;
 
   // Données dynamiques transmises par le Raspberry Pi 4 / ROS 2 (ex: température, rythme cardiaque, étape)
   final Map<String, dynamic> _dynamicFields = {};
@@ -57,6 +59,33 @@ class _HiarAppState extends State<HiarApp> {
   DateTime? _lastSentSttTime;
   Timer? _sttDebounceTimer;
   String? _pendingSttText;
+
+  void _clearVoiceLoading() {
+    _voiceResponseTimeoutTimer?.cancel();
+    _voiceResponseTimeoutTimer = null;
+    if (_awaitingVoiceResponse) {
+      _awaitingVoiceResponse = false;
+    }
+  }
+
+  void _startVoiceLoading() {
+    _voiceResponseTimeoutTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _awaitingVoiceResponse = true;
+      _voiceState = VoiceState.thinking;
+      _voiceStatus = "Réflexion en cours…";
+    });
+    // Timeout de sécurité (si fragment ignoré ou latence réseau)
+    _voiceResponseTimeoutTimer = Timer(const Duration(seconds: 12), () {
+      if (!mounted || !_awaitingVoiceResponse) return;
+      setState(() {
+        _awaitingVoiceResponse = false;
+        _voiceState = VoiceState.listening;
+        _voiceStatus = "J'écoute en continu…";
+      });
+    });
+  }
 
   void _sendSttFinalDebounced(String text) {
     final clean = text.trim();
@@ -84,6 +113,9 @@ class _HiarAppState extends State<HiarApp> {
     _lastSentSttText = clean;
     _lastSentSttTime = now;
     debugPrint("🎤 HubClient: Envoi STT vers serveur: « $clean »");
+    if (_isRobotConnected) {
+      _startVoiceLoading();
+    }
     _hub.publishSttFinal(clean);
   }
 
@@ -97,6 +129,8 @@ class _HiarAppState extends State<HiarApp> {
 
   @override
   void dispose() {
+    _sttDebounceTimer?.cancel();
+    _voiceResponseTimeoutTimer?.cancel();
     _hub.disconnect();
     super.dispose();
   }
@@ -113,18 +147,21 @@ class _HiarAppState extends State<HiarApp> {
 
     // 2. Réception d'ordres TTS depuis le Raspberry Pi 4 : faire parler le robot à haute voix
     _hub.onTtsRequested = (textToSpeak) {
+      _clearVoiceLoading();
       debugPrint("TTS Reçu du Pi 4 -> Émission vocale : « $textToSpeak »");
       VoiceService.instance.speak(textToSpeak);
     };
 
     // 3. Réception d'actions décidées par le Raspberry Pi 4 (après son analyse du texte ou ROS 2)
     _hub.onActionRequested = (actionId, args) {
+      _clearVoiceLoading();
       debugPrint("Action reçue du Pi 4 -> $actionId avec $args");
       _handleServerAction(actionId, args);
     };
 
     // 4. Réception du paquet unifié ServerInstruction (UI + TTS + Données / Signes vitaux)
     _hub.onServerInstruction = (instruction) {
+      _clearVoiceLoading();
       debugPrint("ServerInstruction reçu du Pi 4 -> $instruction");
       _handleServerInstruction(instruction);
     };
@@ -222,12 +259,17 @@ class _HiarAppState extends State<HiarApp> {
 
       voice.onStateChanged = (state, message) {
         if (!mounted) return;
+        // Ne pas écraser l'indicateur de chargement vocal pendant qu'on attend le serveur Pi
+        if (_awaitingVoiceResponse && state != VoiceServiceState.speaking) {
+          return;
+        }
         setState(() {
           switch (state) {
             case VoiceServiceState.listening:
               _voiceState = VoiceState.listening;
               break;
             case VoiceServiceState.speaking:
+              _clearVoiceLoading();
               _voiceState = VoiceState.speaking;
               break;
             case VoiceServiceState.processing:
@@ -385,6 +427,12 @@ class _HiarAppState extends State<HiarApp> {
 
       if (robotStatus != null && robotStatus['status_label'] != null) {
         _voiceStatus = robotStatus['status_label'].toString();
+      }
+      if (robotStatus != null && robotStatus['face_expression'] != null) {
+        _faceExpression = robotStatus['face_expression'].toString();
+      }
+      if (_voiceState == VoiceState.thinking && !VoiceService.instance.isSpeaking) {
+        _voiceState = VoiceState.listening;
       }
       if (hints != null && hints.isNotEmpty) {
         _currentVoiceTip = "Dites : ${hints.map((h) => "« $h »").join(", ")}";
@@ -750,7 +798,7 @@ class _HiarAppState extends State<HiarApp> {
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        "Paramètres & Diagnostic du robot",
+                        "Paramètres de connexion du robot",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: HiarColors.marine),
                       ),
                     ),
@@ -768,11 +816,11 @@ class _HiarAppState extends State<HiarApp> {
                 // Indicateur de statut WebSocket en direct
                 ValueListenableBuilder<bool>(
                   valueListenable: _hub.connectedNotifier,
-                  builder: (_, connected, __) => Container(
+                  builder: (_, connected, _) => Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: connected ? HiarColors.okBg : HiarColors.errBg,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: connected ? HiarColors.ok.withOpacity(0.3) : HiarColors.err.withOpacity(0.3),
                       ),
@@ -801,13 +849,31 @@ class _HiarAppState extends State<HiarApp> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
 
-                // Moniteur temps réel du cycle de vie des capteurs, ESP32, ROS 2 et LLM
-                SensorMonitorPanel(
-                  diagnosticsListenable: _hub.diagnosticsNotifier,
-                  connectedListenable: _hub.connectedNotifier,
-                  onRefresh: () => _hub.requestDiagnosticsRefresh(),
+                // Note : le moniteur des capteurs est désormais disponible dans l'UI Web Médecin
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: HiarColors.emeraldPastel.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.monitor_heart_outlined, size: 15, color: HiarColors.azurDark),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          "État des capteurs & ESP32 : http://${_hub.serverIp}:5001/",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: HiarColors.marine,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
 
@@ -985,6 +1051,7 @@ class _HiarAppState extends State<HiarApp> {
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
                 voiceTip: _currentVoiceTip,
+                faceExpression: _faceExpression,
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
                 onOpenOrientation: () {
@@ -1006,6 +1073,7 @@ class _HiarAppState extends State<HiarApp> {
                 voiceState: _voiceState,
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
+                faceExpression: _faceExpression,
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
                 onBack: () {
@@ -1027,6 +1095,7 @@ class _HiarAppState extends State<HiarApp> {
                 voiceState: _voiceState,
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
+                faceExpression: _faceExpression,
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
                 dynamicFields: _dynamicFields,
@@ -1049,6 +1118,7 @@ class _HiarAppState extends State<HiarApp> {
                 voiceState: _voiceState,
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
+                faceExpression: _faceExpression,
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
                 onBack: () {
@@ -1068,6 +1138,7 @@ class _HiarAppState extends State<HiarApp> {
                 voiceStatus: _voiceStatus,
                 recognizedText: _recognizedText,
                 voiceTip: _currentVoiceTip,
+                faceExpression: _faceExpression,
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
                 isRobotConnected: _isRobotConnected,

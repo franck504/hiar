@@ -1,5 +1,7 @@
 import hmac
+import json
 import os
+import time
 from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
@@ -829,6 +831,65 @@ def api_request():
         response["error"] = bridge.error or "Échec de publication ROS2"
         return jsonify(response), 503
     return jsonify(response), 200
+
+
+@app.route("/api/system/diagnostics", methods=["GET"])
+def api_system_diagnostics():
+    """Retourne l'état temps réel de l'ESP32, des capteurs, des nœuds ROS 2 et du LLM."""
+    diag_path = os.environ.get("HIAR_DIAGNOSTICS_FILE", "/tmp/hiar_diagnostics.json").strip()
+    now = time.time()
+    data = None
+    if diag_path and os.path.isfile(diag_path):
+        try:
+            with open(diag_path, "r", encoding="utf-8") as fh:
+                parsed = json.load(fh)
+            if isinstance(parsed, dict):
+                ts = float(parsed.get("ts") or 0.0)
+                age_sec = max(0.0, now - ts)
+                if age_sec <= 12.0:
+                    data = parsed
+                    data["bridge_online"] = True
+                    data["age_sec"] = round(age_sec, 1)
+        except Exception:
+            data = None
+
+    if data is None:
+        data = {
+            "ts": round(now, 2),
+            "bridge_online": False,
+            "age_sec": None,
+            "firmware_diagnostics": "offline",
+            "esp32": {
+                "status": "offline",
+                "port": "/dev/ttyUSB0",
+                "detail": "Pont ROS 2 hors ligne ou en démarrage",
+            },
+            "sensors": {
+                "ultrasonic": {"status": "offline", "distance_cm": None, "detail": "Hors ligne"},
+                "ir_left": {"status": "offline", "state": None, "raw": None, "detail": "Hors ligne"},
+                "ir_right": {"status": "offline", "state": None, "raw": None, "detail": "Hors ligne"},
+                "ds18b20": {"status": "offline", "detail": "Hors ligne"},
+                "max30102": {"status": "offline", "detail": "Hors ligne"},
+                "motors": {"status": "offline", "mode": "OFFLINE", "detail": "Hors ligne"},
+            },
+            "ros_nodes": {
+                "status": "offline",
+                "active_count": 0,
+                "total_count": 6,
+                "detail": "0/6 actifs (pont hors ligne)",
+            },
+            "llm": {
+                "status": "offline",
+                "detail": "En attente du pont ROS 2",
+            },
+            "network": {
+                "hostname": "",
+                "ip": request.host.split(":")[0],
+                "ws_port": 5000,
+                "web_port": 5001,
+            },
+        }
+    return jsonify(data), 200
 
 
 @app.route("/api/navigation/cancel", methods=["POST"])

@@ -91,6 +91,23 @@
         </table>
       </div>
     </section>
+
+    <section id="diagnostics-panel" class="panel diag-panel" aria-live="polite">
+      <div class="section-heading">
+        <div>
+          <h2 class="diag-title">État des capteurs &amp; matériel du robot</h2>
+          <p class="muted" id="diag-subtitle" style="margin: 2px 0 0;">Chargement du diagnostic temps réel…</p>
+        </div>
+        <div class="diag-header-actions">
+          <span id="diag-bridge-pill" class="diag-pill diag-offline">Pont en attente</span>
+          <button type="button" id="diag-refresh-btn" class="btn btn-outline btn-small">Actualiser</button>
+        </div>
+      </div>
+
+      <div id="diag-grid" class="diag-grid">
+        <!-- Cartes de capteurs rendues dynamiquement par doctor.js -->
+      </div>
+    </section>
   </main>
 
   <script src="{{ url_for('static', filename='doctor.js') }}" defer></script>

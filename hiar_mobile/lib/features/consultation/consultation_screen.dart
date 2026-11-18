@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../ui/components/hiar_surfaces.dart';
 import '../../ui/components/landscape_scaffold.dart';
 import '../../ui/components/action_button.dart';
 import '../../ui/components/vitals_tutorial_player.dart';
@@ -13,6 +14,7 @@ class ConsultationScreen extends StatefulWidget {
   final String voiceStatus;
   final String? recognizedText;
   final String? voiceTip;
+  final String? faceExpression;
   final VoidCallback? onMicTap;
   final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
@@ -30,6 +32,7 @@ class ConsultationScreen extends StatefulWidget {
     this.voiceStatus = "J'écoute en continu…",
     this.recognizedText,
     this.voiceTip,
+    this.faceExpression,
     this.onMicTap,
     this.onSettingsTap,
     this.isRobotConnected = true,
@@ -299,6 +302,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       voiceStatus: widget.voiceStatus,
       recognizedText: widget.recognizedText,
       voiceTip: widget.voiceTip ?? defaultTips[_currentStep],
+      faceExpression: widget.faceExpression,
       onMicTap: widget.onMicTap,
       onSettingsTap: widget.onSettingsTap,
       isRobotConnected: widget.isRobotConnected,
@@ -309,15 +313,17 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
           Flexible(
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                backgroundColor: Colors.white,
                 side: const BorderSide(color: HiarColors.border),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
               ),
               onPressed: widget.onCancel,
               child: const Text(
                 "Annuler (🎤 « Annuler »)",
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: HiarColors.text2),
+                style: TextStyle(color: HiarColors.text2, fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -325,10 +331,11 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
           Flexible(
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: HiarColors.azur,
+                backgroundColor: HiarColors.slateTealEnd,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                elevation: 2,
               ),
               onPressed: _isSubmitting ? null : _nextStep,
               child: _isSubmitting
@@ -341,7 +348,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                       _currentStep == 5 ? "Confirmer (🎤 « Confirmer »)" : "Continuer (🎤 « Suivant »)",
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
                     ),
             ),
           ),
@@ -487,35 +494,62 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     );
   }
 
-  // Étape 3 : Coordonnées
+  // Étape 3 : Coordonnées (carte verre Néo-Clinique)
   Widget _buildContactStep() {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: "Nom complet du patient",
-                hintText: "Ex : Jean Dupont",
-                prefixIcon: const Icon(Icons.person_outline),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: HiarGlassCard(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const HiarPastelBadge(
+                label: "Identification patient",
+                icon: Icons.badge_outlined,
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: "Numéro de téléphone",
-                hintText: "Ex : 034 12 345 67",
-                prefixIcon: const Icon(Icons.phone_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  labelText: "Nom complet du patient",
+                  hintText: "Ex : Jean Dupont",
+                  filled: true,
+                  fillColor: Colors.white,
+                  prefixIcon: const Icon(Icons.person_outline, color: HiarColors.azur),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: HiarColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: HiarColors.border),
+                  ),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 14),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: "Numéro de téléphone",
+                  hintText: "Ex : 034 12 345 67",
+                  filled: true,
+                  fillColor: Colors.white,
+                  prefixIcon: const Icon(Icons.phone_outlined, color: HiarColors.azur),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: HiarColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: HiarColors.border),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -852,58 +886,114 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     );
   }
 
-  // Étape 5 : Récapitulatif
+  // Étape 5 : Récapitulatif (Carte Héros Ardoise → Sarcelle + détails à puces émeraude)
   Widget _buildReviewStep() {
+    final periodLabel = _selectedPeriod == 'MAT' ? 'Matin (08h00 – 12h00)' : 'Après-midi (13h00 – 18h00)';
+    final reasonLabel = _selectedReason == 'consultation_generale'
+        ? 'Consultation générale'
+        : (_selectedReason == 'suivi_medical' ? 'Suivi médical' : 'Autre motif');
+
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: HiarColors.border),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Récapitulatif de votre rendez-vous", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-              const Divider(height: 14, thickness: 1),
-              if (_submitError != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            HiarHeroCard(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.medical_services_outlined, color: Colors.white, size: 22),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline, color: Colors.red, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _submitError!,
-                          style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Récapitulatif de votre rendez-vous",
+                          style: TextStyle(fontSize: 11, color: Colors.white70),
                         ),
-                      ),
-                    ],
+                        Text(
+                          "Médecin $_selectedDoctor · $periodLabel",
+                          style: const TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-              _buildReviewRow("Patient :", _nameController.text),
-              _buildReviewRow("Téléphone :", _phoneController.text),
-              _buildReviewRow("Motif :", _selectedReason == 'consultation_generale' ? 'Consultation générale' : 'Suivi médical'),
-              _buildReviewRow("Médecin :", "Médecin $_selectedDoctor (${_selectedPeriod == 'MAT' ? 'Matin' : 'Après-midi'})"),
-              if (_temperatureC != null) _buildReviewRow("Température :", "${_temperatureC!.toStringAsFixed(1)} °C"),
-              if (_heartRateBpm != null) _buildReviewRow("Pouls :", "$_heartRateBpm BPM"),
-              if (_spo2Percent != null) _buildReviewRow("SpO2 :", "$_spo2Percent %"),
-              if (_temperatureC == null && _heartRateBpm == null && _spo2Percent == null)
-                _buildReviewRow("Constantes :", "Non mesurées"),
-            ],
-          ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white, width: 1.4),
+                boxShadow: [
+                  BoxShadow(
+                    color: HiarColors.slateTealStart.withOpacity(0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_submitError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: HiarColors.errBg,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: HiarColors.err.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: HiarColors.err, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _submitError!,
+                              style: const TextStyle(
+                                color: HiarColors.err,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  _buildReviewRow("Patient", _nameController.text),
+                  _buildReviewRow("Téléphone", _phoneController.text),
+                  _buildReviewRow("Motif", reasonLabel),
+                  if (_temperatureC != null) _buildReviewRow("Température", "${_temperatureC!.toStringAsFixed(1)} °C"),
+                  if (_heartRateBpm != null) _buildReviewRow("Pouls", "$_heartRateBpm BPM"),
+                  if (_spo2Percent != null) _buildReviewRow("SpO2", "$_spo2Percent %"),
+                  if (_temperatureC == null && _heartRateBpm == null && _spo2Percent == null)
+                    _buildReviewRow("Constantes", "Non mesurées"),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -911,19 +1001,31 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   Widget _buildReviewRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      padding: const EdgeInsets.symmetric(vertical: 3.5),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: HiarColors.text2, fontSize: 14)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(color: HiarColors.emerald, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(color: HiarColors.text2, fontSize: 13.5)),
+          const Spacer(),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: HiarColors.marine),
+          ),
         ],
       ),
     );
   }
 
-  // Écran Ticket final
+  // Écran Ticket final — Reçu médical à bord festonné façon UI_style.jpeg !
   Widget _buildTicketScreen() {
+    final periodLabel = _selectedPeriod == 'MAT' ? 'Matin' : 'Après-midi';
+    final hasVitals = _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
+
     return LandscapeScaffold(
       title: "Rendez-vous confirmé",
       showBack: false,
@@ -931,6 +1033,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       voiceStatus: widget.voiceStatus,
       recognizedText: widget.recognizedText,
       voiceTip: "Dites : « Terminer » ou « Accueil »",
+      faceExpression: 'happy',
       onMicTap: widget.onMicTap,
       onSettingsTap: widget.onSettingsTap,
       isRobotConnected: widget.isRobotConnected,
@@ -938,58 +1041,146 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: HiarColors.border),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.check_circle_outline, color: HiarColors.ok, size: 44),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "Votre numéro de passage :",
-                    style: TextStyle(fontSize: 15, color: HiarColors.text2),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _ticketLabel ?? "A-MAT-1",
-                    style: const TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      color: HiarColors.azur,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Patient : ${_nameController.text}",
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: HiarColors.azur,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                HiarReceiptCard(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Mini-carte médecin bleu glacier (comme Dr. Elara Vance dans UI_style.jpeg)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFD9EEFF), Color(0xFFEAF7F5)],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.check_circle, color: HiarColors.emerald, size: 24),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Médecin $_selectedDoctor · $periodLabel",
+                                    style: const TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: HiarColors.marine,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Patient : ${_nameController.text}",
+                                    style: const TextStyle(fontSize: 12, color: HiarColors.text2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const HiarPastelBadge(label: "Confirmé"),
+                          ],
+                        ),
                       ),
-                      onPressed: widget.onFinish,
-                      child: const Text("Terminer (🎤 « Terminer »)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 12),
+
+                      // Numéro de passage centré façon reçu
+                      const Text(
+                        "Votre numéro de passage",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12.5, color: HiarColors.text2, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _ticketLabel ?? "A-MAT-1",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                          color: HiarColors.slateTealStart,
+                          letterSpacing: 2.2,
+                        ),
+                      ),
+
+                      if (hasVitals) ...[
+                        const Divider(height: 18, color: HiarColors.border),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            if (_temperatureC != null)
+                              _buildTicketMetric("Temp.", "${_temperatureC!.toStringAsFixed(1)} °C"),
+                            if (_heartRateBpm != null)
+                              _buildTicketMetric("Pouls", "$_heartRateBpm BPM"),
+                            if (_spo2Percent != null)
+                              _buildTicketMetric("SpO2", "$_spo2Percent %"),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: HiarColors.slateTealEnd,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                      elevation: 3,
+                    ),
+                    onPressed: widget.onFinish,
+                    icon: const Icon(Icons.check_rounded, size: 20),
+                    label: const Text(
+                      "Terminer (🎤 « Terminer »)",
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTicketMetric(String label, String value) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 5,
+              height: 5,
+              decoration: const BoxDecoration(color: HiarColors.emerald, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(fontSize: 11, color: HiarColors.text2)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: HiarColors.marine),
+        ),
+      ],
     );
   }
 }

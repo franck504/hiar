@@ -210,6 +210,117 @@
   $("refresh-btn").addEventListener("click", refresh);
   $("logout-btn").addEventListener("click", () => logout(""));
 
+  // =========================================================================
+  // MONITEUR TEMPS RÉEL DES CAPTEURS & MATÉRIEL (ESP32, ROS 2, LLM)
+  // =========================================================================
+  const DIAG_LABELS = {
+    ok: "En ligne",
+    warn: "Attention",
+    error: "Erreur",
+    offline: "Hors ligne",
+    unknown: "Inconnu",
+  };
+
+  function normalizeStatus(st) {
+    const s = String(st || "offline").toLowerCase();
+    if (s === "ok" || s === "online" || s === "connected" || s === "ready") return "ok";
+    if (s === "warn" || s === "warning" || s === "degraded") return "warn";
+    if (s === "error" || s === "fault") return "error";
+    return "offline";
+  }
+
+  function makeDiagCard(icon, title, status, detail, meta) {
+    const norm = normalizeStatus(status);
+    const card = document.createElement("div");
+    card.className = "diag-card diag-card-" + norm;
+
+    const head = document.createElement("div");
+    head.className = "diag-card-head";
+
+    const titleWrap = document.createElement("span");
+    titleWrap.className = "diag-card-title";
+    titleWrap.textContent = icon + " " + title;
+
+    const badge = document.createElement("span");
+    badge.className = "diag-pill diag-" + norm;
+    badge.textContent = DIAG_LABELS[norm] || norm;
+
+    head.append(titleWrap, badge);
+
+    const detailEl = document.createElement("p");
+    detailEl.className = "diag-card-detail";
+    detailEl.textContent = detail || "—";
+
+    card.append(head, detailEl);
+
+    if (meta) {
+      const metaEl = document.createElement("p");
+      metaEl.className = "diag-card-meta";
+      metaEl.textContent = meta;
+      card.append(metaEl);
+    }
+    return card;
+  }
+
+  function renderDiagnostics(data) {
+    const grid = $("diag-grid");
+    const pill = $("diag-bridge-pill");
+    const subtitle = $("diag-subtitle");
+    if (!grid || !pill || !subtitle) return;
+
+    const online = Boolean(data && data.bridge_online);
+    pill.className = "diag-pill " + (online ? "diag-ok" : "diag-offline");
+    pill.textContent = online ? "Temps réel actif" : "Pont hors ligne";
+
+    const net = (data && data.network) || {};
+    const timeStr = new Date().toLocaleTimeString("fr-FR");
+    subtitle.textContent = online
+      ? "IP Robot : " + (net.ip || "—") + " · Firmware : " + (data.firmware_diagnostics || "—") + " · Mis à jour à " + timeStr
+      : "En attente du pont ROS 2 (hmi_websocket_bridge) · Vérifié à " + timeStr;
+
+    const esp32 = (data && data.esp32) || {};
+    const sensors = (data && data.sensors) || {};
+    const rosNodes = (data && data.ros_nodes) || {};
+    const llm = (data && data.llm) || {};
+
+    const us = sensors.ultrasonic || {};
+    const irL = sensors.ir_left || {};
+    const irR = sensors.ir_right || {};
+    const temp = sensors.ds18b20 || {};
+    const pulse = sensors.max30102 || {};
+    const motors = sensors.motors || {};
+
+    const cards = [
+      makeDiagCard("🔌", "ESP32", esp32.status, esp32.detail || "Non connecté", esp32.port ? "Port : " + esp32.port : ""),
+      makeDiagCard("📏", "Ultrasons HC-SR04", us.status, us.detail || "Inconnu", us.distance_cm != null ? "Distance : " + us.distance_cm + " cm" : ""),
+      makeDiagCard("⬅️", "IR Gauche", irL.status, irL.detail || "Inconnu", irL.raw != null ? "Brut : " + irL.raw : ""),
+      makeDiagCard("➡️", "IR Droite", irR.status, irR.detail || "Inconnu", irR.raw != null ? "Brut : " + irR.raw : ""),
+      makeDiagCard("🌡️", "Température DS18B20", temp.status, temp.detail || "Inconnu", "Bus 1-Wire"),
+      makeDiagCard("❤️", "Pouls / SpO2 MAX30102", pulse.status, pulse.detail || "Inconnu", "Bus I²C (0x57)"),
+      makeDiagCard("⚙️", "Moteurs & Traction", motors.status, motors.detail || "Inconnu", motors.mode ? "Mode : " + motors.mode : ""),
+      makeDiagCard("🤖", "Nœuds ROS 2", rosNodes.status, rosNodes.detail || "—", ""),
+      makeDiagCard("🧠", "IA Vocale (LLM)", llm.status, llm.detail || "—", ""),
+    ];
+
+    grid.replaceChildren(...cards);
+  }
+
+  async function refreshDiagnostics() {
+    try {
+      const response = await fetch("/api/system/diagnostics");
+      if (!response.ok) return;
+      const data = await response.json();
+      renderDiagnostics(data);
+    } catch (_) {
+      renderDiagnostics({ bridge_online: false });
+    }
+  }
+
+  const diagBtn = $("diag-refresh-btn");
+  if (diagBtn) diagBtn.addEventListener("click", refreshDiagnostics);
+  refreshDiagnostics();
+  setInterval(refreshDiagnostics, 3000);
+
   // Restauration automatique de session si jeton mémorisé
   const savedToken = localStorage.getItem("hiar_doctor_token");
   if (savedToken) {

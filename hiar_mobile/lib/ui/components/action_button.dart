@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/hiar_colors.dart';
 
-/// Bouton d'action standard HIAR avec badge de parité vocale
+/// Bouton d'action standard HIAR — Tuile verre dégradé façon UI_style.jpeg
+/// avec badge de parité vocale en pilule pastel.
 class ActionButton extends StatelessWidget {
   final String label;
   final String? subtitle;
@@ -28,62 +29,96 @@ class ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color backgroundColor;
+    final bool isPrimaryOrDestructive = isPrimary || isDestructive;
+    final bool isActive = isSelected || isHighlightedByVoice;
+
+    Gradient gradient;
     Color foregroundColor;
-    Border? border;
+    Border border;
+    List<BoxShadow> shadows;
 
     if (isDestructive) {
-      backgroundColor = HiarColors.err;
+      gradient = const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [Color(0xFFDC2626), Color(0xFFB91C1C)],
+      );
       foregroundColor = Colors.white;
+      border = Border.all(color: Colors.white.withOpacity(0.25), width: 1.2);
+      shadows = [
+        BoxShadow(
+          color: HiarColors.err.withOpacity(0.26),
+          blurRadius: 14,
+          offset: const Offset(0, 5),
+        ),
+      ];
     } else if (isPrimary) {
-      backgroundColor = HiarColors.azur;
+      gradient = const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [HiarColors.slateTealStart, HiarColors.slateTealEnd],
+      );
       foregroundColor = Colors.white;
-    } else if (isSelected || isHighlightedByVoice) {
-      backgroundColor = HiarColors.azurSoft;
+      border = Border.all(color: Colors.white.withOpacity(0.22), width: 1.2);
+      shadows = [
+        BoxShadow(
+          color: HiarColors.slateTealStart.withOpacity(0.24),
+          blurRadius: 14,
+          offset: const Offset(0, 5),
+        ),
+      ];
+    } else if (isActive) {
+      gradient = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFFD6F4EE), Colors.white],
+      );
       foregroundColor = HiarColors.marine;
-      border = Border.all(color: HiarColors.azur, width: 2.5);
+      border = Border.all(color: HiarColors.azur, width: 2.0);
+      shadows = [
+        BoxShadow(
+          color: HiarColors.azur.withOpacity(0.18),
+          blurRadius: 14,
+          offset: const Offset(0, 4),
+        ),
+      ];
     } else {
-      backgroundColor = Colors.white;
+      gradient = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [HiarColors.glassMintTop, HiarColors.glassWhiteBottom],
+      );
       foregroundColor = HiarColors.marine;
-      border = Border.all(color: HiarColors.border, width: 1.5);
+      border = Border.all(color: Colors.white.withOpacity(0.92), width: 1.4);
+      shadows = [
+        BoxShadow(
+          color: HiarColors.slateTealStart.withOpacity(0.08),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ];
     }
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          constraints: const BoxConstraints(minHeight: 52),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          constraints: const BoxConstraints(minHeight: 54),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
           decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(16),
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(20),
             border: border,
-            boxShadow: isPrimary || isDestructive
-                ? [
-                    BoxShadow(
-                      color: (isDestructive ? HiarColors.err : HiarColors.azur).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    )
-                  ]
-                : [
-                    const BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    )
-                  ],
+            boxShadow: shadows,
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isCompact = constraints.maxWidth < 280;
-              final isPrimaryOrDestructive = isPrimary || isDestructive;
 
               if (isCompact) {
-                // Disposition compacte (cartes en grille 2 colonnes) : pas de compression horizontale
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,14 +127,14 @@ class ActionButton extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         if (icon != null)
-                          _buildIcon(isPrimaryOrDestructive, size: 30, iconSize: 18)
+                          _buildIcon(isPrimaryOrDestructive, size: 32, iconSize: 18)
                         else
                           const SizedBox.shrink(),
                         if (voiceHint != null)
                           Flexible(child: _buildVoiceBadge(isPrimaryOrDestructive)),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 7),
                     Text(
                       label,
                       maxLines: 1,
@@ -108,6 +143,7 @@ class ActionButton extends StatelessWidget {
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: foregroundColor,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     if (subtitle != null) ...[
@@ -127,12 +163,11 @@ class ActionButton extends StatelessWidget {
                 );
               }
 
-              // Disposition large (liste en colonne unique ou écran d'accueil)
               return Row(
                 children: [
                   if (icon != null) ...[
-                    _buildIcon(isPrimaryOrDestructive, size: 38, iconSize: 22),
-                    const SizedBox(width: 10),
+                    _buildIcon(isPrimaryOrDestructive, size: 42, iconSize: 22),
+                    const SizedBox(width: 12),
                   ],
                   Expanded(
                     child: Column(
@@ -147,10 +182,11 @@ class ActionButton extends StatelessWidget {
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: foregroundColor,
+                            letterSpacing: -0.2,
                           ),
                         ),
                         if (subtitle != null) ...[
-                          const SizedBox(height: 1),
+                          const SizedBox(height: 2),
                           Text(
                             subtitle!,
                             maxLines: 2,
@@ -165,7 +201,7 @@ class ActionButton extends StatelessWidget {
                     ),
                   ),
                   if (voiceHint != null) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     _buildVoiceBadge(isPrimaryOrDestructive),
                   ],
                 ],
@@ -183,9 +219,14 @@ class ActionButton extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: isPrimaryOrDestructive
-            ? Colors.white.withOpacity(0.2)
-            : HiarColors.azurSoft,
-        borderRadius: BorderRadius.circular(8),
+            ? Colors.white.withOpacity(0.18)
+            : Colors.white.withOpacity(0.88),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isPrimaryOrDestructive
+              ? Colors.white.withOpacity(0.24)
+              : HiarColors.azur.withOpacity(0.14),
+        ),
       ),
       child: Icon(
         icon,
@@ -197,15 +238,12 @@ class ActionButton extends StatelessWidget {
 
   Widget _buildVoiceBadge(bool isPrimaryOrDestructive) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: isPrimaryOrDestructive
-            ? Colors.white.withOpacity(0.2)
-            : HiarColors.brume,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isPrimaryOrDestructive ? Colors.white24 : HiarColors.border,
-        ),
+            ? Colors.white.withOpacity(0.18)
+            : HiarColors.emeraldPastel,
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -213,7 +251,7 @@ class ActionButton extends StatelessWidget {
           Icon(
             Icons.mic,
             size: 12,
-            color: isPrimaryOrDestructive ? Colors.white70 : HiarColors.azur,
+            color: isPrimaryOrDestructive ? Colors.white : HiarColors.emerald,
           ),
           const SizedBox(width: 4),
           Flexible(
@@ -223,8 +261,8 @@ class ActionButton extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isPrimaryOrDestructive ? Colors.white : HiarColors.marine,
+                fontWeight: FontWeight.w700,
+                color: isPrimaryOrDestructive ? Colors.white : HiarColors.azurDark,
               ),
             ),
           ),

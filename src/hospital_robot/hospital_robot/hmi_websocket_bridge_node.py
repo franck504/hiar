@@ -1259,12 +1259,28 @@ class HMIWebSocketBridgeNode(Node):
             },
         }
 
+    def _write_diagnostics_snapshot(self, diag: Optional[Dict[str, Any]] = None) -> None:
+        """Écrit un instantané atomique des diagnostics pour l'interface Web Médecin."""
+        path = os.environ.get("HIAR_DIAGNOSTICS_FILE", "/tmp/hiar_diagnostics.json").strip()
+        if not path:
+            return
+        try:
+            payload = diag if diag is not None else self.build_system_diagnostics()
+            tmp_path = f"{path}.{os.getpid()}.tmp"
+            with open(tmp_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False)
+            os.replace(tmp_path, path)
+        except Exception:
+            pass
+
     async def _broadcast_diagnostics_to_subscribers(self):
+        diag = self.build_system_diagnostics()
+        self._write_diagnostics_snapshot(diag)
         with self._ws_clients_lock:
             subs = list(self._diagnostics_subscribers)
         if not subs:
             return
-        envelope = make_envelope("robot/diagnostics", self.build_system_diagnostics())
+        envelope = make_envelope("robot/diagnostics", diag)
         for client in subs:
             try:
                 await client.send(envelope)
@@ -1272,7 +1288,8 @@ class HMIWebSocketBridgeNode(Node):
                 pass
 
     async def _diagnostics_broadcast_loop(self):
-        """Diffuse périodiquement robot/diagnostics aux clients mobiles abonnés."""
+        """Diffuse périodiquement robot/diagnostics (WebSocket + snapshot UI Web)."""
+        self._write_diagnostics_snapshot()
         while not self._stop_event.is_set():
             try:
                 await asyncio.sleep(2.5)

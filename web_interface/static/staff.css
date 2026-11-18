@@ -441,3 +441,95 @@ td.empty {
     margin-left: auto;
   }
 }
+
+
+/* =========================================================================
+   MONITEUR CAPTEURS & MATÉRIEL HIAR (Style Néo-Clinique)
+   ========================================================================= */
+.diag-panel {
+  margin-top: 24px;
+  background: linear-gradient(180deg, #EAF6FD 0%, #F4FBFA 45%, #FFFFFF 100%);
+  border: 1px solid #CFE3EE;
+  border-radius: 18px;
+}
+
+.diag-title {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #102A3A;
+}
+
+.diag-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.diag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.diag-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #D6E7F0;
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 12px rgba(16, 42, 58, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.diag-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(16, 42, 58, 0.09);
+}
+
+.diag-card-ok { border-left: 4px solid #16A37F; }
+.diag-card-warn { border-left: 4px solid #D97706; }
+.diag-card-error,
+.diag-card-offline { border-left: 4px solid #DC2626; }
+
+.diag-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.diag-card-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #102A3A;
+}
+
+.diag-card-detail {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #334E60;
+  line-height: 1.35;
+}
+
+.diag-card-meta {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #627B8C;
+}
+
+.diag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.diag-ok { background: #DCFCE7; color: #15803D; }
+.diag-warn { background: #FEF3C7; color: #B45309; }
+.diag-error,
+.diag-offline { background: #FEE2E2; color: #B91C1C; }
