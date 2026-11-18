@@ -93,17 +93,8 @@ def _parse_int(val: Optional[str], low: float, high: float) -> Optional[int]:
 
 
 def format_speech_fr(temp: Optional[float], hr: Optional[int], spo2: Optional[int]) -> str:
-    """Génère une phrase naturelle en français pour le TTS."""
-    segments = ["Mesure des constantes terminée."]
-    if temp is not None:
-        temp_str = str(temp).replace(".", " virgule ")
-        segments.append(f"Température : {temp_str} degrés.")
-    if hr is not None:
-        segments.append(f"Pouls : {hr} battements par minute.")
-    if spo2 is not None:
-        segments.append(f"Oxygénation : {spo2} pour cent.")
-
-    return " ".join(segments)
+    """Génère une phrase naturelle en français pour le TTS sans prononcer les valeurs mesurées."""
+    return "Mesure des constantes terminée. Vos résultats s'affichent à l'écran. Vous pouvez passer à l'étape suivante."
 
 
 def build_vitals_instruction(parsed: Dict) -> Dict:

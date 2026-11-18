@@ -25,7 +25,7 @@ LOOP_PERIOD_S = 0.1
 
 # Intervalle minimum entre deux FORWARD
 FORWARD_RESEND_S = 0.5
-MAX_MISSION_DURATION_S = 8.0
+MAX_MISSION_DURATION_S = 30
 
 # Durée d'une rotation courte
 TURN_DURATION_S = 0.6

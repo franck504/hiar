@@ -418,6 +418,7 @@ class _HiarAppState extends State<HiarApp> {
   /// Traitement du paquet unifié ServerInstruction (UI + Données + Voix)
   void _handleServerInstruction(Map<String, dynamic> data) {
     if (!mounted) return;
+    _clearVoiceLoading();
 
     final ui = data['instruction_ui'] as Map<String, dynamic>?;
     final valueToShow = data['value_to_show'] as Map<String, dynamic>?;
@@ -742,10 +743,18 @@ class _HiarAppState extends State<HiarApp> {
     setState(() {
       _currentScreen = screen;
       _recognizedText = null;
+      if (screen == 'consultation' && _consultationStep == 1) {
+        _dynamicFields.remove('ticket_label');
+        _dynamicFields.remove('booking_error');
+      }
     });
 
-    // Notifie le Raspberry Pi de l'écran actuellement actif
-    _hub.publishUiState(screen, _getActiveActionsForScreen(screen));
+    // Notifie le Raspberry Pi de l'écran actuellement actif (et de l'étape de consultation)
+    _hub.publishUiState(
+      screen,
+      _getActiveActionsForScreen(screen),
+      step: screen == 'consultation' ? _consultationStep : null,
+    );
   }
 
   List<String> _getActiveActionsForScreen(String screen) {
@@ -1188,14 +1197,23 @@ class _HiarAppState extends State<HiarApp> {
                 onStepChanged: (newStep) {
                   _consultationStep = newStep;
                   _hub.publishAction('consult.step_changed', {'step': newStep});
-                  _hub.publishUiState('consultation', ['step_$newStep']);
+                  _hub.publishUiState('consultation', ['step_$newStep'], step: newStep);
+                  if (!_isRobotConnected && newStep == 4) {
+                    VoiceService.instance.speak(
+                      "Prise des signes vitaux. Veuillez tenir la sonde de température dans votre main et poser votre index sur le capteur d'oxymétrie, puis appuyez sur Démarrer la mesure ou dites Mesurer.",
+                    );
+                  }
                 },
                 onRequestMeasure: () {
                   _hub.publishAction('consult.measure_vitals', {});
                 },
                 onConfirmAppointment: (data) {
+                  setState(() {
+                    _dynamicFields.remove('ticket_label');
+                    _dynamicFields.remove('booking_error');
+                  });
                   _hub.publishAction('consult.confirm', data);
-                  _hub.publishUiState('consultation', ['confirming']);
+                  _hub.publishUiState('consultation', ['confirming'], step: 5);
                 },
                 onCancel: () {
                   _consultationStep = 1;

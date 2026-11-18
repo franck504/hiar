@@ -985,14 +985,14 @@ class HMIWebSocketBridgeNode(Node):
         elif action_id in {"consult.confirm", "consult.book", "consult.create"}:
             if args:
                 self._current_consultation_data.update(args)
-            data_to_book = self._current_consultation_data if self._current_consultation_data else args
-            res = self._book_appointment(data_to_book)
+            data_to_book = dict(self._current_consultation_data) if self._current_consultation_data else dict(args)
+            res = await asyncio.to_thread(self._book_appointment, data_to_book)
             if res.get("ok"):
                 ticket_label = res.get("ticket_label", "A-MAT-1")
                 appt_id = res.get("appointment_id")
-                doctor = res.get("doctor", data_to_book.get("doctor_code", "A"))
-                period = res.get("period", data_to_book.get("period", "MAT"))
-                patient_name = data_to_book.get("patient_name", "Jean Dupont")
+                doctor = res.get("doctor", data_to_book.get("doctor_code", ""))
+                period = res.get("period", data_to_book.get("period", ""))
+                patient_name = str(data_to_book.get("patient_name") or "").strip()
 
                 self._publish_hmi_request({
                     "category": "CONSULTATION",
@@ -1065,6 +1065,28 @@ class HMIWebSocketBridgeNode(Node):
             if "fields" in args and isinstance(args["fields"], dict):
                 self._current_consultation_data.update(args["fields"])
 
+            if self._current_step == 4:
+                vitals_guide_speech = (
+                    "Prise des signes vitaux. Veuillez tenir la sonde de température dans votre main et poser votre index sur le capteur d'oxymétrie, puis appuyez sur Démarrer la mesure ou dites Mesurer."
+                )
+                instruction = {
+                    "origin": "server",
+                    "text_to_speak": vitals_guide_speech,
+                    "speech_priority": "normal",
+                    "instruction_ui": {
+                        "screen": "consultation",
+                        "step": 4,
+                        "require_confirmation": False,
+                    },
+                    "voice_hints": ["Mesurer", "Suivant", "Passer"],
+                    "robot_status": {
+                        "face_expression": "speaking",
+                        "status_label": "Prise de constantes",
+                    },
+                }
+                await self.broadcast("server/instruction", instruction)
+                await self.broadcast("voice/tts/request", {"text": vitals_guide_speech, "priority": "normal"})
+
         elif action_id == "consult.cancel":
             self._current_screen = "home"
             self._current_step = 1
@@ -1113,11 +1135,30 @@ class HMIWebSocketBridgeNode(Node):
             today_iso = now_dt.date().isoformat()
             requested_date = str(args.get("requested_date") or today_iso).strip()
 
-            patient_name = str(args.get("patient_name") or "Jean Dupont").strip()
-            contact = str(args.get("contact") or args.get("patient_phone") or "0341234567").strip()
-            reason_code = str(args.get("reason_code") or args.get("selected_reason") or "consultation_generale").strip()
-            doctor_code = str(args.get("doctor_code") or args.get("selected_doctor") or "A").strip()
-            period = str(args.get("period") or args.get("selected_period") or "MAT").strip()
+            patient_name = str(args.get("patient_name") or "").strip()
+            contact = str(args.get("contact") or args.get("patient_phone") or "").strip()
+            reason_code = str(args.get("reason_code") or args.get("selected_reason") or "").strip()
+            doctor_code = str(args.get("doctor_code") or args.get("selected_doctor") or "").strip()
+            period = str(args.get("period") or args.get("selected_period") or "").strip()
+
+            if not patient_name or not contact:
+                return {
+                    "ok": False,
+                    "code": "missing_identity",
+                    "error": "Veuillez renseigner votre nom complet et votre numéro de téléphone.",
+                }
+            if not reason_code:
+                return {
+                    "ok": False,
+                    "code": "missing_reason",
+                    "error": "Veuillez choisir un motif de consultation.",
+                }
+            if not doctor_code or not period:
+                return {
+                    "ok": False,
+                    "code": "missing_doctor",
+                    "error": "Veuillez choisir un médecin et une période.",
+                }
 
             if requested_date == today_iso:
                 ensure_daily_sessions()

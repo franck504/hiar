@@ -63,14 +63,18 @@ def test_parse_error_frames():
 
 def test_format_speech_fr():
     text = format_speech_fr(36.8, 72, 98)
-    assert "Température : 36 virgule 8 degrés." in text
-    assert "Pouls : 72 battements par minute." in text
-    assert "Oxygénation : 98 pour cent." in text
+    assert "Mesure des constantes terminée" in text
+    assert "36" not in text
+    assert "72" not in text
+    assert "98" not in text
+    assert "degrés" not in text
+    assert "battements" not in text
+    assert "pour cent" not in text
 
     partial = format_speech_fr(37.0, 75, None)
-    assert "Température : 37 virgule 0 degrés." in partial
-    assert "Pouls : 75 battements par minute." in partial
-    assert "Oxygénation" not in partial
+    assert "Mesure des constantes terminée" in partial
+    assert "37" not in partial
+    assert "75" not in partial
 
 
 def test_build_vitals_instruction_success():

@@ -50,12 +50,13 @@ class ConsultationScreen extends StatefulWidget {
 class _ConsultationScreenState extends State<ConsultationScreen> {
   int _currentStep = 1;
 
-  // Données du formulaire
-  String? _selectedReason = 'consultation_generale';
-  String? _selectedDoctor = 'A';
-  String? _selectedPeriod = 'MAT';
-  final _nameController = TextEditingController(text: "Jean Dupont");
-  final _phoneController = TextEditingController(text: "0341234567");
+  // Données du formulaire (sans valeur par défaut pour laisser le choix réel au patient)
+  String? _selectedReason;
+  String? _selectedDoctor;
+  String? _selectedPeriod;
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  String? _formValidationError;
 
   // Signes vitaux dynamiques (mis à jour par le Raspberry Pi 4 / ROS 2 / ESP32)
   bool _vitalsRunning = false;
@@ -71,19 +72,12 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   String? _ticketLabel;
   bool _isSubmitting = false;
   String? _submitError;
+  Timer? _submitTimeoutTimer;
 
   @override
   void initState() {
     super.initState();
     _currentStep = widget.initialStep;
-    final hour = DateTime.now().hour;
-    if (hour >= 12) {
-      _selectedDoctor = 'B';
-      _selectedPeriod = 'AM';
-    } else {
-      _selectedDoctor = 'A';
-      _selectedPeriod = 'MAT';
-    }
     _syncFields();
   }
 
@@ -94,12 +88,16 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       setState(() {
         _currentStep = widget.initialStep;
       });
+      if (_currentStep == 4) {
+        widget.onStepChanged?.call(4);
+      }
     }
     _syncFields();
   }
 
   @override
   void dispose() {
+    _submitTimeoutTimer?.cancel();
     _vitalsTimeoutTimer?.cancel();
     _nameController.dispose();
     _phoneController.dispose();
@@ -155,11 +153,14 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     }
     if (fields.containsKey('ticket_label') && fields['ticket_label'] != null) {
       _ticketLabel = fields['ticket_label'].toString();
+      _submitTimeoutTimer?.cancel();
       _isSubmitting = false;
       _submitError = null;
+      _formValidationError = null;
       _currentStep = 6;
     }
     if (fields.containsKey('booking_error') && fields['booking_error'] != null) {
+      _submitTimeoutTimer?.cancel();
       _submitError = fields['booking_error'].toString();
       _isSubmitting = false;
     }
@@ -220,9 +221,37 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   }
 
   void _nextStep() {
+    setState(() {
+      _formValidationError = null;
+      _submitError = null;
+    });
+
+    if (_currentStep == 1 && _selectedReason == null) {
+      setState(() {
+        _formValidationError = "Veuillez choisir un motif de consultation.";
+      });
+      return;
+    }
+
+    if (_currentStep == 2 && (_selectedDoctor == null || _selectedPeriod == null)) {
+      setState(() {
+        _formValidationError = "Veuillez choisir un médecin et un créneau horaire.";
+      });
+      return;
+    }
+
+    if (_currentStep == 3 &&
+        (_nameController.text.trim().isEmpty || _phoneController.text.trim().isEmpty)) {
+      setState(() {
+        _formValidationError = "Veuillez renseigner votre nom complet et votre numéro de téléphone.";
+      });
+      return;
+    }
+
     if (_currentStep < 5) {
       setState(() {
         _currentStep++;
+        _formValidationError = null;
         _submitError = null;
       });
       widget.onStepChanged?.call(_currentStep);
@@ -234,16 +263,53 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   void _confirmAndBook() {
     setState(() {
+      _formValidationError = null;
+      _submitError = null;
+    });
+
+    final patientName = _nameController.text.trim();
+    final patientPhone = _phoneController.text.trim();
+
+    if (patientName.isEmpty || patientPhone.isEmpty) {
+      setState(() {
+        _formValidationError = "Nom complet et numéro de téléphone requis (Étape 3).";
+      });
+      return;
+    }
+    if (_selectedReason == null) {
+      setState(() {
+        _formValidationError = "Veuillez sélectionner un motif de consultation (Étape 1).";
+      });
+      return;
+    }
+    if (_selectedDoctor == null || _selectedPeriod == null) {
+      setState(() {
+        _formValidationError = "Veuillez choisir un médecin et un créneau (Étape 2).";
+      });
+      return;
+    }
+
+    setState(() {
       _isSubmitting = true;
       _submitError = null;
     });
 
+    _submitTimeoutTimer?.cancel();
+    _submitTimeoutTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted && _isSubmitting) {
+        setState(() {
+          _isSubmitting = false;
+          _submitError = "Le serveur n'a pas répondu dans les temps. Veuillez réessayer.";
+        });
+      }
+    });
+
     final payload = {
-      'patient_name': _nameController.text.trim().isEmpty ? 'Jean Dupont' : _nameController.text.trim(),
-      'contact': _phoneController.text.trim().isEmpty ? '0341234567' : _phoneController.text.trim(),
-      'reason_code': _selectedReason ?? 'consultation_generale',
-      'doctor_code': _selectedDoctor ?? 'A',
-      'period': _selectedPeriod ?? 'MAT',
+      'patient_name': patientName,
+      'contact': patientPhone,
+      'reason_code': _selectedReason!,
+      'doctor_code': _selectedDoctor!,
+      'period': _selectedPeriod!,
       'temperature_c': _temperatureC,
       'heart_rate_bpm': _heartRateBpm,
       'spo2_percent': _spo2Percent,
@@ -252,6 +318,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     if (widget.onConfirmAppointment != null) {
       widget.onConfirmAppointment!(payload);
     } else {
+      _submitTimeoutTimer?.cancel();
       setState(() {
         _ticketLabel = "$_selectedDoctor-$_selectedPeriod-1";
         _currentStep = 6;
@@ -263,6 +330,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   void _prevStep() {
     setState(() {
+      _formValidationError = null;
+      _submitError = null;
       if (_currentStep > 1) {
         _currentStep--;
         widget.onStepChanged?.call(_currentStep);
@@ -380,7 +449,40 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     }
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      child: content,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_formValidationError != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: HiarColors.errBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: HiarColors.err.withOpacity(0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.info_outline, color: HiarColors.err, size: 18),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      _formValidationError!,
+                      style: const TextStyle(
+                        color: HiarColors.err,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          content,
+        ],
+      ),
     );
   }
 
@@ -888,10 +990,15 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   // Étape 5 : Récapitulatif (Carte Héros Ardoise → Sarcelle + détails à puces émeraude)
   Widget _buildReviewStep() {
-    final periodLabel = _selectedPeriod == 'MAT' ? 'Matin (08h00 – 12h00)' : 'Après-midi (13h00 – 18h00)';
-    final reasonLabel = _selectedReason == 'consultation_generale'
-        ? 'Consultation générale'
-        : (_selectedReason == 'suivi_medical' ? 'Suivi médical' : 'Autre motif');
+    final periodLabel = _selectedPeriod == null
+        ? 'Créneau non choisi'
+        : (_selectedPeriod == 'MAT' ? 'Matin (08h00 – 12h00)' : 'Après-midi (13h00 – 18h00)');
+    final doctorLabel = _selectedDoctor == null ? 'Médecin non choisi' : 'Médecin $_selectedDoctor';
+    final reasonLabel = _selectedReason == null
+        ? 'Non sélectionné'
+        : (_selectedReason == 'consultation_generale'
+            ? 'Consultation générale'
+            : (_selectedReason == 'suivi_medical' ? 'Suivi médical' : 'Autre motif'));
 
     return Center(
       child: ConstrainedBox(
@@ -923,7 +1030,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                           style: TextStyle(fontSize: 11, color: Colors.white70),
                         ),
                         Text(
-                          "Médecin $_selectedDoctor · $periodLabel",
+                          "$doctorLabel · $periodLabel",
                           style: const TextStyle(
                             fontSize: 15.5,
                             fontWeight: FontWeight.w800,
@@ -982,8 +1089,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                       ),
                     ),
                   ],
-                  _buildReviewRow("Patient", _nameController.text),
-                  _buildReviewRow("Téléphone", _phoneController.text),
+                  _buildReviewRow("Patient", _nameController.text.trim().isEmpty ? "Non renseigné" : _nameController.text.trim()),
+                  _buildReviewRow("Téléphone", _phoneController.text.trim().isEmpty ? "Non renseigné" : _phoneController.text.trim()),
                   _buildReviewRow("Motif", reasonLabel),
                   if (_temperatureC != null) _buildReviewRow("Température", "${_temperatureC!.toStringAsFixed(1)} °C"),
                   if (_heartRateBpm != null) _buildReviewRow("Pouls", "$_heartRateBpm BPM"),
@@ -1024,6 +1131,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   // Écran Ticket final — Reçu médical à bord festonné façon UI_style.jpeg !
   Widget _buildTicketScreen() {
     final periodLabel = _selectedPeriod == 'MAT' ? 'Matin' : 'Après-midi';
+    final doctorLabel = _selectedDoctor != null ? "Médecin $_selectedDoctor" : "Médecin";
+    final patientLabel = _nameController.text.trim().isEmpty ? "Anonyme" : _nameController.text.trim();
     final hasVitals = _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
 
     return LandscapeScaffold(
@@ -1078,7 +1187,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Médecin $_selectedDoctor · $periodLabel",
+                                    "$doctorLabel · $periodLabel",
                                     style: const TextStyle(
                                       fontSize: 13.5,
                                       fontWeight: FontWeight.w800,
@@ -1086,7 +1195,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                                     ),
                                   ),
                                   Text(
-                                    "Patient : ${_nameController.text}",
+                                    "Patient : $patientLabel",
                                     style: const TextStyle(fontSize: 12, color: HiarColors.text2),
                                   ),
                                 ],

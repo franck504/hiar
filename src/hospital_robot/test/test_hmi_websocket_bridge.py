@@ -347,11 +347,12 @@ def test_vitals_voice_requires_consultation_step_4(bridge_node):
             }))
 
             inst2 = None
-            for _ in range(3):
+            for _ in range(5):
                 m = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
                 if m.get("topic") == "server/instruction":
-                    inst2 = m["payload"]
-                    break
+                    if m["payload"].get("value_to_show", {}).get("value") == "measuring":
+                        inst2 = m["payload"]
+                        break
             assert inst2 is not None
             assert inst2["instruction_ui"]["screen"] == "consultation"
             assert inst2["instruction_ui"]["step"] == 4

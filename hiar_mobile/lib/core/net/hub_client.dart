@@ -408,7 +408,7 @@ class HubClient {
   }
 
   /// PUBLICATION UI STATE : Notifie le Pi de l'écran affiché
-  void publishUiState(String screenName, List<String> activeActions) {
+  void publishUiState(String screenName, List<String> activeActions, {int? step}) {
     if (!_isConnected) return;
     _seq++;
     final nowTs = DateTime.now().millisecondsSinceEpoch;
@@ -422,6 +422,7 @@ class HubClient {
       qos: 0,
       payload: {
         "screen": screenName,
+        "step": step,
         "epoch": nowTs,
         "actions": activeActions,
         "mission_active": screenName == 'mission',

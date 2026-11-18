@@ -246,7 +246,7 @@ def test_start_mission_records_start_time_when_sensors_are_ready():
 def test_mission_timeout_sends_stop_and_returns_to_idle():
     node = make_request_node("FORWARD")
     node.destination = "PHARMACY"
-    node.mission_start_time = 91.0
+    node.mission_start_time = 65.0
 
     NavigationDecision.step(node)
 
