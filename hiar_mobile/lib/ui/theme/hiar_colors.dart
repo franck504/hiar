@@ -19,8 +19,8 @@ class HiarColors {
 
   // 2. Couleurs secondaires & surfaces
   static const Color surface = Color(0xFFFFFFFF);       // Blanc pur
-  static const Color offWhite = Color(0xFFF8F9FE);      // Blanc cassé
-  static const Color background = Color(0xFFF4F8FB);    // Blanc froid
+  static const Color offWhite = Color(0xFFFCFDFE);      // Blanc cassé très lumineux
+  static const Color background = Color(0xFFFAFDFE);    // Fond ultra-clair blanc glacé
   static const Color surfaceSoft = Color(0xFFE7F2F9);   // Bleu très pâle
   static const Color cyanPale = Color(0xFFD0F0FB);      // Cyan pâle (badges / barres)
   static const Color turquoisePale = Color(0xFFB3E3F1); // Turquoise pâle (gradient B)
@@ -91,16 +91,16 @@ class HiarColors {
 class HiarGradients {
   HiarGradients._();
 
-  /// A. Background principal : Blue → Cyan (#D9ECFB → #C4E7FA → #82DFF7)
+  /// A. Background principal lumineux (très blanc avec touche bleu pastel douce)
   static const LinearGradient mainBackground = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      HiarColors.primaryLight,
-      HiarColors.primarySoft,
-      HiarColors.background,
+      Color(0xFFFFFFFF),
+      Color(0xFFF8FBFE),
+      Color(0xFFECF5FC),
     ],
-    stops: [0.0, 0.45, 1.0],
+    stops: [0.0, 0.58, 1.0],
   );
 
   /// A (plein éclat, pour splash / en-têtes) : #D9ECFB → #C4E7FA → #82DFF7

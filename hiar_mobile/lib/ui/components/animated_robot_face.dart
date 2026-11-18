@@ -5,12 +5,12 @@ import '../theme/hiar_colors.dart';
 
 /// Expressions faciales animées du robot HIAR.
 enum RobotFaceExpression {
-  idle,      // Repos → bouche fermée calme
-  listening, // Écoute active → léger sourire attentif
-  thinking,  // Attente / chargement vocal → bouche pensive + barre de chargement
+  idle,      // Veille neutre → yeux grands ouverts + bouche fermée
+  listening, // Écoute attentive / curieux → inclinaison + léger sourire
+  thinking,  // Attente / chargement vocal → regard qui balaie + bouche pensive + barre
   speaking,  // Parole TTS → bouche animée multi-syllabes
-  happy,     // Accueil / confirmation / succès → grand sourire radieux + yeux heureux
-  emergency, // Arrêt / erreur → bouche inquiète + yeux d'alerte
+  happy,     // Sourire enthousiaste & serein → yeux fermés en arcs + grand sourire + joues
+  emergency, // Alerte / arrêt → yeux plissés rouge-corail + bouche inquiète
 }
 
 /// Forme explicite de bouche dérivée de [RobotFaceExpression].
@@ -57,6 +57,7 @@ RobotFaceExpression parseRobotFaceExpression(
     case 'loading':
       return RobotFaceExpression.thinking;
     case 'listening':
+    case 'curious':
       return RobotFaceExpression.listening;
     case 'emergency':
     case 'alert':
@@ -71,24 +72,30 @@ RobotFaceExpression parseRobotFaceExpression(
   }
 }
 
-/// Visage animé du robot HIAR (base bleue) :
-/// - Petite croix médicale jaune sur le front qui bouge avec la tête et pulse doucement
-/// - Clignement périodique naturel des yeux
-/// - Mouvement fluide du regard (yeux qui bougent selon l'état)
-/// - Formes de bouche variées selon le contexte : fermée, sourire, parle (syllabes), réflexion, alerte
-/// - Inclinaison douce et flottement de la tête
+/// Visage animé officiel du robot HIAR (inspiré de hiar_animated_logo_splash_screen.html) :
+/// - Coque céramique blanche 3D + oreilles acoustiques latérales + visière verre sombre
+/// - Petite croix médicale JAUNE sur le front qui bouge avec la tête et pulse doucement
+/// - Morphing continu Bézier des yeux (ronds ouverts avec reflets → arcs fermés souriants)
+/// - 6 formes de bouche conditionnées selon l'état (fermée, sourire, parle, réflexion, alerte)
+/// - Mode [playIntroSequence] pour le Splash Screen :
+///     1. (0s – 2s) Neutre : yeux grands ouverts sans réaction, bouche fermée, micro-clignement
+///     2. (2s – 4s) Curieux : inclinaison de la tête (~13°) comme s'il vous avait repéré
+///     3. (4s – 6s) Sourire enthousiaste & serein : yeux fermés en arcs + grand sourire + joues
+///     4. (6s – 9.5s) Maintien serein avec respiration douce puis boucle fluide
 class AnimatedRobotFace extends StatefulWidget {
   final RobotFaceExpression expression;
   final double width;
   final double height;
   final bool showLoadingRing;
+  final bool playIntroSequence;
 
   const AnimatedRobotFace({
     super.key,
     this.expression = RobotFaceExpression.idle,
-    this.width = 76,
-    this.height = 58,
+    this.width = 92,
+    this.height = 70,
     this.showLoadingRing = false,
+    this.playIntroSequence = false,
   });
 
   @override
@@ -100,37 +107,58 @@ class _AnimatedRobotFaceState extends State<AnimatedRobotFace>
   late final AnimationController _ambientCtrl;
   late final AnimationController _speakCtrl;
   late final AnimationController _blinkCtrl;
+  late final AnimationController _introCtrl;
   Timer? _blinkTimer;
 
   @override
   void initState() {
     super.initState();
-    // Inclinaison douce de la tête + mouvement du regard + pulsation croix jaune (4.6 s)
     _ambientCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 4600),
     )..repeat();
 
-    // Animation de parole (syllabes rapides ~780 ms)
     _speakCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 780),
     )..repeat();
 
-    // Clignement naturel des paupières
     _blinkCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 110),
     );
 
+    // Cycle intro Splash Screen : 10 secondes (Neutre 0–2s → Curieux 2–4s → Sourire serein 4–9s → Transition douce)
+    _introCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 10000),
+    );
+    if (widget.playIntroSequence) {
+      _introCtrl.repeat();
+    }
+
     _scheduleBlinkLoop();
+  }
+
+  @override
+  void didUpdateWidget(covariant AnimatedRobotFace oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.playIntroSequence && !_introCtrl.isAnimating) {
+      _introCtrl.repeat();
+    } else if (!widget.playIntroSequence && _introCtrl.isAnimating) {
+      _introCtrl.stop();
+    }
   }
 
   void _scheduleBlinkLoop() {
     _blinkTimer?.cancel();
     _blinkTimer = Timer.periodic(const Duration(milliseconds: 3400), (_) {
       if (!mounted) return;
-      if (widget.expression == RobotFaceExpression.emergency) return;
+      if (widget.playIntroSequence) return; // L'intro gère son propre clignement
+      if (widget.expression == RobotFaceExpression.emergency ||
+          widget.expression == RobotFaceExpression.happy) {
+        return;
+      }
       _blinkCtrl.forward().then((_) {
         if (mounted) _blinkCtrl.reverse();
       });
@@ -143,134 +171,166 @@ class _AnimatedRobotFaceState extends State<AnimatedRobotFace>
     _ambientCtrl.dispose();
     _speakCtrl.dispose();
     _blinkCtrl.dispose();
+    _introCtrl.dispose();
     super.dispose();
+  }
+
+  double _clamp01(double v) => v.clamp(0.0, 1.0);
+
+  double _easeInOutCubic(double t) {
+    final c = _clamp01(t);
+    return c < 0.5 ? 4 * c * c * c : 1 - math.pow(-2 * c + 2, 3) / 2.0;
+  }
+
+  double _easeOutBack(double t, {double s = 1.25}) {
+    final c = _clamp01(t);
+    final c3 = s + 1.0;
+    return 1.0 + c3 * math.pow(c - 1.0, 3) + s * math.pow(c - 1.0, 2);
+  }
+
+  double _window(double timeSec, double start, double end, {bool back = false}) {
+    if (timeSec <= start) return 0.0;
+    if (timeSec >= end) return 1.0;
+    final norm = (timeSec - start) / (end - start);
+    return back ? _easeOutBack(norm) : _easeInOutCubic(norm);
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isThinking =
-        widget.expression == RobotFaceExpression.thinking || widget.showLoadingRing;
-    final bool isEmergency = widget.expression == RobotFaceExpression.emergency;
-    final bool isHappy = widget.expression == RobotFaceExpression.happy;
-    final bool isSpeaking = widget.expression == RobotFaceExpression.speaking;
-    final bool isListening = widget.expression == RobotFaceExpression.listening;
-
-    final Color glowColor = isEmergency
-        ? HiarColors.err
-        : (isHappy
-            ? HiarColors.cyanSoft
-            : (isThinking ? HiarColors.cyan : HiarColors.azur));
-
     return AnimatedBuilder(
-      animation: Listenable.merge([_ambientCtrl, _speakCtrl, _blinkCtrl]),
+      animation: Listenable.merge([_ambientCtrl, _speakCtrl, _blinkCtrl, _introCtrl]),
       builder: (context, _) {
         final double phase = _ambientCtrl.value * 2 * math.pi;
         final double speakPhase = _speakCtrl.value;
-        final double blink = _blinkCtrl.value;
 
-        // 1. Inclinaison de la tête (radians) + léger flottement vertical
-        double tiltRad;
-        double floatY;
-        if (isEmergency) {
-          tiltRad = 0.0;
-          floatY = 0.0;
-        } else if (isThinking) {
-          tiltRad = 0.09 * math.sin(phase * 1.5);
-          floatY = -2.0 * math.sin(phase * 2.0);
-        } else if (isListening) {
-          tiltRad = 0.068 * math.sin(phase);
-          floatY = -1.8 * math.sin(phase);
-        } else if (isSpeaking) {
-          tiltRad = 0.055 * math.sin(phase * 2.0);
-          floatY = -2.2 * math.sin(speakPhase * math.pi).abs();
-        } else if (isHappy) {
-          tiltRad = 0.08 * math.sin(phase * 1.5);
-          floatY = -2.4 * math.sin(phase * 2.0);
-        } else {
-          tiltRad = 0.045 * math.sin(phase);
-          floatY = -1.6 * math.sin(phase);
-        }
-
-        // 2. Déplacement horizontal/vertical du regard (yeux qui bougent)
+        double tiltDeg = 0.0;
+        double floatY = 0.0;
         double lookX = 0.0;
         double lookY = 0.0;
-        if (isThinking) {
-          lookX = math.sin(phase * 2.0) * 1.0;
-          lookY = -0.3;
-        } else if (isListening) {
-          lookX = math.sin(phase) * 0.35;
-          lookY = 0.0;
-        } else if (isEmergency) {
-          lookX = 0.0;
-          lookY = 0.0;
+        double blink = _blinkCtrl.value;
+        double curiosity = 0.0;
+        double happyMorph = 0.0;
+        double cheekOpacity = 0.0;
+        RobotMouthShape mouthShape = mouthShapeForExpression(widget.expression);
+        bool isEmergency = widget.expression == RobotFaceExpression.emergency;
+        bool isThinking =
+            widget.expression == RobotFaceExpression.thinking || widget.showLoadingRing;
+
+        if (widget.playIntroSequence) {
+          // Séquence fidèle à hiar_animated_logo_splash_screen.html (10 s en boucle douce)
+          final double t = _introCtrl.value * 10.0;
+
+          // Scène 1 (0–2s) : neutre, yeux grands ouverts + micro-clignement à 1.15s
+          if (t > 1.05 && t < 1.32) {
+            blink = math.sin(((t - 1.05) / 0.27) * math.pi);
+          } else {
+            blink = 0.0;
+          }
+
+          // Scène 2 (2–4s) : curiosité & inclinaison (~13.2°) comme s'il vous avait repéré
+          final cIn = _window(t, 1.95, 2.85, back: true);
+          final cOut = _window(t, 3.95, 4.75);
+          curiosity = (cIn * (1.0 - cOut)).clamp(0.0, 1.15);
+
+          // Scène 3 & 4 (4–8.8s) : sourire enthousiaste, yeux fermés en arcs, serein → retour neutre 8.8–9.8s
+          final wIn = _window(t, 4.00, 5.15, back: true);
+          final wOut = _window(t, 8.80, 9.75);
+          final double welcome = (wIn * (1.0 - wOut)).clamp(0.0, 1.05);
+
+          happyMorph = welcome.clamp(0.0, 1.0);
+          cheekOpacity = (happyMorph * 0.95).clamp(0.0, 1.0);
+
+          final double breath = math.sin(t * 2.1) * 2.4;
+          floatY = breath - curiosity * 3.0 - happyMorph * 2.5;
+          final double gentleSway = math.sin(t * 1.45) * 1.3 * happyMorph;
+          tiltDeg = curiosity * 13.2 + happyMorph * 2.2 + gentleSway;
+          lookX = curiosity * 0.7 + happyMorph * 0.12;
+          lookY = -curiosity * 0.35 - happyMorph * 0.18;
+
+          if (happyMorph > 0.45) {
+            mouthShape = RobotMouthShape.bigSmile;
+          } else if (curiosity > 0.25) {
+            mouthShape = RobotMouthShape.gentleSmile;
+          } else {
+            mouthShape = RobotMouthShape.closed;
+          }
+          isEmergency = false;
+          isThinking = false;
         } else {
-          lookX = math.sin(phase) * 0.72;
-          lookY = math.cos(phase * 2.0) * 0.25;
+          // Mode interactif dans le VoiceRail selon l'expression active
+          switch (widget.expression) {
+            case RobotFaceExpression.idle:
+              // Neutre calme, yeux ouverts, bouche fermée
+              tiltDeg = math.sin(phase) * 2.2;
+              floatY = -math.sin(phase) * 1.5;
+              lookX = math.sin(phase) * 0.45;
+              lookY = math.cos(phase * 2.0) * 0.15;
+              happyMorph = 0.0;
+              break;
+            case RobotFaceExpression.listening:
+              // Curieux / à l'écoute : tête inclinée + regard attentif
+              curiosity = 0.65;
+              tiltDeg = 6.5 + math.sin(phase) * 2.2;
+              floatY = -math.sin(phase) * 1.8 - 1.0;
+              lookX = math.sin(phase) * 0.35 + 0.2;
+              happyMorph = 0.0;
+              break;
+            case RobotFaceExpression.thinking:
+              // Attente réponse vocale : inclinaison curieuse + yeux qui balaient
+              curiosity = 0.55;
+              tiltDeg = math.sin(phase * 1.5) * 7.0;
+              floatY = -math.sin(phase * 2.0) * 1.8;
+              lookX = math.sin(phase * 2.0) * 0.95;
+              lookY = -0.3;
+              happyMorph = 0.0;
+              break;
+            case RobotFaceExpression.speaking:
+              // Parle : bouche multi-syllabes + léger hochement amical
+              tiltDeg = math.sin(phase * 2.0) * 3.5;
+              floatY = -math.sin(speakPhase * math.pi).abs() * 2.0;
+              lookX = math.sin(phase) * 0.25;
+              happyMorph = 0.0;
+              cheekOpacity = 0.35;
+              break;
+            case RobotFaceExpression.happy:
+              // Sourire enthousiaste & serein : yeux fermés en arcs + grand sourire
+              tiltDeg = 2.5 + math.sin(phase * 1.4) * 2.0;
+              floatY = -math.sin(phase * 2.0) * 2.0 - 1.5;
+              happyMorph = 1.0;
+              cheekOpacity = 0.95;
+              break;
+            case RobotFaceExpression.emergency:
+              tiltDeg = 0.0;
+              floatY = 0.0;
+              happyMorph = 0.0;
+              break;
+          }
         }
 
-        final double radius = widget.height * 0.32;
-
-        return Transform.translate(
-          offset: Offset(0, floatY),
-          child: Transform.rotate(
-            angle: tiltRad,
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                // Halo lumineux bleu derrière la tête
-                Container(
-                  width: widget.width + 10,
-                  height: widget.height + 10,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(radius + 5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: glowColor.withOpacity(isThinking || isListening ? 0.42 : 0.24),
-                        blurRadius: isThinking || isListening ? 18 : 13,
-                        spreadRadius: isThinking ? 1.5 : 0.5,
-                      ),
-                    ],
-                  ),
+        return SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: Transform.translate(
+            offset: Offset(0, floatY),
+            child: Transform.rotate(
+              angle: tiltDeg * math.pi / 180.0,
+              child: CustomPaint(
+                painter: _HiarCeramicRobotPainter(
+                  expression: widget.expression,
+                  mouthShape: mouthShape,
+                  lookX: lookX,
+                  lookY: lookY,
+                  blink: blink,
+                  curiosity: curiosity,
+                  happyMorph: happyMorph,
+                  cheekOpacity: cheekOpacity,
+                  speakPhase: speakPhase,
+                  ambientPhase: phase,
+                  spinnerPhase: _ambientCtrl.value,
+                  isEmergency: isEmergency,
+                  showLoadingRing: isThinking,
                 ),
-
-                // Boîtier de tête HIAR BLEU médical + reflet verre
-                Container(
-                  width: widget.width,
-                  height: widget.height,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: isEmergency
-                          ? const [Color(0xFF4C1414), Color(0xFF8A1C1C)]
-                          : const [HiarColors.textPrimary, HiarColors.secondaryDark, HiarColors.secondary],
-                    ),
-                    borderRadius: BorderRadius.circular(radius),
-                    border: Border.all(
-                      color: (isEmergency ? HiarColors.err : HiarColors.cyan).withOpacity(0.9),
-                      width: widget.width > 100 ? 3.5 : 2.2,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(radius - 2),
-                    child: CustomPaint(
-                      painter: _RobotFacePainter(
-                        expression: widget.expression,
-                        mouthShape: mouthShapeForExpression(widget.expression),
-                        lookX: lookX,
-                        lookY: lookY,
-                        blink: blink,
-                        speakPhase: speakPhase,
-                        ambientPhase: phase,
-                        spinnerPhase: _ambientCtrl.value,
-                        showLoadingRing: isThinking,
-                        glowColor: glowColor,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         );
@@ -279,163 +339,317 @@ class _AnimatedRobotFaceState extends State<AnimatedRobotFace>
   }
 }
 
-class _RobotFacePainter extends CustomPainter {
+class _HiarCeramicRobotPainter extends CustomPainter {
   final RobotFaceExpression expression;
   final RobotMouthShape mouthShape;
   final double lookX;
   final double lookY;
   final double blink;
+  final double curiosity;
+  final double happyMorph;
+  final double cheekOpacity;
   final double speakPhase;
   final double ambientPhase;
   final double spinnerPhase;
+  final bool isEmergency;
   final bool showLoadingRing;
-  final Color glowColor;
 
-  _RobotFacePainter({
+  _HiarCeramicRobotPainter({
     required this.expression,
     required this.mouthShape,
     required this.lookX,
     required this.lookY,
     required this.blink,
+    required this.curiosity,
+    required this.happyMorph,
+    required this.cheekOpacity,
     required this.speakPhase,
     required this.ambientPhase,
     required this.spinnerPhase,
+    required this.isEmergency,
     required this.showLoadingRing,
-    required this.glowColor,
   });
+
+  double _lerp(double a, double b, double t) => a + (b - a) * t;
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
+    final cx = w * 0.5;
+    final cy = h * 0.52;
 
-    // 1. Reflet verre doux en haut de la visière bleue
-    final sheenPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
+    // Proportions inspirées de la coque céramique 524×396 + oreilles du HTML
+    final double shellW = w * 0.84;
+    final double shellH = h * 0.80;
+    final double shellR = shellH * 0.45;
+    final Rect shellRect = Rect.fromCenter(center: Offset(cx, cy), width: shellW, height: shellH);
+
+    // Parallaxe 3D subtile
+    final double faceShiftX = lookX * (shellW * 0.032);
+    final double faceShiftY = lookY * (shellH * 0.025);
+    final double earParallaxX = -faceShiftX * 0.35;
+
+    // 1. Ombre portée douce sous la tête
+    final shadowPaint = Paint()
+      ..color = HiarColors.shadow.withOpacity(0.14)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(shellRect.shift(const Offset(0, 4)), Radius.circular(shellR)),
+      shadowPaint,
+    );
+
+    // 2. Oreilles acoustiques latérales (avec accent teal/cyan HIAR)
+    _paintEars(canvas, shellRect, earParallaxX, -faceShiftY * 0.3);
+
+    // 3. Coque céramique blanche 3D
+    final shellPaint = Paint()
+      ..shader = const RadialGradient(
+        center: Alignment(-0.12, -0.42),
+        radius: 1.05,
         colors: [
-          Colors.white.withOpacity(0.20),
-          Colors.white.withOpacity(0.0),
+          Color(0xFFFFFFFF),
+          Color(0xFFF6FAFD),
+          Color(0xFFE3EEF6),
+          Color(0xFFCBDCEB),
         ],
-      ).createShader(Rect.fromLTWH(0, 0, w, h * 0.45));
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, h * 0.45), sheenPaint);
+        stops: [0.0, 0.58, 0.86, 1.0],
+      ).createShader(shellRect);
 
-    // 2. Petite croix médicale JAUNE sur le front qui bouge (parallaxe + oscillation douce + pulsation)
-    _paintYellowForeheadCross(canvas, w, h);
+    final RRect shellRRect = RRect.fromRectAndRadius(shellRect, Radius.circular(shellR));
+    canvas.drawRRect(shellRRect, shellPaint);
 
-    final Color featureColor = expression == RobotFaceExpression.emergency
-        ? const Color(0xFFFFB4B4)
-        : HiarColors.cyanSoft;
-
-    final eyePaint = Paint()
-      ..color = featureColor
-      ..style = PaintingStyle.fill;
-
-    // Décalage du regard
-    final double dx = lookX * (w * 0.055);
-    final double dy = lookY * (h * 0.05);
-
-    // Yeux abaissés légèrement pour laisser un beau front à la croix jaune
-    final double eyeY = h * 0.46 + dy;
-    final double leftEyeX = w * 0.32 + dx;
-    final double rightEyeX = w * 0.68 + dx;
-    final double eyeW = w * 0.135;
-    final double fullEyeH = h * 0.22;
-    final double currentEyeH = math.max(h * 0.032, fullEyeH * (1.0 - blink * 0.88));
-
-    // 3. Yeux (selon expression)
-    if (expression == RobotFaceExpression.happy && blink < 0.5) {
-      final arcPaint = Paint()
-        ..color = featureColor
+    // Bordure satinée de la coque
+    canvas.drawRRect(
+      shellRRect,
+      Paint()
+        ..color = HiarColors.border
         ..style = PaintingStyle.stroke
-        ..strokeWidth = math.max(2.2, h * 0.062)
-        ..strokeCap = StrokeCap.round;
+        ..strokeWidth = math.max(1.2, w * 0.012),
+    );
 
-      for (final cx in [leftEyeX, rightEyeX]) {
-        final rect = Rect.fromCenter(
-          center: Offset(cx, eyeY + 2),
-          width: eyeW * 1.15,
-          height: fullEyeH * 0.85,
-        );
-        canvas.drawArc(rect, math.pi * 1.12, math.pi * 0.76, false, arcPaint);
-      }
-    } else if (expression == RobotFaceExpression.emergency) {
-      for (final cx in [leftEyeX, rightEyeX]) {
-        final rect = RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(cx, eyeY), width: eyeW * 1.12, height: fullEyeH * 0.46),
-          Radius.circular(eyeW * 0.35),
-        );
-        canvas.drawRRect(rect, eyePaint);
-      }
-    } else {
-      final double scaleY = expression == RobotFaceExpression.listening ? 1.12 : 1.0;
-      final double finalH = currentEyeH * scaleY;
-      for (final cx in [leftEyeX, rightEyeX]) {
-        final rect = RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(cx, eyeY), width: eyeW, height: finalH),
-          Radius.circular(eyeW * 0.45),
-        );
-        canvas.drawRRect(rect, eyePaint);
+    // Reflet spéculaire 3D doux sur le haut du crâne
+    final highlightRect = Rect.fromCenter(
+      center: Offset(cx, shellRect.top + shellH * 0.14),
+      width: shellW * 0.56,
+      height: shellH * 0.16,
+    );
+    canvas.drawOval(
+      highlightRect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white.withOpacity(0.95), Colors.white.withOpacity(0.0)],
+        ).createShader(highlightRect),
+    );
 
-        if (blink < 0.35) {
-          final glintPaint = Paint()..color = Colors.white.withOpacity(0.88);
-          canvas.drawCircle(
-            Offset(cx - eyeW * 0.18, eyeY - finalH * 0.22),
-            math.max(1.2, eyeW * 0.16),
-            glintPaint,
-          );
-        }
-      }
+    // 4. Petite croix médicale JAUNE sur le front qui bouge avec la tête + pulsation
+    _paintYellowForeheadCross(canvas, cx, shellRect.top + shellH * 0.115, shellW, shellH);
+
+    // 5. Cadre satiné + Visière en verre sombre profond
+    final double visorW = shellW * 0.82;
+    final double visorH = shellH * 0.63;
+    final double visorR = visorH * 0.44;
+    final Rect visorRect = Rect.fromCenter(
+      center: Offset(cx, cy + shellH * 0.055),
+      width: visorW,
+      height: visorH,
+    );
+    final RRect visorFrame = RRect.fromRectAndRadius(
+      visorRect.inflate(math.max(1.8, w * 0.015)),
+      Radius.circular(visorR + 2),
+    );
+    canvas.drawRRect(visorFrame, Paint()..color = const Color(0xFFDCE8F2));
+
+    final RRect visorRRect = RRect.fromRectAndRadius(visorRect, Radius.circular(visorR));
+    final visorPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(0.0, -0.3),
+        radius: 0.95,
+        colors: isEmergency
+            ? const [Color(0xFF471515), Color(0xFF230A0A), Color(0xFF120505)]
+            : const [Color(0xFF15324B), Color(0xFF0B1C2E), Color(0xFF06101B)],
+        stops: const [0.0, 0.55, 1.0],
+      ).createShader(visorRect);
+    canvas.drawRRect(visorRRect, visorPaint);
+
+    // Contenu interne de la visière (clippé)
+    canvas.save();
+    canvas.clipRRect(visorRRect);
+
+    // Reflet vitré diagonal subtil sur la visière
+    final sheenPath = Path()
+      ..moveTo(visorRect.left, visorRect.top)
+      ..lineTo(visorRect.left + visorW * 0.62, visorRect.top)
+      ..lineTo(visorRect.left + visorW * 0.36, visorRect.bottom)
+      ..lineTo(visorRect.left, visorRect.bottom)
+      ..close();
+    canvas.drawPath(
+      sheenPath,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.14),
+            Colors.white.withOpacity(0.02),
+            Colors.transparent,
+          ],
+        ).createShader(visorRect),
+    );
+
+    // 6. Joues lumineuses douces lors du sourire
+    if (cheekOpacity > 0.02) {
+      final cheekPaint = Paint()
+        ..color = const Color(0xFF2DD4BF).withOpacity(0.32 * cheekOpacity)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+      final double cheekY = visorRect.center.dy + visorH * 0.21 + faceShiftY;
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(visorRect.center.dx - visorW * 0.29 + faceShiftX, cheekY),
+          width: visorW * 0.17,
+          height: visorH * 0.14,
+        ),
+        cheekPaint,
+      );
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(visorRect.center.dx + visorW * 0.29 + faceShiftX, cheekY),
+          width: visorW * 0.17,
+          height: visorH * 0.14,
+        ),
+        cheekPaint,
+      );
     }
 
-    // 4. Bouche conditionnée selon les cas (fermée, sourire, parle, réflexion, alerte)
-    _paintMouth(canvas, w, h, dx, dy, featureColor);
+    // 7. Yeux morphés (ronds grands ouverts → arcs fermés souriants)
+    final Color featureColor = isEmergency ? const Color(0xFFFF8A8A) : const Color(0xFF22D3EE);
+    final double eyeY = visorRect.center.dy - visorH * 0.06 - happyMorph * (visorH * 0.03) + faceShiftY;
+    final double eyeOffset = visorW * 0.22;
 
-    // 5. Barre de progression subtile tout en bas en mode réflexion / chargement
+    final double baseRx = visorW * 0.082 * (1.0 + curiosity * 0.11);
+    final double baseRy = visorH * 0.142 * (1.0 + curiosity * 0.12);
+
+    // Asymétrie attachante pendant la curiosité (exactement comme dans le HTML)
+    final double leftRx = baseRx * (1.0 - curiosity * 0.03);
+    final double leftRy = math.max(1.8, baseRy * (1.0 - curiosity * 0.03) * (1.0 - blink * 0.88));
+    final double rightRx = baseRx * (1.0 + curiosity * 0.05);
+    final double rightRy = math.max(1.8, baseRy * (1.0 + curiosity * 0.05) * (1.0 - blink * 0.88));
+
+    _paintMorphedEye(
+      canvas,
+      Offset(visorRect.center.dx - eyeOffset + faceShiftX, eyeY),
+      leftRx,
+      leftRy,
+      happyMorph,
+      featureColor,
+    );
+    _paintMorphedEye(
+      canvas,
+      Offset(visorRect.center.dx + eyeOffset + faceShiftX, eyeY),
+      rightRx,
+      rightRy,
+      happyMorph,
+      featureColor,
+    );
+
+    // 8. Bouche conditionnée selon les cas (fermée, sourire, parle, réflexion, alerte)
+    _paintMouth(canvas, visorRect, faceShiftX, faceShiftY, featureColor);
+
+    // 9. Barre de progression subtile en mode réflexion / chargement vocal
     if (showLoadingRing) {
-      final barY = h - 3.0;
-      final trackPaint = Paint()
-        ..color = Colors.white.withOpacity(0.16)
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round;
-      canvas.drawLine(Offset(w * 0.12, barY), Offset(w * 0.88, barY), trackPaint);
+      final double barY = visorRect.bottom - math.max(3.0, visorH * 0.06);
+      final double padX = visorW * 0.16;
+      canvas.drawLine(
+        Offset(visorRect.left + padX, barY),
+        Offset(visorRect.right - padX, barY),
+        Paint()
+          ..color = Colors.white.withOpacity(0.16)
+          ..strokeWidth = 2.4
+          ..strokeCap = StrokeCap.round,
+      );
+      final double trackW = visorW - padX * 2;
+      final double sweepW = trackW * 0.34;
+      final double startX = visorRect.left +
+          padX +
+          (trackW - sweepW) * ((math.sin(spinnerPhase * 2 * math.pi * 1.5) + 1) / 2);
+      canvas.drawLine(
+        Offset(startX, barY),
+        Offset(startX + sweepW, barY),
+        Paint()
+          ..color = HiarColors.robotCrossYellow
+          ..strokeWidth = 2.8
+          ..strokeCap = StrokeCap.round,
+      );
+    }
 
-      final sweepW = w * 0.28;
-      final startX = w * 0.12 +
-          (w * 0.76 - sweepW) * ((math.sin(spinnerPhase * 2 * math.pi * 1.5) + 1) / 2);
-      final activePaint = Paint()
-        ..color = HiarColors.robotCrossYellow
-        ..strokeWidth = 2.8
-        ..strokeCap = StrokeCap.round;
-      canvas.drawLine(Offset(startX, barY), Offset(startX + sweepW, barY), activePaint);
+    canvas.restore();
+  }
+
+  void _paintEars(Canvas canvas, Rect shellRect, double px, double py) {
+    final double earW = shellRect.width * 0.085;
+    final double earH = shellRect.height * 0.30;
+    final double earY = shellRect.center.dy + shellRect.height * 0.02 + py;
+
+    final earPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFF7FBFE), Color(0xFFDCE9F3), Color(0xFFB9D0E2)],
+      ).createShader(shellRect);
+
+    final accentPaint = Paint()
+      ..color = (isEmergency ? HiarColors.err : HiarColors.secondary).withOpacity(0.85);
+
+    for (final isLeft in [true, false]) {
+      final double ex = isLeft
+          ? shellRect.left - earW * 0.45 + px
+          : shellRect.right + earW * 0.45 + px;
+      final earRect = Rect.fromCenter(center: Offset(ex, earY), width: earW, height: earH);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(earRect, Radius.circular(earW * 0.5)),
+        earPaint,
+      );
+      final stripRect = Rect.fromCenter(
+        center: Offset(ex + (isLeft ? -earW * 0.12 : earW * 0.12), earY),
+        width: earW * 0.25,
+        height: earH * 0.58,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(stripRect, Radius.circular(earW * 0.15)),
+        accentPaint,
+      );
     }
   }
 
-  /// Dessine la petite croix médicale JAUNE sur le front du robot (mobile + pulsation).
-  void _paintYellowForeheadCross(Canvas canvas, double w, double h) {
-    final double cx = w * 0.5 + lookX * (w * 0.028) + math.sin(ambientPhase * 1.5) * (w * 0.012);
-    final double cy = h * 0.175 + math.cos(ambientPhase * 2.0) * (h * 0.015);
-    final double pulse = 1.0 + 0.10 * math.sin(ambientPhase * 2.0);
-    final double armLen = math.max(5.5, h * 0.145) * pulse;
-    final double armThick = math.max(2.1, armLen * 0.36);
+  /// Petite croix médicale JAUNE sur le front qui bouge doucement et pulse.
+  void _paintYellowForeheadCross(Canvas canvas, double cx, double cy, double shellW, double shellH) {
+    final double moveX = lookX * (shellW * 0.018) + math.sin(ambientPhase * 1.5) * (shellW * 0.008);
+    final double moveY = math.cos(ambientPhase * 2.0) * (shellH * 0.008);
+    final double pulse = 1.0 + 0.09 * math.sin(ambientPhase * 2.0);
+    final double armLen = math.max(6.5, shellH * 0.145) * pulse;
+    final double armThick = math.max(2.3, armLen * 0.36);
 
-    // Halo doré doux
-    final haloPaint = Paint()
-      ..color = HiarColors.robotCrossYellow.withOpacity(0.32)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawCircle(Offset(cx, cy), armLen * 0.72, haloPaint);
+    final Offset center = Offset(cx + moveX, cy + moveY);
 
-    // Rotation très subtile de la croix jaune lors du mouvement de tête
+    // Halo doré discret
+    canvas.drawCircle(
+      center,
+      armLen * 0.72,
+      Paint()
+        ..color = HiarColors.robotCrossYellow.withOpacity(0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+
     canvas.save();
-    canvas.translate(cx, cy);
+    canvas.translate(center.dx, center.dy);
     canvas.rotate(0.08 * math.sin(ambientPhase * 1.5));
 
     final crossPaint = Paint()
       ..color = HiarColors.robotCrossYellow
       ..style = PaintingStyle.fill;
 
-    // Barre verticale
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(center: Offset.zero, width: armThick, height: armLen),
@@ -443,7 +657,6 @@ class _RobotFacePainter extends CustomPainter {
       ),
       crossPaint,
     );
-    // Barre horizontale
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(center: Offset.zero, width: armLen, height: armThick),
@@ -454,23 +667,148 @@ class _RobotFacePainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// Dessine les différentes formes de bouche selon le contexte.
+  /// Morphing continu par 4 courbes de Bézier cubiques (port fidèle de buildEyePath du HTML) :
+  /// happy = 0 → œil rond grand ouvert lumineux + 2 reflets spéculaires blancs
+  /// happy = 1 → arc souriant fermé enthousiaste et serein
+  void _paintMorphedEye(
+    Canvas canvas,
+    Offset center,
+    double rx,
+    double ry,
+    double happy,
+    Color color,
+  ) {
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+
+    if (isEmergency) {
+      // Yeux plissés d'alerte
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset.zero, width: rx * 2.1, height: ry * 0.9),
+          Radius.circular(rx * 0.45),
+        ),
+        Paint()..color = color,
+      );
+      canvas.restore();
+      return;
+    }
+
+    const double k = 0.55228475;
+    final double h = happy.clamp(0.0, 1.0);
+
+    // État ouvert (happy = 0)
+    final oL = Offset(-rx, 0);
+    final oT = Offset(0, -ry);
+    final oR = Offset(rx, 0);
+    final oB = Offset(0, ry);
+
+    final oLc1 = Offset(-rx, -ry * k);
+    final oTc2 = Offset(-rx * k, -ry);
+    final oTc1 = Offset(rx * k, -ry);
+    final oRc2 = Offset(rx, -ry * k);
+    final oRc1 = Offset(rx, ry * k);
+    final oBc2 = Offset(rx * k, ry);
+    final oBc1 = Offset(-rx * k, ry);
+    final oLc2 = Offset(-rx, ry * k);
+
+    // État souriant fermé (happy = 1 : croissant lumineux courbé vers le haut)
+    final double arcW = rx * 1.20;
+    final double arcPeakY = -ry * 0.58;
+    final double arcBaseY = ry * 0.28;
+    final double thick = math.max(2.2, ry * 0.28);
+
+    final hL = Offset(-arcW, arcBaseY);
+    final hT = Offset(0, arcPeakY - thick * 0.5);
+    final hR = Offset(arcW, arcBaseY);
+    final hB = Offset(0, arcPeakY + thick * 0.5);
+
+    final hLc1 = Offset(-arcW * 0.72, arcBaseY - ry * 0.55);
+    final hTc2 = Offset(-arcW * 0.45, hT.dy);
+    final hTc1 = Offset(arcW * 0.45, hT.dy);
+    final hRc2 = Offset(arcW * 0.72, arcBaseY - ry * 0.55);
+
+    final hRc1 = Offset(arcW * 0.68, arcBaseY - ry * 0.35);
+    final hBc2 = Offset(arcW * 0.42, hB.dy);
+    final hBc1 = Offset(-arcW * 0.42, hB.dy);
+    final hLc2 = Offset(-arcW * 0.68, arcBaseY - ry * 0.35);
+
+    Offset mix(Offset a, Offset b) => Offset(_lerp(a.dx, b.dx, h), _lerp(a.dy, b.dy, h));
+
+    final pL = mix(oL, hL);
+    final pT = mix(oT, hT);
+    final pR = mix(oR, hR);
+    final pB = mix(oB, hB);
+    final c1 = mix(oLc1, hLc1);
+    final c2 = mix(oTc2, hTc2);
+    final c3 = mix(oTc1, hTc1);
+    final c4 = mix(oRc2, hRc2);
+    final c5 = mix(oRc1, hRc1);
+    final c6 = mix(oBc2, hBc2);
+    final c7 = mix(oBc1, hBc1);
+    final c8 = mix(oLc2, hLc2);
+
+    final path = Path()
+      ..moveTo(pL.dx, pL.dy)
+      ..cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, pT.dx, pT.dy)
+      ..cubicTo(c3.dx, c3.dy, c4.dx, c4.dy, pR.dx, pR.dy)
+      ..cubicTo(c5.dx, c5.dy, c6.dx, c6.dy, pB.dx, pB.dy)
+      ..cubicTo(c7.dx, c7.dy, c8.dx, c8.dy, pL.dx, pL.dy)
+      ..close();
+
+    // Lueur cyan douce autour de l'œil
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color.withOpacity(0.42)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5),
+    );
+    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFF82DFF7)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _lerp(0.8, 1.8, h),
+    );
+
+    // 2 reflets spéculaires blancs dans l'œil ouvert (disparaissent quand l'œil sourit fermé)
+    final double catchOpacity = (1.0 - h * 1.45).clamp(0.0, 1.0) * (1.0 - blink);
+    if (catchOpacity > 0.05) {
+      final double gx = curiosity * rx * 0.18;
+      final double gy = -curiosity * ry * 0.12;
+      canvas.drawCircle(
+        Offset(-rx * 0.30 + gx, -ry * 0.30 + gy),
+        math.max(1.2, rx * 0.24),
+        Paint()..color = Colors.white.withOpacity(0.92 * catchOpacity),
+      );
+      canvas.drawCircle(
+        Offset(rx * 0.26 + gx * 0.7, ry * 0.26 + gy * 0.7),
+        math.max(0.8, rx * 0.11),
+        Paint()..color = Colors.white.withOpacity(0.65 * catchOpacity),
+      );
+    }
+
+    canvas.restore();
+  }
+
   void _paintMouth(
     Canvas canvas,
-    double w,
-    double h,
+    Rect visorRect,
     double dx,
     double dy,
     Color featureColor,
   ) {
-    final double mouthCx = w * 0.5 + dx * 0.35;
-    final double mouthY = h * 0.75 + dy * 0.3;
-    final double mouthHalfW = w * 0.145;
+    final double w = visorRect.width;
+    final double h = visorRect.height;
+    final double mouthCx = visorRect.center.dx + dx;
+    final double mouthY = visorRect.center.dy + h * 0.23 + dy * 0.4;
+    final double mouthHalfW = w * 0.105;
 
     final strokePaint = Paint()
       ..color = featureColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(2.0, h * 0.052)
+      ..strokeWidth = math.max(2.0, h * 0.055)
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
@@ -480,47 +818,52 @@ class _RobotFacePainter extends CustomPainter {
 
     switch (mouthShape) {
       case RobotMouthShape.closed:
-        // 1. BOUCHE FERMÉE (repos / neutre) : ligne horizontale douce fermée
+        // Bouche fermée calme (neutre / veille)
+        final double hw = mouthHalfW * (0.65 - curiosity * 0.12);
         canvas.drawLine(
-          Offset(mouthCx - mouthHalfW * 0.85, mouthY),
-          Offset(mouthCx + mouthHalfW * 0.85, mouthY),
+          Offset(mouthCx - hw, mouthY),
+          Offset(mouthCx + hw, mouthY),
           strokePaint,
         );
         break;
 
       case RobotMouthShape.gentleSmile:
-        // 2. SOURIRE DOUX ATTENTIF (en écoute)
+        // Petit sourire attentif (écoute / curieux)
         final path = Path()
-          ..moveTo(mouthCx - mouthHalfW, mouthY - h * 0.025)
-          ..quadraticBezierTo(mouthCx, mouthY + h * 0.095, mouthCx + mouthHalfW, mouthY - h * 0.025);
+          ..moveTo(mouthCx - mouthHalfW * 0.9, mouthY - h * 0.015)
+          ..quadraticBezierTo(mouthCx, mouthY + h * 0.09, mouthCx + mouthHalfW * 0.9, mouthY - h * 0.015);
         canvas.drawPath(path, strokePaint);
         break;
 
       case RobotMouthShape.bigSmile:
-        // 3. GRAND SOURIRE OUVERT RADIEUX (happy / accueil / ticket confirmé)
-        final double smileW = mouthHalfW * 1.32;
-        final double depth = h * 0.145;
-        final smilePath = Path()
-          ..moveTo(mouthCx - smileW, mouthY - depth * 0.25)
-          ..quadraticBezierTo(mouthCx, mouthY + depth, mouthCx + smileW, mouthY - depth * 0.25)
-          ..close();
-        canvas.drawPath(smilePath, fillPaint);
-        canvas.drawPath(smilePath, strokePaint..strokeWidth = math.max(1.5, h * 0.035));
+        // Grand sourire chaleureux & enthousiaste (exactement comme Scène 3 du HTML)
+        final double smileW = _lerp(mouthHalfW * 0.65, mouthHalfW * 1.45, happyMorph.clamp(0.5, 1.0));
+        final double cornerY = mouthY - h * 0.03;
+        final double ctrlY = mouthY + h * 0.16;
+        final path = Path()
+          ..moveTo(mouthCx - smileW, cornerY)
+          ..quadraticBezierTo(mouthCx, ctrlY, mouthCx + smileW, cornerY);
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = featureColor.withOpacity(0.35)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = strokePaint.strokeWidth * 2.1
+            ..strokeCap = StrokeCap.round
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        );
+        canvas.drawPath(path, strokePaint..strokeWidth = math.max(2.3, h * 0.068));
         break;
 
       case RobotMouthShape.talking:
-        // 4. BOUCHE QUI PARLE (cycle multi-syllabes fluide : O, large D, mi-fermée, ouverte)
+        // Bouche animée multi-syllabes (parle : O / large A / semi-ouvert I / micro-pause)
         final double t = speakPhase;
         if (t < 0.25) {
-          // Syllabe ronde "O"
-          final oval = Rect.fromCenter(
-            center: Offset(mouthCx, mouthY + h * 0.01),
-            width: mouthHalfW * 0.95,
-            height: h * 0.14,
+          canvas.drawOval(
+            Rect.fromCenter(center: Offset(mouthCx, mouthY), width: mouthHalfW * 0.95, height: h * 0.14),
+            fillPaint,
           );
-          canvas.drawOval(oval, fillPaint);
         } else if (t < 0.55) {
-          // Syllabe large ouverte souriante "A / E"
           final double openW = mouthHalfW * 1.25;
           final double openH = h * 0.14;
           final talkPath = Path()
@@ -530,38 +873,32 @@ class _RobotFacePainter extends CustomPainter {
             ..close();
           canvas.drawPath(talkPath, fillPaint);
         } else if (t < 0.78) {
-          // Syllabe semi-ouverte "I"
-          final rect = RRect.fromRectAndRadius(
-            Rect.fromCenter(
-              center: Offset(mouthCx, mouthY),
-              width: mouthHalfW * 1.35,
-              height: h * 0.075,
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(center: Offset(mouthCx, mouthY), width: mouthHalfW * 1.32, height: h * 0.075),
+              Radius.circular(h * 0.04),
             ),
-            Radius.circular(h * 0.04),
+            fillPaint,
           );
-          canvas.drawRRect(rect, fillPaint);
         } else {
-          // Micro-pause entre syllabes (presque fermée)
           final path = Path()
-            ..moveTo(mouthCx - mouthHalfW * 0.85, mouthY)
-            ..quadraticBezierTo(mouthCx, mouthY + h * 0.04, mouthCx + mouthHalfW * 0.85, mouthY);
+            ..moveTo(mouthCx - mouthHalfW * 0.8, mouthY)
+            ..quadraticBezierTo(mouthCx, mouthY + h * 0.04, mouthCx + mouthHalfW * 0.8, mouthY);
           canvas.drawPath(path, strokePaint);
         }
         break;
 
       case RobotMouthShape.thinking:
-        // 5. RÉFLEXION / LOADING : petite bouche pensive oscillante + points
+        // Bouche pensive oscillante (réflexion / loading)
         final double shift = math.sin(ambientPhase * 2.0) * (w * 0.025);
-        final oval = Rect.fromCenter(
-          center: Offset(mouthCx + shift, mouthY + h * 0.01),
-          width: mouthHalfW * 0.65,
-          height: h * 0.085,
+        canvas.drawOval(
+          Rect.fromCenter(center: Offset(mouthCx + shift, mouthY), width: mouthHalfW * 0.62, height: h * 0.085),
+          strokePaint,
         );
-        canvas.drawOval(oval, strokePaint);
         break;
 
       case RobotMouthShape.alert:
-        // 6. ALERTE / ARRÊT D'URGENCE : bouche inquiète inversée
+        // Bouche inquiète inversée (arrêt / erreur)
         final path = Path()
           ..moveTo(mouthCx - mouthHalfW * 0.85, mouthY + h * 0.045)
           ..quadraticBezierTo(mouthCx, mouthY - h * 0.05, mouthCx + mouthHalfW * 0.85, mouthY + h * 0.045);
@@ -571,5 +908,5 @@ class _RobotFacePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _RobotFacePainter oldDelegate) => true;
+  bool shouldRepaint(covariant _HiarCeramicRobotPainter oldDelegate) => true;
 }

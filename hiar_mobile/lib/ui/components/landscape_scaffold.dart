@@ -83,42 +83,12 @@ class LandscapeScaffold extends StatelessWidget {
                           if (showBack)
                             Padding(
                               padding: const EdgeInsets.only(right: 12),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(999),
-                                  onTap: onBack ?? () => Navigator.of(context).maybePop(),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(color: HiarColors.border),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: HiarColors.marine.withOpacity(0.08),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.arrow_back_rounded, color: HiarColors.marine, size: 17),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          "Retour",
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: HiarColors.marine,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
+                              child: HiarCircularButton(
+                                icon: Icons.arrow_back_rounded,
+                                size: 36,
+                                iconSize: 19,
+                                tooltip: "Retour",
+                                onTap: onBack ?? () => Navigator.of(context).maybePop(),
                               ),
                             ),
                           Expanded(

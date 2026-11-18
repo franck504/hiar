@@ -62,29 +62,29 @@ class VoiceRail extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            HiarColors.primaryLight,
-            HiarColors.primarySoft,
-            HiarColors.turquoisePale,
+            Color(0xFFFAFDFF),
+            Color(0xFFF0F7FD),
+            Color(0xFFE5F2FB),
           ],
           stops: [0.0, 0.55, 1.0],
         ),
         border: Border(
-          right: BorderSide(color: Colors.white.withOpacity(0.65), width: 1.5),
+          right: BorderSide(color: HiarColors.border.withOpacity(0.75), width: 1.2),
         ),
         boxShadow: HiarShadows.card,
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         child: Column(
           children: [
-            // 1. Tête animée du robot HIAR (sourire, yeux qui bougent, inclinaison)
+            // 1. Tête animée du robot HIAR (coque blanche, croix jaune mobile, yeux & bouches dynamiques)
             AnimatedRobotFace(
               expression: resolvedExpression,
-              width: 82,
-              height: 60,
+              width: 98,
+              height: 72,
               showLoadingRing: isThinking,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
             // 2. Libellé d'état vocal (+ pastille de chargement en mode réflexion)
             if (isThinking)

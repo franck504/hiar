@@ -31,12 +31,12 @@
   --turquoise-pale: #B3E3F1;
   --turquoise-light: #9DCFCF;
 
-  /* 4. Surfaces & backgrounds */
-  --background: #F4F8FB;
-  --background-off: #F8F9FE;
+  /* 4. Surfaces & backgrounds (fond très blanc lumineux) */
+  --background: #FAFDFE;
+  --background-off: #FCFDFE;
   --background-blue: #D9ECFB;
   --surface: #FFFFFF;
-  --surface-soft: #E7F2F9;
+  --surface-soft: #EEF6FC;
 
   /* 5. Textes & fonctionnels */
   --text-primary: #19313A;
@@ -47,11 +47,11 @@
   /* 6. Bordures & séparateurs */
   --border: #D0E5EF;
   --divider: #E6EEF2;
-  --border-glass: rgba(255, 255, 255, 0.65);
+  --border-glass: rgba(255, 255, 255, 0.78);
 
   /* 7. Dégradés officiels */
   --gradient-main: linear-gradient(135deg, #D9ECFB 0%, #C4E7FA 45%, #82DFF7 100%);
-  --gradient-canvas: linear-gradient(135deg, #D9ECFB 0%, #E7F2F9 45%, #F4F8FB 100%);
+  --gradient-canvas: linear-gradient(135deg, #FFFFFF 0%, #F8FBFE 60%, #EDF6FD 100%);
   --gradient-teal: linear-gradient(135deg, #B3E3F1 0%, #A7D6DA 50%, #9DCFCF 100%);
   --gradient-medical: linear-gradient(135deg, #ECFFF9 0%, #C8F1E7 50%, #82DFF7 100%);
   --gradient-hero: linear-gradient(135deg, #19313A 0%, #3B6E71 50%, #2C7777 100%);

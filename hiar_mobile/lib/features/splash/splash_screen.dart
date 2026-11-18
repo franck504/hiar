@@ -15,7 +15,19 @@ class SplashScreen extends StatelessWidget {
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onStart,
-        child: HiarAtmosphericBackground(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(0.0, -0.1),
+              radius: 1.15,
+              colors: [
+                Color(0xFFFFFFFF),
+                Color(0xFFF7FBFE),
+                Color(0xFFEAF4FB),
+              ],
+              stops: [0.0, 0.55, 1.0],
+            ),
+          ),
           child: SizedBox.expand(
             child: Center(
               child: SingleChildScrollView(
@@ -24,13 +36,13 @@ class SplashScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Visage animé grand format du robot HIAR (cligne, sourit, bouge les yeux, s'incline)
+                    // Séquence logo HIAR : neutre yeux grands ouverts → curieux tête inclinée → sourire enthousiaste yeux fermés
                     const AnimatedRobotFace(
-                      expression: RobotFaceExpression.happy,
-                      width: 158,
-                      height: 116,
+                      playIntroSequence: true,
+                      width: 196,
+                      height: 146,
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     const HiarPastelBadge(
                       label: "Assistant Hospitalier HIAR",
                       icon: Icons.medical_services_outlined,
