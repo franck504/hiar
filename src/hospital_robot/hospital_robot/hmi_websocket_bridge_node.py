@@ -120,11 +120,11 @@ class HMIWebSocketBridgeNode(Node):
                 self.get_logger().info(f"[LLM] Variables chargées depuis {env_loaded}")
 
         default_backend = os.environ.get("HIAR_LLM_BACKEND", "hybrid_gemini_qwen").strip() or "hybrid_gemini_qwen"
-        default_gemini_model = os.environ.get("HIAR_GEMINI_MODEL", "gemini-2.5-flash-lite").strip() or "gemini-2.5-flash-lite"
+        default_gemini_model = os.environ.get("HIAR_GEMINI_MODEL", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
         try:
-            default_gemini_timeout = float(os.environ.get("HIAR_GEMINI_TIMEOUT", "4.0"))
+            default_gemini_timeout = float(os.environ.get("HIAR_GEMINI_TIMEOUT", "8.0"))
         except ValueError:
-            default_gemini_timeout = 4.0
+            default_gemini_timeout = 8.0
         try:
             default_gemini_cooldown = int(os.environ.get("HIAR_GEMINI_COOLDOWN", "60"))
         except ValueError:

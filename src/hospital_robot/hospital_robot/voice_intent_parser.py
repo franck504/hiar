@@ -400,7 +400,7 @@ class VoiceIntentParser:
             return "qwen2.5:0.5b"
         cfg = self.llm_engine.config
         if backend_used.startswith("gemini"):
-            return getattr(cfg, "gemini_model", "gemini-2.5-flash-lite")
+            return getattr(cfg, "gemini_model", "gemini-3.5-flash-lite")
         if backend_used == "cache":
             return "cache-lru"
         return getattr(cfg, "model_name", "qwen2.5:0.5b")

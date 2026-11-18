@@ -139,8 +139,8 @@ class LLMConfig:
     max_tokens: int = 150
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     # --- Gemini API (primaire) ---
-    gemini_model: str = "gemini-2.5-flash-lite"
-    gemini_timeout_sec: float = 4.0
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_timeout_sec: float = 8.0
     gemini_cooldown_sec: int = 60
     # --- Cache LRU ---
     cache_ttl_min: int = 10
@@ -364,6 +364,14 @@ class GeminiBackend(LLMBackendInterface):
         return self.available_key_count() > 0
 
     def _build_request_bytes(self, user_prompt: str, config: LLMConfig) -> bytes:
+        gen_cfg: Dict[str, Any] = {
+            "responseMimeType": "application/json",
+            "temperature": config.temperature,
+            "maxOutputTokens": config.max_tokens,
+        }
+        if "gemini-3" in config.gemini_model.lower():
+            gen_cfg["thinkingConfig"] = {"thinkingLevel": "MINIMAL"}
+
         body = {
             "contents": [
                 {
@@ -372,11 +380,7 @@ class GeminiBackend(LLMBackendInterface):
                     ]
                 }
             ],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "temperature": config.temperature,
-                "maxOutputTokens": config.max_tokens,
-            },
+            "generationConfig": gen_cfg,
         }
         return json.dumps(body).encode("utf-8")
 
@@ -750,7 +754,18 @@ class LLMIntentEngine:
 
         start = time.time()
         try:
-            ollama.generate("Bonjour robot", self.config)
+            # Timeout généreux pour le chargement à froid en RAM sur Raspberry Pi 4
+            warm_cfg = LLMConfig(
+                enabled=self.config.enabled,
+                backend="ollama",
+                host=self.config.host,
+                model_name=self.config.model_name,
+                timeout_sec=max(45.0, self.config.timeout_sec),
+                temperature=0.0,
+                max_tokens=16,
+                system_prompt="Réponds {} en JSON.",
+            )
+            ollama.generate("ok", warm_cfg)
             latency_ms = (time.time() - start) * 1000.0
             self._qwen_warmed = True
             return {"qwen_available": True, "warmed": True, "latency_ms": latency_ms}
