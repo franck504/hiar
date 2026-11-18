@@ -27,6 +27,14 @@ sleep 1
 source /opt/ros/humble/setup.bash
 source "$PROJECT_ROOT/install/setup.bash"
 
+# Charger les variables d'environnement locales (clés API Gemini, jeton staff, etc.)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$PROJECT_ROOT/.env"
+    set +a
+fi
+
 echo "=========================================================="
 echo "🤖 Démarrage des nœuds ROS 2 + Serveur Web HIAR..."
 echo "=========================================================="

@@ -153,8 +153,15 @@ class VoiceIntentParser:
         raw_text: str,
         confidence: float = 1.0,
         use_llm: bool = True,
+        current_screen: str = "",
     ) -> ParsedIntent:
-        """Analyse le texte brut et renvoie une intention typée."""
+        """Analyse le texte brut selon l'architecture à 5 niveaux :
+          1. Réflexe de sécurité local (STOP) — < 1 ms, jamais réseau
+          2. Cache LRU local — < 1 ms, zéro quota
+          3. Gemini API primaire (rotation de clés)
+          4. Qwen 2.5 local (fallback automatique)
+          5. Parseur déterministe (filet de sécurité final)
+        """
         norm = normalize_text(raw_text)
 
         if not norm:
@@ -172,7 +179,7 @@ class VoiceIntentParser:
                 details={"fragment": norm},
             )
 
-        # 1. ARRÊT D'URGENCE (Priorité absolue)
+        # 1. ARRÊT D'URGENCE — RÉFLEXE LOCAL ABSOLU (< 1 ms, jamais de réseau/LLM)
         if re.search(self.STOP_REGEX, norm):
             return ParsedIntent(
                 intent_type="STOP",
@@ -180,7 +187,49 @@ class VoiceIntentParser:
                 ros_command="STOP",
             )
 
-        # 2. REPRENDRE LE GUIDAGE
+        # 2-4. CACHE LRU → GEMINI API (rotation clés) → QWEN LOCAL (secours)
+        llm_attempted = False
+        llm_latency_ms = 0.0
+        llm_backend_used = ""
+        if use_llm and self.enable_llm and self.llm_engine and self.llm_engine.is_available():
+            llm_attempted = True
+            try:
+                llm_res = self.llm_engine.infer(raw_text, current_screen=current_screen)
+                llm_latency_ms = getattr(llm_res, "latency_ms", 0.0) if llm_res else 0.0
+                llm_backend_used = getattr(llm_res, "backend_used", "") if llm_res else ""
+                if llm_res and llm_res.success:
+                    intent = self._convert_llm_response(llm_res, confidence, raw_text)
+                    if intent is not None:
+                        return intent
+            except Exception as e:
+                logger.warning(f"Error during LLM inference: {e}")
+
+        # 5. FILET DE SÉCURITÉ DÉTERMINISTE (si LLM désactivé, hors ligne, erreur ou UNKNOWN)
+        det_intent = self._parse_deterministic(norm, confidence)
+        if det_intent is not None:
+            if llm_attempted:
+                det_intent.details["deterministic_fallback"] = True
+                det_intent.details["llm_attempted"] = True
+                det_intent.details["latency_ms"] = llm_latency_ms
+                det_intent.details["backend_used"] = llm_backend_used
+            return det_intent
+
+        # 6. INCONNU / NON ACTIONNABLE DÉFINITIF
+        details: Dict[str, Any] = {"original_text": raw_text}
+        if llm_attempted:
+            details["llm_attempted"] = True
+            details["latency_ms"] = llm_latency_ms
+            details["backend_used"] = llm_backend_used
+            details["model"] = self._active_model_label(llm_backend_used)
+        return ParsedIntent(
+            intent_type="UNKNOWN",
+            confidence=confidence,
+            details=details,
+        )
+
+    def _parse_deterministic(self, norm: str, confidence: float) -> Optional[ParsedIntent]:
+        """Parseur déterministe par mots-clés (filet de sécurité final / mode hors LLM)."""
+        # REPRENDRE LE GUIDAGE
         if re.search(self.RESUME_REGEX, norm):
             return ParsedIntent(
                 intent_type="RESUME",
@@ -189,7 +238,7 @@ class VoiceIntentParser:
                 ros_command="RESUME",
             )
 
-        # 3. TERMINER LA MISSION OU RETOUR ACCUEIL
+        # TERMINER LA MISSION OU RETOUR ACCUEIL
         if re.search(self.FINISH_REGEX, norm):
             return ParsedIntent(
                 intent_type="FINISH",
@@ -198,7 +247,7 @@ class VoiceIntentParser:
                 ros_command="HOME",
             )
 
-        # 4. COMMENCER (Depuis l'écran de veille)
+        # COMMENCER (Depuis l'écran de veille)
         if re.search(self.START_REGEX, norm):
             return ParsedIntent(
                 intent_type="START",
@@ -206,7 +255,7 @@ class VoiceIntentParser:
                 label="Commencer",
             )
 
-        # 5. CONFIRMATION VOCALE (OUI / NON)
+        # CONFIRMATION VOCALE (OUI / NON)
         if re.search(self.CONFIRM_YES_REGEX, norm):
             return ParsedIntent(
                 intent_type="CONFIRM_YES",
@@ -220,7 +269,7 @@ class VoiceIntentParser:
                 label="Annuler",
             )
 
-        # 6. POLITESSE : MERCI
+        # POLITESSE : MERCI
         if re.search(self.THANKS_REGEX, norm):
             return ParsedIntent(
                 intent_type="THANKS",
@@ -228,7 +277,7 @@ class VoiceIntentParser:
                 label="Remerciement",
             )
 
-        # 7. POLITESSE : BONJOUR
+        # POLITESSE : BONJOUR
         if re.search(self.GREETING_REGEX, norm):
             return ParsedIntent(
                 intent_type="GREETING",
@@ -236,7 +285,7 @@ class VoiceIntentParser:
                 label="Salutation",
             )
 
-        # 7. RETOUR ACCUEIL
+        # RETOUR ACCUEIL
         if re.search(self.HOME_REGEX, norm):
             return ParsedIntent(
                 intent_type="HOME",
@@ -244,7 +293,7 @@ class VoiceIntentParser:
                 label="Accueil",
             )
 
-        # 5. ORIENTATION VERS UN SERVICE
+        # ORIENTATION VERS UN SERVICE
         for dest_key, info in self.DEPARTMENTS.items():
             if re.search(info["regex"], norm):
                 return ParsedIntent(
@@ -257,7 +306,7 @@ class VoiceIntentParser:
                     ros_request={"category": "ORIENTATION", "destination": dest_key},
                 )
 
-        # 6. MESURE DES SIGNES VITAUX
+        # MESURE DES SIGNES VITAUX
         if re.search(self.VITALS_REGEX, norm):
             return ParsedIntent(
                 intent_type="VITALS",
@@ -269,7 +318,7 @@ class VoiceIntentParser:
                 ros_request={"category": "CONSULTATION", "action": "VITAL_SIGNS"},
             )
 
-        # 7. INFORMATION SANTE PUBLIQUE SPÉCIFIQUE (Fiches OMS)
+        # INFORMATION SANTE PUBLIQUE SPÉCIFIQUE (Fiches OMS)
         for topic_key, info in self.TOPICS.items():
             if re.search(info["regex"], norm):
                 return ParsedIntent(
@@ -282,7 +331,7 @@ class VoiceIntentParser:
                     ros_request={"category": "INFORMATION", "topic": topic_key},
                 )
 
-        # 8. RENSEIGNEMENTS / INFORMATIONS GÉNÉRALES
+        # RENSEIGNEMENTS / INFORMATIONS GÉNÉRALES
         if re.search(self.INFO_GENERAL_REGEX, norm):
             return ParsedIntent(
                 intent_type="INFORMATION_GENERAL",
@@ -292,7 +341,7 @@ class VoiceIntentParser:
                 ros_request={"category": "INFORMATION", "topic": "MALARIA"},
             )
 
-        # 9. TICKET DE CONSULTATION
+        # TICKET DE CONSULTATION
         if re.search(self.CONSULT_TICKET, norm):
             return ParsedIntent(
                 intent_type="CONSULTATION_TICKET",
@@ -300,7 +349,7 @@ class VoiceIntentParser:
                 label="Ticket",
             )
 
-        # 10. SAISIE VOCALE DU MOTIF DE CONSULTATION
+        # SAISIE VOCALE DU MOTIF DE CONSULTATION
         if re.search(self.CONSULT_REASON_SUIVI, norm):
             return ParsedIntent(
                 intent_type="CONSULTATION_REASON",
@@ -316,7 +365,7 @@ class VoiceIntentParser:
                 label="Consultation générale",
             )
 
-        # 11. NAVIGATION DANS LES ÉTAPES DE CONSULTATION
+        # NAVIGATION DANS LES ÉTAPES DE CONSULTATION
         if re.search(self.CONSULT_STEP_NEXT, norm):
             return ParsedIntent(
                 intent_type="CONSULTATION_STEP",
@@ -332,7 +381,7 @@ class VoiceIntentParser:
                 label="Précédent",
             )
 
-        # 12. OUVERTURE DE CONSULTATION & RENDEZ-VOUS
+        # OUVERTURE DE CONSULTATION & RENDEZ-VOUS
         if re.search(self.CONSULTATION_REGEX, norm):
             return ParsedIntent(
                 intent_type="CONSULTATION",
@@ -344,33 +393,17 @@ class VoiceIntentParser:
                 ros_request={"category": "CONSULTATION", "action": "APPOINTMENT"},
             )
 
-        # 13. INCONNU PAR MOTS-CLÉS DÉTERMINISTES -> TENTATIVE D'INFÉRENCE LLM
-        if use_llm and self.enable_llm and self.llm_engine and self.llm_engine.is_available():
-            try:
-                llm_res = self.llm_engine.infer(raw_text)
-                if llm_res and llm_res.success:
-                    intent = self._convert_llm_response(llm_res, confidence, raw_text)
-                    if intent:
-                        return intent
-                return ParsedIntent(
-                    intent_type="UNKNOWN",
-                    confidence=confidence,
-                    details={
-                        "original_text": raw_text,
-                        "llm_attempted": True,
-                        "latency_ms": getattr(llm_res, "latency_ms", 0.0) if llm_res else 0.0,
-                        "model": getattr(self.llm_engine.config, "model_name", "qwen2.5:0.5b"),
-                    },
-                )
-            except Exception as e:
-                logger.warning(f"Error during LLM fallback inference: {e}")
+        return None
 
-        # 14. INCONNU / NON ACTIONNABLE DÉFINITIF
-        return ParsedIntent(
-            intent_type="UNKNOWN",
-            confidence=confidence,
-            details={"original_text": raw_text},
-        )
+    def _active_model_label(self, backend_used: str = "") -> str:
+        if not self.llm_engine:
+            return "qwen2.5:0.5b"
+        cfg = self.llm_engine.config
+        if backend_used.startswith("gemini"):
+            return getattr(cfg, "gemini_model", "gemini-2.5-flash-lite")
+        if backend_used == "cache":
+            return "cache-lru"
+        return getattr(cfg, "model_name", "qwen2.5:0.5b")
 
     def _convert_llm_response(
         self,
@@ -381,13 +414,17 @@ class VoiceIntentParser:
         """Convertit un LLMResponse en ParsedIntent compatible ROS 2."""
         target = res.target
         intent_type = res.intent
-        model_name = getattr(self.llm_engine.config, "model_name", "qwen2.5:0.5b") if self.llm_engine else "qwen2.5:0.5b"
+        backend_used = getattr(res, "backend_used", "")
+        cache_hit = bool(getattr(res, "cache_hit", False))
+        model_name = self._active_model_label(backend_used)
         latency_ms = getattr(res, "latency_ms", 0.0)
 
         def _make_details(extra_screen: Optional[str] = None):
             return {
                 "llm_text_to_speak": res.text_to_speak,
                 "llm_generated": True,
+                "cache_hit": cache_hit,
+                "backend_used": backend_used,
                 "screen": res.screen or extra_screen,
                 "original_text": raw_text,
                 "latency_ms": latency_ms,
@@ -401,6 +438,56 @@ class VoiceIntentParser:
                 confidence=confidence,
                 label="Bonjour",
                 details=_make_details("home"),
+            )
+
+        if intent_type == "CONFIRM_YES":
+            return ParsedIntent(
+                intent_type="CONFIRM_YES",
+                confidence=confidence,
+                label="Confirmer",
+                details=_make_details(),
+            )
+
+        if intent_type == "CONFIRM_NO":
+            return ParsedIntent(
+                intent_type="CONFIRM_NO",
+                confidence=confidence,
+                label="Annuler",
+                details=_make_details("home"),
+            )
+
+        if intent_type == "RESUME":
+            return ParsedIntent(
+                intent_type="RESUME",
+                confidence=confidence,
+                label="Reprendre",
+                ros_command="RESUME",
+                details=_make_details("mission"),
+            )
+
+        if intent_type == "FINISH":
+            return ParsedIntent(
+                intent_type="FINISH",
+                confidence=confidence,
+                label="Terminer",
+                ros_command="HOME",
+                details=_make_details("home"),
+            )
+
+        if intent_type == "START":
+            return ParsedIntent(
+                intent_type="START",
+                confidence=confidence,
+                label="Commencer",
+                details=_make_details("home"),
+            )
+
+        if intent_type == "THANKS":
+            return ParsedIntent(
+                intent_type="THANKS",
+                confidence=confidence,
+                label="Remerciement",
+                details=_make_details(),
             )
 
         if (target and target in self.DEPARTMENTS) or intent_type == "ORIENTATION":
@@ -428,6 +515,16 @@ class VoiceIntentParser:
                 target_value=topic_key,
                 label=label,
                 ros_request={"category": "INFORMATION", "topic": topic_key},
+                details=_make_details("information"),
+            )
+
+        if intent_type == "INFORMATION_GENERAL":
+            return ParsedIntent(
+                intent_type="INFORMATION_GENERAL",
+                confidence=confidence,
+                category="INFORMATION",
+                label="Fiches de santé",
+                ros_request={"category": "INFORMATION", "topic": "MALARIA"},
                 details=_make_details("information"),
             )
 

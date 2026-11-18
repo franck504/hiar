@@ -9,6 +9,7 @@ Ce nœud héberge le serveur WebSocket central (port 5000) et fait la passerelle
 import asyncio
 import json
 import logging
+import os
 import re
 import socket
 import subprocess
@@ -69,14 +70,15 @@ except ImportError:
 try:
     from hospital_robot.voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from hospital_robot.vitals_data_parser import build_vitals_instruction, parse_vitals_frame
-    from hospital_robot.llm_intent_engine import LLMConfig
+    from hospital_robot.llm_intent_engine import LLMConfig, load_dotenv_file
 except ImportError:
     from voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from vitals_data_parser import build_vitals_instruction, parse_vitals_frame
     try:
-        from llm_intent_engine import LLMConfig
+        from llm_intent_engine import LLMConfig, load_dotenv_file
     except ImportError:
         LLMConfig = None  # type: ignore
+        load_dotenv_file = None  # type: ignore
 
 import websockets
 try:
@@ -111,14 +113,34 @@ class HMIWebSocketBridgeNode(Node):
     ):
         super().__init__(node_name)
 
+        # Charger .env si présent (GEMINI_API_KEY_1..N, HIAR_GEMINI_MODEL, ...)
+        if load_dotenv_file is not None:
+            env_loaded = load_dotenv_file()
+            if env_loaded is not None:
+                self.get_logger().info(f"[LLM] Variables chargées depuis {env_loaded}")
+
+        default_backend = os.environ.get("HIAR_LLM_BACKEND", "hybrid_gemini_qwen").strip() or "hybrid_gemini_qwen"
+        default_gemini_model = os.environ.get("HIAR_GEMINI_MODEL", "gemini-2.5-flash-lite").strip() or "gemini-2.5-flash-lite"
+        try:
+            default_gemini_timeout = float(os.environ.get("HIAR_GEMINI_TIMEOUT", "4.0"))
+        except ValueError:
+            default_gemini_timeout = 4.0
+        try:
+            default_gemini_cooldown = int(os.environ.get("HIAR_GEMINI_COOLDOWN", "60"))
+        except ValueError:
+            default_gemini_cooldown = 60
+
         if ROS_AVAILABLE:
             self.declare_parameter("websocket_host", "0.0.0.0")
             self.declare_parameter("websocket_port", 5000)
             self.declare_parameter("enable_llm", True)
-            self.declare_parameter("llm_backend", "ollama")
+            self.declare_parameter("llm_backend", default_backend)
             self.declare_parameter("llm_host", "http://127.0.0.1:11434")
             self.declare_parameter("llm_model", "qwen2.5:0.5b")
             self.declare_parameter("llm_timeout", 15.0)
+            self.declare_parameter("gemini_model", default_gemini_model)
+            self.declare_parameter("gemini_timeout", default_gemini_timeout)
+            self.declare_parameter("gemini_cooldown", default_gemini_cooldown)
 
             self.host = host or str(self.get_parameter("websocket_host").value)
             self.port = port or int(self.get_parameter("websocket_port").value)
@@ -127,16 +149,22 @@ class HMIWebSocketBridgeNode(Node):
             llm_host = str(self.get_parameter("llm_host").value)
             llm_model = str(self.get_parameter("llm_model").value)
             llm_timeout = float(self.get_parameter("llm_timeout").value)
+            gemini_model = str(self.get_parameter("gemini_model").value)
+            gemini_timeout = float(self.get_parameter("gemini_timeout").value)
+            gemini_cooldown = int(self.get_parameter("gemini_cooldown").value)
         else:
             self.host = host or "0.0.0.0"
             self.port = port or 5000
             enable_llm = True
-            llm_backend = "ollama"
+            llm_backend = default_backend
             llm_host = "http://127.0.0.1:11434"
             llm_model = "qwen2.5:0.5b"
             llm_timeout = 15.0
+            gemini_model = default_gemini_model
+            gemini_timeout = default_gemini_timeout
+            gemini_cooldown = default_gemini_cooldown
 
-        # Composants de traitement métier (Parseur hybride Déterministe + LLM)
+        # Composants de traitement métier (Sécurité locale → Cache → Gemini → Qwen → Déterministe)
         if LLMConfig is not None:
             llm_cfg = LLMConfig(
                 enabled=enable_llm,
@@ -144,35 +172,55 @@ class HMIWebSocketBridgeNode(Node):
                 host=llm_host,
                 model_name=llm_model,
                 timeout_sec=llm_timeout,
+                gemini_model=gemini_model,
+                gemini_timeout_sec=gemini_timeout,
+                gemini_cooldown_sec=gemini_cooldown,
             )
             self.intent_parser = VoiceIntentParser(enable_llm=enable_llm, llm_config=llm_cfg)
         else:
             self.intent_parser = VoiceIntentParser()
 
-        # Préchauffage en arrière-plan pour garder le modèle Qwen chargé en RAM
+        # Préchauffage en arrière-plan de Qwen 2.5 en RAM (Option 2 : secours immédiat)
         self._llm_status: str = "offline"
         self._llm_detail: str = "Désactivé"
+        self._llm_prewarming: bool = False
         if getattr(self.intent_parser, "enable_llm", False) and getattr(self.intent_parser, "llm_engine", None):
-            self._llm_status = "warn"
-            self._llm_detail = "Initialisation Qwen 2.5..."
+            engine = self.intent_parser.llm_engine
+            self._llm_status, self._llm_detail = engine.get_diagnostics_status()
+            self._llm_prewarming = True
+
             def _prewarm_llm():
                 try:
                     time.sleep(1.0)
-                    if self.intent_parser.llm_engine.is_available():
-                        self._llm_status = "warn"
-                        self._llm_detail = "Chargement RAM..."
-                        self.get_logger().info("[LLM] 🔥 Pre-warming LLM Qwen 2.5 in RAM...")
-                        res = self.intent_parser.llm_engine.infer("Bonjour robot")
-                        self._llm_status = "ok"
-                        self._llm_detail = f"Qwen 2.5 prêt ({res.latency_ms:.0f} ms)"
-                        self.get_logger().info(f"[LLM] ✅ Qwen 2.5 prêt (latency={res.latency_ms:.0f}ms).")
+                    backend_obj = getattr(engine, "_backend", None)
+                    gemini_keys = getattr(getattr(backend_obj, "gemini", backend_obj), "key_count", 0)
+                    if gemini_keys > 0:
+                        self.get_logger().info(
+                            f"[LLM] ☁️ Gemini API primaire prêt ({gemini_keys} clé(s), modèle={engine.config.gemini_model})."
+                        )
                     else:
-                        self._llm_status = "offline"
-                        self._llm_detail = "Ollama indisponible"
+                        self.get_logger().info(
+                            "[LLM] ℹ️ Aucune clé GEMINI_API_KEY_N dans .env — fonctionnement sur Qwen local."
+                        )
+
+                    self.get_logger().info("[LLM] 🔥 Pré-chauffage secours Qwen 2.5 en RAM...")
+                    res = engine.prewarm_local_fallback()
+                    if res.get("warmed"):
+                        self.get_logger().info(
+                            f"[LLM] ✅ Qwen 2.5 secours prêt en RAM ({res.get('latency_ms', 0.0):.0f}ms)."
+                        )
+                    elif res.get("qwen_available"):
+                        self.get_logger().warning(
+                            f"[LLM] ⚠️ Pré-chauffage Qwen 2.5 partiel : {res.get('error', 'timeout')}"
+                        )
+                    else:
+                        self.get_logger().info("[LLM] ℹ️ Ollama (Qwen secours) non démarré localement.")
                 except Exception as ex:
-                    self._llm_status = "warn"
-                    self._llm_detail = f"Erreur: {ex}"
                     self.get_logger().warning(f"[LLM] Pre-warm warning: {ex}")
+                finally:
+                    self._llm_prewarming = False
+                    self._llm_status, self._llm_detail = engine.get_diagnostics_status()
+
             threading.Thread(target=_prewarm_llm, daemon=True).start()
 
         self._pending_orientation: Optional[Dict[str, Any]] = None
@@ -557,8 +605,12 @@ class HMIWebSocketBridgeNode(Node):
         self._last_stt_time = now
         self.get_logger().info(f"[MOBILE] 🎤 Voix STT: \"{text}\" (conf={confidence:.2f})")
 
-        # Analyse et classification d'intention
-        intent = self.intent_parser.parse(text, confidence=confidence)
+        # Analyse et classification d'intention (avec contexte écran courant)
+        intent = self.intent_parser.parse(
+            text,
+            confidence=confidence,
+            current_screen=self._current_screen,
+        )
 
         # Filtrage des fragments isolés ("je", "le", etc.) : on attend la suite sans parler
         if intent.intent_type == "IGNORED_FRAGMENT":
@@ -566,13 +618,21 @@ class HMIWebSocketBridgeNode(Node):
             return
 
         is_llm = bool(intent.details.get("llm_generated", False))
+        is_cache = bool(intent.details.get("cache_hit", False))
+        backend_used = str(intent.details.get("backend_used", ""))
         latency_ms = float(intent.details.get("latency_ms", 0.0))
         model = str(intent.details.get("model", "qwen2.5:0.5b"))
 
-        if is_llm:
-            engine_str = f"🧠 LLM {model} (Inférence Ollama | Latence: {latency_ms:.0f}ms)"
+        if is_cache:
+            engine_str = "⚡ Cache LRU local (Zéro quota | Latence: <1ms)"
+        elif is_llm and backend_used.startswith("gemini"):
+            engine_str = f"☁️ Gemini API {model} ({backend_used} | Latence: {latency_ms:.0f}ms)"
+        elif is_llm:
+            engine_str = f"🧠 Qwen local {model} ({backend_used or 'ollama'} | Latence: {latency_ms:.0f}ms)"
+        elif intent.intent_type == "STOP":
+            engine_str = "🛑 Réflexe Sécurité Local (STOP prioritaire | Latence: <1ms)"
         elif intent.intent_type != "UNKNOWN":
-            engine_str = "⚙️ Sécurité Déterministe (Regex Réflexe | Latence: <1ms)"
+            engine_str = "⚙️ Filet Déterministe (Regex local | Latence: <1ms)"
         else:
             engine_str = f"❓ Non reconnu / Hors périmètre (Inconnu | Latence: {latency_ms:.0f}ms)"
 
@@ -1165,6 +1225,14 @@ class HMIWebSocketBridgeNode(Node):
 
         primary_ip, all_ips, _ = self._collect_network_info()
 
+        llm_status, llm_detail = self._llm_status, self._llm_detail
+        engine = getattr(self.intent_parser, "llm_engine", None)
+        if engine is not None and hasattr(engine, "get_diagnostics_status") and not self._llm_prewarming:
+            try:
+                llm_status, llm_detail = engine.get_diagnostics_status()
+            except Exception:
+                pass
+
         return {
             "ts": round(time.time(), 2),
             "firmware_diagnostics": fw_mode,
@@ -1179,8 +1247,8 @@ class HMIWebSocketBridgeNode(Node):
                 "detail": nodes_detail,
             },
             "llm": {
-                "status": self._llm_status,
-                "detail": self._llm_detail,
+                "status": llm_status,
+                "detail": llm_detail,
             },
             "network": {
                 "hostname": socket.gethostname(),
