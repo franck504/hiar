@@ -65,6 +65,7 @@ def load_dotenv_file(env_path: Optional[Path] = None) -> Optional[Path]:
         return None
 
     try:
+        parsed: Dict[str, str] = {}
         for raw_line in target.read_text(encoding="utf-8").splitlines():
             line = raw_line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -78,6 +79,8 @@ def load_dotenv_file(env_path: Optional[Path] = None) -> Optional[Path]:
                 continue
             if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
                 val = val[1:-1]
+            parsed[key] = val
+        for key, val in parsed.items():
             os.environ.setdefault(key, val)
         return target
     except Exception as exc:
