@@ -1,0 +1,36 @@
+flowchart TB
+    %% Figure 22 : Diagramme de déploiement physique et logiciel du système distribué HIAR
+
+    subgraph D_PHONE["&laquo; device &raquo; Terminal Tactile Usager (Smartphone / Tablette)"]
+        A_FLUTTER["&laquo; artifact &raquo; Application Flutter « Neo Clinic »<br/>(Interface native Android &amp; Navigateur Web Chrome)"]
+    end
+
+    subgraph D_RPI["&laquo; device &raquo; Raspberry Pi 4 Model B (4 Go, Ubuntu 22.04 LTS)"]
+        subgraph ENV_ROS["&laquo; execution environment &raquo; ROS 2 Humble"]
+            N1["hmi_websocket_bridge_node (:8765)"]
+            N2["navigation_decision_node (FSM)"]
+            N3["robot_supervisor_node (Watchdog 10 Hz)"]
+            N4["obstacle_detector_node (Seuils 20 cm)"]
+            N5["esp32_interface_node (Passerelle série USB)"]
+        end
+
+        subgraph ENV_SERVICES["Services Applicatifs Système"]
+            S_FLASK["&laquo; service &raquo; Serveur Web Flask :5000"]
+            S_OLLAMA["&laquo; service &raquo; Moteur Ollama local (Qwen 2.5 0.5B)"]
+            A_SQLITE[("<< artifact >> Base SQLite3<br/>appointments.sqlite3")]
+        end
+    end
+
+    subgraph D_ESP["&laquo; device &raquo; ESP32-WROOM-32 (240 MHz)"]
+        A_FIRMWARE["&laquo; artifact &raquo; Firmware d'Intégration C++<br/>• Multiplexage acoustique 35 ms (3x HC-SR04)<br/>• Filtre médian glissant 3 points<br/>• Chaîne photopléthysmographique BPM &amp; SpO2 %<br/>• Arrêt d'urgence matériel (&lt; 25 cm, timeout 2 s)"]
+    end
+
+    subgraph D_HW["&laquo; device &raquo; Châssis &amp; Électronique de Puissance"]
+        HW_L298N["Pont en H L298N &amp; 2 Moteurs DC à réducteur"]
+        HW_SENSORS["Ceinture 3x HC-SR04 (Avant, Gauche, Droite)<br/>Sonde DS18B20 (1-Wire) &amp; Capteur MAX30102 (I²C)"]
+        HW_POWER["Pack Accumulateurs Li-ion 18650 (7,4 V) &amp; Powerbank 5 V"]
+    end
+
+    D_PHONE <-->|"Wi-Fi WPA2 (HIAR-DEMO)<br/>WebSocket JSON :8765 / HTTP :5000"| D_RPI
+    D_RPI <-->|"Liaison série USB (/dev/ttyUSB0)<br/>115200 bauds (Trames texte)"| D_ESP
+    D_ESP -->|"Signaux logiques, PWM 20 kHz, Bus I²C &amp; 1-Wire"| D_HW

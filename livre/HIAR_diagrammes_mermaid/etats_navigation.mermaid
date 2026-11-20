@@ -1,0 +1,29 @@
+stateDiagram-v2
+    %% Figure 17 : Machine à états finis (FSM) de la navigation réactive autonome
+
+    [*] --> IDLE : Initialisation du nœud ROS 2
+    
+    IDLE --> DECIDE : Requête /navigation/request valide & Capteurs frais (&lt; 0,6 s)
+    
+    state DECIDE {
+        [*] --> EvaluationTriplet
+        EvaluationTriplet --> ChoixDirection
+    }
+
+    DECIDE --> FORWARD : Devant >= 20 cm (Voie frontale libre)
+    DECIDE --> TURN_LEFT : Devant < 20 cm & Gauche libre & Droite bloquée
+    DECIDE --> TURN_RIGHT : Devant < 20 cm & Droite libre & Gauche bloquée
+    DECIDE --> TURN_LEFT : Devant < 20 cm & 2 côtés libres (Gauche plus large)
+    DECIDE --> TURN_RIGHT : Devant < 20 cm & 2 côtés libres (Droite plus large +5 cm)
+    DECIDE --> BLOCKED : Impasse totale (Devant, Gauche et Droite < 20 cm)
+
+    FORWARD --> DECIDE : Obstacle frontal < 20 cm OU Données périmées (> 0,6 s)
+    FORWARD --> IDLE : Échéance du timeout mission (30 s) OU Ordre STOP explicite
+
+    TURN_LEFT --> RECHECK : Temporisation de pivot atteinte (0,6 s)
+    TURN_RIGHT --> RECHECK : Temporisation de pivot atteinte (0,6 s)
+
+    RECHECK --> DECIDE : Temporisation de stabilisation échue (0,2 s)
+
+    BLOCKED --> DECIDE : Dégagement constaté (Au moins une direction > 20 cm)
+    BLOCKED --> IDLE : Ordre STOP explicite de l'usager

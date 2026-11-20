@@ -1,0 +1,42 @@
+flowchart TB
+    %% Figure 24 : Architecture du moteur d'IA hybride à double détente (Gemini 2.5 Flash + Fallback local Qwen)
+
+    subgraph UI_LAYER["Interface et Interaction Usager"]
+        USER["Patient / Usager hospitalier"]
+        APP["Application Flutter « Neo Clinic »<br/>(Acquisition vocale STT &amp; Synthèse TTS)"]
+        BRIDGE["hmi_websocket_bridge_node<br/>(Gestionnaire de session &amp; Routeur NLU)"]
+        
+        USER -->|"Prompt vocal ou texte"| APP
+        APP -->|"WebSocket JSON (:8765)"| BRIDGE
+        BRIDGE -.->|"Réponse guidage (TTS) &amp; Affichage visuel"| APP
+        APP -.->|"Vocalisation de guidage (Vitaux exclus !)"| USER
+    end
+
+    subgraph AI_PIPELINE["Pipeline de Compréhension Sémantique Hybride (voice_intent_parser.py)"]
+        STAGE1["Étape 1 : Moteur Déterministe Réflexe (Regex)<br/>Mots-clés navigation immédiate (STOP, Pharmacie, Labo)<br/>Latence &lt; 1 ms"]
+        CACHE[("Cache Mémoire LRU<br/>Requêtes récurrentes (&lt; 1 ms)")]
+        
+        subgraph DUAL_LLM["Compréhension Sémantique et Extraction d'Intentions (LLM)"]
+            GEMINI["MOTEUR PRINCIPAL CLOUD<br/>Google Gemini 2.5 Flash API<br/>• Prompt enrichi : cartographie hospitalière &amp; règles de guidage<br/>• Sortie structurée JSON garantie (intent, target, message)<br/>• Latence ~400-800 ms"]
+            QWEN["MOTEUR DE SECOURS SOUVERAIN (EDGE)<br/>Qwen 2.5 0.5B Instruct (Serveur Ollama local)<br/>• Hébergement 100% autonome sur CPU Raspberry Pi 4<br/>• Résilience absolue en cas de coupure Internet ou zone blanche<br/>• Latence ~1,8 s (CPU local)"]
+        end
+
+        RAG["Module Documentaire Mini-RAG<br/>6 Fiches officielles OMS &amp; 38 passages indexés<br/>(Paludisme, TB, Diabète, HTA, VIH, Santé menstruelle)"]
+    end
+
+    BRIDGE -->|"Texte usager"| STAGE1
+    STAGE1 -->|"Si non réflexe"| CACHE
+    CACHE -->|"Miss cache (Liaison Internet active)"| GEMINI
+    GEMINI -.->|"Fallback automatique<br/>(si erreur réseau ou timeout &gt; 2 s)"| QWEN
+
+    GEMINI -->|"Demande sanitaire"| RAG
+    QWEN -->|"Demande sanitaire"| RAG
+
+    STAGE1 -.->|"Action immédiate"| BRIDGE
+    GEMINI -.->|"JSON Intention"| BRIDGE
+    QWEN -.->|"JSON Intention"| BRIDGE
+
+    subgraph SECURITY["Sanctuarisation Éthique &amp; Déontologique"]
+        RULE1["Sécurité Cyber-Physique :<br/>Le module d'IA ne dispose d'AUCUN accès aux registres moteurs."]
+        RULE2["Secret Médical Strict :<br/>Interdiction formelle de vocaliser les constantes vitales (T°, BPM, SpO2)."]
+    end

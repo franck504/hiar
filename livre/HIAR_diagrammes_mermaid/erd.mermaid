@@ -1,0 +1,37 @@
+erDiagram
+    %% Figure 19 : Modèle Physique des Données (MPD) de la base relationnelle SQLite locale
+
+    hiar_schema_migrations {
+        INTEGER version PK "Numéro séquentiel de version du schéma"
+        TEXT applied_at "Horodatage ISO 8601 d'application"
+    }
+
+    doctor_sessions {
+        TEXT requested_date PK "Date de la session (AAAA-MM-JJ)"
+        TEXT doctor_code PK "Code praticien (CHECK 'A','B','C','D')"
+        TEXT period PK "Période (CHECK 'MAT','AM')"
+        INTEGER is_open "Inscriptions ouvertes (0 ou 1)"
+        TEXT opened_at "Horodatage d'ouverture"
+        TEXT closed_at "Horodatage de fermeture"
+        INTEGER manual_open "Ouverture forcée par médecin (0 ou 1)"
+    }
+
+    appointments {
+        INTEGER id PK "Identifiant interne auto-incrémenté"
+        TEXT patient_name "Nom et prénom (<= 120 car.)"
+        TEXT contact "Téléphone brut saisi"
+        TEXT contact_normalized "Téléphone normalisé (+261...)"
+        TEXT requested_date "Date session (AAAA-MM-JJ)"
+        TEXT doctor "Code praticien assigné (A-D)"
+        TEXT period "Période de rendez-vous (MAT/AM)"
+        INTEGER ticket_number "Numéro séquentiel dans la file (> 0)"
+        TEXT reason_code "Code normalisé (C_GEN, C_SPE, URG)"
+        TEXT reason "Libellé explicite du motif"
+        TEXT status "Statut (en attente, appelé, terminé, annulé)"
+        REAL temperature_c "Température corporelle cutanée (25 à 45 °C)"
+        INTEGER heart_rate_bpm "Fréquence cardiaque (40 à 200 BPM)"
+        REAL spo2_percent "Saturation pulsée en oxygène (70 à 100 % ACTIF)"
+        TEXT created_at "Horodatage ISO 8601 de création"
+    }
+
+    doctor_sessions ||--o{ appointments : "encadre (Date, Médecin, Période)"

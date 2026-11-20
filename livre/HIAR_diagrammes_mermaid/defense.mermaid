@@ -1,0 +1,28 @@
+flowchart TB
+    %% Figure 23 : Modèle de défense en profondeur : couches de sécurité du réseau à l'actionnement physique
+
+    subgraph C1["Couche 1 : Sécurité Réseau et Périphérie"]
+        N1["Point d'accès Wi-Fi autonome WPA2-PSK (HIAR-DEMO)<br/>• Sous-réseau privé hermétique 10.42.0.0/24<br/>• Filtrage pare-feu UFW : ports restreints 5000 (HTTP) et 8765 (WS)"]
+    end
+
+    subgraph C2["Couche 2 : Contrôle d'Accès et Authentification Applicative"]
+        N2["Contrôle d'accès par jetons cryptographiques stricts<br/>• En-têtes X-Doctor-Token et X-Staff-Token<br/>• Comparaison en temps constant via hmac.compare_digest (anti-timing attacks)<br/>• Validation formelle de schéma de chaque requête entrante"]
+    end
+
+    subgraph C3["Couche 3 : Intégrité des Données et Confidentialité Médicale"]
+        N3["Protection des données et intégrité relationnelle<br/>• Isolation transactionnelle ACID stricte (BEGIN IMMEDIATE)<br/>• Index partiels uniques prévenant les réservations concurrentes<br/>• Anonymisation des journaux système (aucun jeton ni nom en clair)<br/>• Sanctuarisation du secret médical : interdiction de vocalisation TTS des vitaux"]
+    end
+
+    subgraph C4["Couche 4 : Cloisonnement Déontologique de l'Intelligence Artificielle"]
+        N4["Isolation hermétique de la chaîne d'IA (LLM)<br/>• Les modèles (Gemini et Qwen) n'ont AUCUN privilège sur les actionneurs<br/>• Sorties contraintes à un schéma JSON validé avant toute transmission"]
+    end
+
+    subgraph C5["Couche 5 : Supervision Déterministe Robotique (ROS 2)"]
+        N5["Superviseur déterministe autonome (robot_supervisor_node)<br/>• Boucle de contrôle prioritaire cyclique cadencée à 10 Hz<br/>• Interdiction absolue de l'avance FORWARD si obstacle &lt; 20 cm<br/>• Watchdog de communication : arrêt d'urgence sur perte de signal (&gt; 0,6 s)"]
+    end
+
+    subgraph C6["Couche 6 : Sécurité Embarquée Temps Réel et Matérielle (ESP32)"]
+        N6["Garde-fou matériel de dernier recours (Firmware C++)<br/>• Arrêt d'urgence matériel autonome si distance frontale &lt; 25 cm<br/>• Expiration temporelle de commande (timeout matériel strict de 2,0 s)<br/>• Isolation galvanique des masses et alimentations moteurs / processeur"]
+    end
+
+    C1 --> C2 --> C3 --> C4 --> C5 --> C6

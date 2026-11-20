@@ -1,0 +1,59 @@
+flowchart TB
+    %% Figure 12 : Modèle architectural global en couches du système cyber-physique HIAR (UIT-T Y.4000 / ISO/IEC 30141)
+
+    subgraph L1["1. Couche IHM et Interaction (Terminal Tactile Usager & Web)"]
+        FLUTTER["Application Mobile Flutter « Neo Clinic »<br/>• Connexion WebSocket contractuelle :8765<br/>• Vidéos didactiques MP4 (posture doigt, guidage)<br/>• Synthèse et reconnaissance vocale (TTS / STT)"]
+        WEB_PORTAL["Portail Web Soignant & Médecin (Flask :5000)<br/>• Appel des patients et gestion des tickets de file<br/>• Contrôle d'accès par jetons HMAC (X-Doctor-Token)"]
+    end
+
+    subgraph L2["2. Couche Applicative Métier (Raspberry Pi 4, Ubuntu 22.04 LTS)"]
+        AI_SRV["Service d'IA Hybride Résilient (voice_intent_parser.py)<br/>1. Regex réflexe (&lt; 1 ms)<br/>2. Google Gemini 2.5 Flash API (Cloud)<br/>3. Qwen 2.5 0.5B Instruct local (Edge / Ollama)<br/>+ Mini-RAG (6 fiches sanitaires OMS)"]
+        FLASK_SRV["Serveur Web Flask :5000 (web_server.py)<br/>API REST transactionnelle &amp; Validation requêtes"]
+        DB_SQL[("Base SQLite locale (appointments.sqlite3)<br/>Sessions, Rendez-vous, Signes Vitaux (SpO2 actif)")]
+        WS_BRIDGE["hmi_websocket_bridge_node (Passerelle :8765)<br/>Gestion des sessions usagers &amp; Routage ROS 2"]
+
+        FLASK_SRV -->|"Transactions SQL (BEGIN IMMEDIATE)"| DB_SQL
+        FLASK_SRV -.->|"Coordination inter-processus"| WS_BRIDGE
+        WS_BRIDGE <-->|"Requêtes NLU / Réponses JSON"| AI_SRV
+    end
+
+    FLUTTER <-->|"Wi-Fi WPA2 / WebSocket JSON (:8765)"| WS_BRIDGE
+    FLUTTER <-->|"Wi-Fi WPA2 / HTTP REST (:5000)"| FLASK_SRV
+    WEB_PORTAL <-->|"HTTP REST (:5000) / Jetons HMAC"| FLASK_SRV
+
+    subgraph L3["3. Couche Décision et Supervision (Middleware ROS 2 Humble)"]
+        OBS_NODE["obstacle_detector_node<br/>Qualification des seuils 20 cm (Avant, Gauche, Droite)"]
+        NAV_NODE["navigation_decision_node<br/>Machine à états finis (FSM) : IDLE, DECIDE, FORWARD, TURN, BLOCKED"]
+        SUP_NODE["robot_supervisor_node<br/>Watchdog déterministe 10 Hz &amp; Arrêt d'urgence prioritaire"]
+        ESP_NODE["esp32_interface_node<br/>Passerelle série USB &amp; Inversion cinématique (invert_steering = True)"]
+
+        WS_BRIDGE -->|"/navigation/request"| NAV_NODE
+        WS_BRIDGE -->|"/vitals/request"| ESP_NODE
+        ESP_NODE -->|"/vitals/result &amp; /esp32/diagnostics"| WS_BRIDGE
+
+        ESP_NODE -->|"/sensors/ultrasonic*"| OBS_NODE
+        ESP_NODE -->|"/sensors/ultrasonic*"| NAV_NODE
+        OBS_NODE -->|"/sensors/obstacle"| SUP_NODE
+        OBS_NODE -->|"/sensors/obstacle_left &amp; right"| NAV_NODE
+
+        NAV_NODE -->|"/robot/command"| SUP_NODE
+        SUP_NODE -->|"/robot/motor_command"| ESP_NODE
+    end
+
+    subgraph L4["4. Couche Contrôle Embarqué Temps Réel (Firmware ESP32 C++)"]
+        FIRMWARE["Firmware C++ déterministe<br/>• Multiplexage acoustique 35 ms (3x HC-SR04)<br/>• Filtre médian glissant sur 3 points<br/>• Chaîne biométrique T° (1-Wire) + BPM / SpO2 % (I²C)<br/>• Boucle matérielle d'arrêt d'urgence (&lt; 25 cm, timeout 2 s)"]
+    end
+
+    ESP_NODE <-->|"Liaison série USB 115200 bauds (/dev/ttyUSB0)"| FIRMWARE
+
+    subgraph L5["5. Couche Matérielle Physique (Châssis, Capteurs, Actionneurs)"]
+        HW_MOTORS["Pilote L298N + 2 Moteurs DC à réducteur<br/>(Châssis différentiel à deux roues motrices)"]
+        HW_US["Ceinture 3x HC-SR04<br/>(Avant TRIG 13/ECHO 34, Gauche 2/4, Droit 5/16)"]
+        HW_DS["Sonde DS18B20<br/>(Température cutanée corporelle, GPIO 23)"]
+        HW_MAX["Capteur MAX30102<br/>(Fréquence cardiaque BPM &amp; Saturation SpO2 %, GPIO 21/22)"]
+    end
+
+    FIRMWARE -->|"PWM 20 kHz &amp; Signaux de direction"| HW_MOTORS
+    FIRMWARE <-->|"Impulsions ultrasoniques TRIG / ECHO"| HW_US
+    FIRMWARE <-->|"Trame binaire 12 bits 1-Wire"| HW_DS
+    FIRMWARE <-->|"Échantillons FIFO photodiode I²C"| HW_MAX

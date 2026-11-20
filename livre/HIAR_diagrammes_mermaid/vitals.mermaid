@@ -1,0 +1,27 @@
+flowchart TD
+    %% Figure 8 : Synoptique de la chaîne d'acquisition et de traitement des grandeurs physiologiques (DS18B20 & MAX30102)
+
+    subgraph CHAIN_TEMP["1. Chaîne Température Corporelle Cutanée (Bus 1-Wire)"]
+        T1["Homéothermie corporelle<br/>(Régulation hypothalamique ~37,0 °C)"]
+        T2["Température cutanée<br/>au point de contact digital"]
+        T3["Sonde Dallas DS18B20<br/>• Bus 1-Wire (GPIO 23 + Pull-up 4,7 kΩ)<br/>• Mot binaire 12 bits (résolution 0,0625 °C)"]
+        T4["Firmware ESP32 &amp; ROS 2<br/>• Contrôle d'intégrité [25,0 °C - 45,0 °C]<br/>• Affichage visuel indicatif sur l'application"]
+        
+        T1 --> T2 --> T3 --> T4
+    end
+
+    subgraph CHAIN_OPT["2. Chaîne Photopléthysmographique BPM &amp; SpO2 % (Bus I²C)"]
+        O1["Systole cardiaque &amp; Onde pulsatile<br/>artérielle dans le lit capillaire"]
+        O2["Capteur optique MAX30102 (Doigt posé)<br/>• LED Rouge (660 nm) : sensible à la désoxyhémoglobine<br/>• LED Infrarouge (880 nm) : sensible à l'oxyhémoglobine"]
+        O3["Photodiode &amp; Convertisseur ADC 18 bits<br/>• Registre FIFO (Fast Mode I²C 400 kHz, 0x57)<br/>• Séparation des composantes AC (pulsatile) et DC (continue)"]
+        O4["Algorithme Firmware ESP32<br/>• Période R-R cardiaque : BPM = 60 / T [40 - 200]<br/>• Ratio de modulation : R = (AC_rouge / DC_rouge) / (AC_IR / DC_IR)<br/>• Équation empirique étalonnée : SpO2 ≈ 110 - 25 * R [70 - 100 %]"]
+        
+        O1 --> O2 --> O3 --> O4
+    end
+
+    subgraph SECURITY_ETHICS["Sanctuarisation Éthique et Secret Médical"]
+        SEC["Règle Déontologique Fondamentale :<br/>• Les constantes vitales (T°, BPM, SpO2) sont enregistrées en base SQLite locale.<br/>• Elles sont UNIQUEMENT présentées sur l'écran tactile du terminal.<br/>• Elles sont STRICTEMENT MUTÉES de toute synthèse vocale TTS (Secret Médical en salle d'attente)."]
+    end
+
+    T4 --> SEC
+    O4 --> SEC

@@ -1,0 +1,15 @@
+stateDiagram-v2
+    %% Figure 20 : Cycle de vie et transitions d'état d'un ticket de consultation hospitalière
+
+    [*] --> en_attente : Inscription validée via formulaire ou assistant (Création ticket A-MAT-1)
+
+    en_attente --> appele : Appel du patient par le médecin (Route authentifiée X-Doctor-Token)
+    en_attente --> annule : Annulation par l'usager ou le personnel soignant (X-Staff-Token)
+
+    appele --> termine : Clôture de la consultation par le médecin praticien
+    appele --> non_recu : Patient non présenté en salle de soin après plusieurs appels
+    appele --> en_attente : Remise exceptionnelle en file d'attente (Demande du praticien)
+
+    termine --> [*] : Archivage médical
+    non_recu --> [*] : Clôture de non-présentation
+    annule --> [*] : Libération du créneau

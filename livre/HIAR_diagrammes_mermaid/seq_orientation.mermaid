@@ -1,0 +1,37 @@
+sequenceDiagram
+    %% Figure 16 : Diagramme de séquence du scénario d'orientation et de guidage vers un service hospitalier
+    autonumber
+
+    actor USR as Usager / Patient
+    participant APP as App Flutter « Neo Clinic »
+    participant BRIDGE as hmi_websocket_bridge (:8765)
+    participant NAV as navigation_decision (FSM)
+    participant SUP as robot_supervisor (10 Hz)
+    participant ESP as esp32_interface & Moteurs
+
+    USR->>APP: Sélectionne le service de destination (« Pharmacie »)
+    APP->>BRIDGE: WebSocket JSON : {"action": "navigate", "destination": "PHARMACY"}
+    BRIDGE->>NAV: Topic /navigation/request (Vérification de validité de la cible)
+    
+    NAV->>BRIDGE: Topic /navigation/status ("STARTING:PHARMACY")
+    BRIDGE->>APP: Notification WebSocket : Début de la mission d'accompagnement
+    APP-->>USR: Écran d'accompagnement actif & Invitation au suivi
+
+    rect rgb(235, 255, 235)
+        Note over NAV,ESP: Phase d'avance active régulée par la FSM
+        NAV->>SUP: Topic /robot/command ("FORWARD")
+        SUP->>ESP: Topic /robot/motor_command ("FORWARD")
+        ESP->>ESP: Activation des moteurs DC (Vitesse stabilisée & triplet HC-SR04 actif)
+    end
+
+    rect rgb(255, 255, 235)
+        Note over NAV: Fin de parcours par échéance du timeout déterministe (30 s)
+        NAV->>NAV: Expiration du compteur temporel de mission (30 s)
+        NAV->>SUP: Topic /robot/command ("STOP")
+        SUP->>ESP: Topic /robot/motor_command ("STOP")
+        ESP->>ESP: Coupure immédiate du signal PWM (Arrêt complet du châssis)
+    end
+
+    NAV->>BRIDGE: Topic /navigation/status ("COMPLETED:PHARMACY")
+    BRIDGE->>APP: WebSocket broadcast : Arrivée à destination
+    APP-->>USR: Notification visuelle et synthèse vocale TTS : « Vous êtes arrivé à destination »

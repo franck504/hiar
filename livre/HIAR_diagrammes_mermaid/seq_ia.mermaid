@@ -1,0 +1,33 @@
+sequenceDiagram
+    %% Figure 25 : Diagramme de séquence du traitement d'une intention vocale et du basculement hors-ligne
+    autonumber
+
+    actor USR as Usager / Patient
+    participant APP as App Flutter « Neo Clinic »
+    participant BRIDGE as hmi_websocket_bridge
+    participant PARSER as voice_intent_parser (IA)
+    participant GEMINI as Google Gemini 2.5 Flash (Cloud)
+    participant OLLAMA as Qwen 2.5 0.5B (Ollama Local Edge)
+
+    USR->>APP: Émission d'un prompt vocal : « Où se trouve la pharmacie ? »
+    APP->>BRIDGE: Trame WebSocket :8765 JSON (Transcription textuelle STT)
+    BRIDGE->>PARSER: Appel de la méthode parse_intent(texte)
+
+    PARSER->>PARSER: Vérification cache réflexe (Non trouvé)
+
+    rect rgb(235, 255, 245)
+        Note over PARSER,GEMINI: 1. Tentative prioritaire sur le Cloud
+        PARSER->>GEMINI: Requête API Cloud (Prompt enrichi + Schéma JSON strict)
+        GEMINI--xPARSER: Échec de connexion réseau (Erreur HTTP / Timeout > 2,0 s)
+    end
+
+    rect rgb(255, 245, 235)
+        Note over PARSER,OLLAMA: 2. Basculement autonome vers le moteur local (Edge souverain)
+        PARSER->>OLLAMA: POST http://127.0.0.1:11434/api/generate (Format JSON)
+        OLLAMA-->>PARSER: Réponse JSON : {"intent": "ORIENTATION", "target": "PHARMACY"}
+    end
+
+    PARSER->>PARSER: Enregistrement dans le cache LRU local
+    PARSER-->>BRIDGE: Intention structurée validée
+    BRIDGE->>APP: Notification WebSocket (Confirmation de cible & Action)
+    APP-->>USR: Affichage de la carte et guidage vocal TTS : « Suivez-moi vers la pharmacie »

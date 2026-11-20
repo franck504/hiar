@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HIAR — Hospital Intelligent Assistant Robot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #E8F0F7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Conteneur strictement 16:9 adaptatif plein écran */
+    .stage-16-9 {
+      position: relative;
+      width: 100vw;
+      height: 56.25vw; /* Ratio 16:9 */
+      max-height: 100vh;
+      max-width: 177.78vh; /* Ratio 16:9 */
+      background: radial-gradient(circle at 50% 45%, #F8FBFE 0%, #EDF4FA 52%, #DFECF5 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(11, 79, 124, 0.08);
+    }
+
+    /* Halo lumineux d'ambiance hospitalière douce */
+    .ambient-aura {
+      position: absolute;
+      width: 44%;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.14) 0%, rgba(10, 124, 120, 0.05) 48%, rgba(255, 255, 255, 0) 75%);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    svg#hiar-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: visible;
+    }
+
+    /* Bouton discret de relecture (s'efface automatiquement après quelques secondes) */
+    .replay-btn {
+      position: absolute;
+      bottom: 2.8%;
+      right: 2.2%;
+      width: 40px;
+      height: 40px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(11, 79, 124, 0.12);
+      color: #0B4F7C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.5s ease, transform 0.4s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+      box-shadow: 0 4px 14px rgba(11, 79, 124, 0.08);
+      z-index: 20;
+    }
+
+    .stage-16-9:hover .replay-btn,
+    .replay-btn.visible,
+    .replay-btn:focus-visible {
+      opacity: 0.85;
+      transform: translateY(0);
+    }
+
+    .replay-btn:hover {
+      opacity: 1 !important;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 6px 20px rgba(10, 124, 120, 0.18);
+      color: #0A7C78;
+    }
+
+    .replay-btn:active {
+      transform: scale(0.93);
+    }
+  </style>
+</head>
+<body>
+
+  <main class="stage-16-9" id="stage" aria-label="HIAR Animated Logo">
+    <!-- Halo lumineux subtil en arrière-plan -->
+    <div class="ambient-aura" id="ambientAura"></div>
+
+    <!-- Scène vectorielle 16:9 haute précision (1920x1080) -->
+    <svg id="hiar-canvas" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <!-- Dégradé coque céramique blanche 3D -->
+        <radialGradient id="shellGradient" cx="46%" cy="28%" r="72%" fx="42%" fy="22%">
+          <stop offset="0%" stop-color="#FFFFFF" />
+          <stop offset="58%" stop-color="#F6FAFD" />
+          <stop offset="86%" stop-color="#E3EEF6" />
+          <stop offset="100%" stop-color="#CBDCEB" />
+        </radialGradient>
+
+        <!-- Reflet spéculaire supérieur sur la coque -->
+        <linearGradient id="topHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
+          <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0" />
+        </linearGradient>
+
+        <!-- Dégradé anneau latéral / oreilles acoustiques -->
+        <linearGradient id="earGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#F7FBFE" />
+          <stop offset="50%" stop-color="#DCE9F3" />
+          <stop offset="100%" stop-color="#B9D0E2" />
+        </linearGradient>
+
+        <!-- Dégradé accent médical sarcelle / bleu HIAR -->
+        <linearGradient id="tealAccent" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#14B8A6" />
+          <stop offset="100%" stop-color="#0B4F7C" />
+        </linearGradient>
+
+        <!-- Visière en verre sombre profond -->
+        <radialGradient id="visorGradient" cx="50%" cy="35%" r="70%">
+          <stop offset="0%" stop-color="#132A42" />
+          <stop offset="55%" stop-color="#0A1929" />
+          <stop offset="100%" stop-color="#050D17" />
+        </radialGradient>
+
+        <!-- Reflet vitré diagonal subtil sur la visière -->
+        <linearGradient id="visorGlassSheen" x1="15%" y1="0%" x2="75%" y2="100%">
+          <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.16" />
+          <stop offset="38%" stop-color="#FFFFFF" stop-opacity="0.04" />
+          <stop offset="42%" stop-color="#FFFFFF" stop-opacity="0.0" />
+          <stop offset="100%" stop-color="#22D3EE" stop-opacity="0.03" />
+        </linearGradient>
+
+        <!-- Halo des yeux et du sourire (lueur cyan / sarcelle) -->
+        <filter id="luminousGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="7" result="blur1" />
+          <feGaussianBlur stdDeviation="16" result="blur2" />
+          <feMerge>
+            <feMergeNode in="blur2" />
+            <feMergeNode in="blur1" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        <!-- Ombre interne de la visière encastrée -->
+        <filter id="visorInsetShadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#030911" flood-opacity="0.75" />
+        </filter>
+
+        <!-- Ombre portée douce sous le robot -->
+        <radialGradient id="floorShadow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#0B4F7C" stop-opacity="0.18" />
+          <stop offset="55%" stop-color="#0B4F7C" stop-opacity="0.07" />
+          <stop offset="100%" stop-color="#0B4F7C" stop-opacity="0.0" />
+        </radialGradient>
+
+        <!-- Joues chaleureuses lors du sourire -->
+        <radialGradient id="cheekBlush" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#2DD4BF" stop-opacity="0.34" />
+          <stop offset="60%" stop-color="#22D3EE" stop-opacity="0.12" />
+          <stop offset="100%" stop-color="#22D3EE" stop-opacity="0.0" />
+        </radialGradient>
+
+        <!-- Masque interne de la visière -->
+        <clipPath id="visorClip">
+          <rect x="-215" y="-128" width="430" height="256" rx="116" ry="116" />
+        </clipPath>
+      </defs>
+
+      <!-- Ombre portée au sol (réagit à la hauteur de flottement) -->
+      <ellipse id="groundShadow" cx="960" cy="835" rx="190" ry="26" fill="url(#floorShadow)" />
+
+      <!-- Groupe principal de la tête du robot centré en (960, 520) -->
+      <g id="robotHeadGroup" transform="translate(960, 520)">
+
+        <!-- Base / Cou minimaliste flottant -->
+        <g id="neckAssembly" transform="translate(0, 218)">
+          <path d="M -68 -14 C -68 18, 68 18, 68 -14 C 48 -6, -48 -6, -68 -14 Z" fill="url(#earGradient)" />
+          <ellipse cx="0" cy="-14" rx="68" ry="12" fill="#B5CCE0" />
+          <!-- Anneau lumineux de statut sarcelle -->
+          <path d="M -52 2 Q 0 14 52 2" fill="none" stroke="#0A7C78" stroke-width="3.5" stroke-linecap="round" opacity="0.65" />
+        </g>
+
+        <!-- Capteurs latéraux / Oreilles acoustiques douces -->
+        <g id="leftEar" transform="translate(-268, 8)">
+          <rect x="-24" y="-58" width="42" height="116" rx="21" fill="url(#earGradient)" stroke="#C6D9E8" stroke-width="2" />
+          <rect x="-12" y="-34" width="8" height="68" rx="4" fill="url(#tealAccent)" opacity="0.85" />
+        </g>
+
+        <g id="rightEar" transform="translate(268, 8)">
+          <rect x="-18" y="-58" width="42" height="116" rx="21" fill="url(#earGradient)" stroke="#C6D9E8" stroke-width="2" />
+          <rect x="4" y="-34" width="8" height="68" rx="4" fill="url(#tealAccent)" opacity="0.85" />
+        </g>
+
+        <!-- Coque principale en céramique blanche arrondie -->
+        <rect x="-262" y="-198" width="524" height="396" rx="182" ry="182" fill="url(#shellGradient)" stroke="#D5E4F0" stroke-width="2.5" />
+
+        <!-- Liseré supérieur discret bleu médical / sarcelle sur le front -->
+        <path d="M -46 -196 Q 0 -199 46 -196" fill="none" stroke="#0A7C78" stroke-width="4" stroke-linecap="round" opacity="0.55" />
+
+        <!-- Reflet spéculaire 3D doux sur le haut du crâne -->
+        <ellipse cx="0" cy="-145" rx="165" ry="38" fill="url(#topHighlight)" opacity="0.85" />
+
+        <!-- Cadre métallique/satiné entourant la visière -->
+        <rect x="-224" y="-137" width="448" height="274" rx="125" ry="125" fill="#DCE8F2" />
+        <rect x="-221" y="-134" width="442" height="268" rx="122" ry="122" fill="#F8FBFE" opacity="0.7" />
+
+        <!-- Visière sombre interactive -->
+        <rect x="-215" y="-128" width="430" height="256" rx="116" ry="116" fill="url(#visorGradient)" filter="url(#visorInsetShadow)" />
+
+        <!-- Contenu interne de la visière (clippé) -->
+        <g clip-path="url(#visorClip)">
+          <!-- Reflet de verre courbé -->
+          <path d="M -230 -140 L 110 -140 L -30 140 L -230 140 Z" fill="url(#visorGlassSheen)" />
+          <path d="M -175 -102 Q 0 -122 175 -102" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" opacity="0.14" />
+
+          <!-- Groupe du visage (yeux + joues + bouche) avec parallaxe 3D -->
+          <g id="faceFeatures" transform="translate(0, 0)">
+
+            <!-- Lueurs douces des joues (apparaissent lors du sourire) -->
+            <ellipse id="leftCheek" cx="-126" cy="44" rx="42" ry="24" fill="url(#cheekBlush)" opacity="0" />
+            <ellipse id="rightCheek" cx="126" cy="44" rx="42" ry="24" fill="url(#cheekBlush)" opacity="0" />
+
+            <!-- ŒIL GAUCHE -->
+            <g id="leftEyeGroup" transform="translate(-96, -12)">
+              <!-- Forme morphée entre cercle ouvert et arc souriant -->
+              <path id="leftEyePath"
+                    d=""
+                    fill="#22D3EE"
+                    stroke="#67E8F9"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    filter="url(#luminousGlow)" />
+              <!-- Reflet spéculaire de l'œil ouvert (s'estompe quand l'œil se ferme en sourire) -->
+              <circle id="leftCatchlightMain" cx="-10" cy="-11" r="7.5" fill="#FFFFFF" opacity="0.92" />
+              <circle id="leftCatchlightSub" cx="9" cy="10" r="3.2" fill="#FFFFFF" opacity="0.65" />
+            </g>
+
+            <!-- ŒIL DROIT -->
+            <g id="rightEyeGroup" transform="translate(96, -12)">
+              <path id="rightEyePath"
+                    d=""
+                    fill="#22D3EE"
+                    stroke="#67E8F9"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    filter="url(#luminousGlow)" />
+              <circle id="rightCatchlightMain" cx="-10" cy="-11" r="7.5" fill="#FFFFFF" opacity="0.92" />
+              <circle id="rightCatchlightSub" cx="9" cy="10" r="3.2" fill="#FFFFFF" opacity="0.65" />
+            </g>
+
+            <!-- BOUCHE (morphée d'un petit trait neutre serein vers un grand sourire chaleureux) -->
+            <path id="mouthPath"
+                  d=""
+                  fill="none"
+                  stroke="#22D3EE"
+                  stroke-width="7.5"
+                  stroke-linecap="round"
+                  filter="url(#luminousGlow)" />
+          </g>
+        </g>
+      </g>
+    </svg>
+
+    <!-- Bouton de relecture discret (sans texte) -->
+    <button class="replay-btn" id="replayBtn" title="Rejouer l'animation" aria-label="Rejouer l'animation">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+      </svg>
+    </button>
+  </main>
+
+  <script>
+    /**
+     * HIAR — Moteur d'animation vectorielle haute fluidité (60fps+)
+     * Chronologie :
+     *  - Scène 1 (0.0s – 2.0s) : État neutre / veille sereine
+     *  - Scène 2 (2.0s – 4.0s) : Curiosité & découverte (inclinaison ~13°, regard attentif)
+     *  - Scène 3 (4.0s – 6.0s) : Accueil chaleureux (yeux fermés en arcs souriants + grand sourire)
+     *  - Scène 4 (6.0s – 7.5s+) : Maintien doux avec respiration organique continue
+     */
+
+    // Fonctions d'interpolation (Easing) organiques
+    const clamp = (v, min = 0, max = 1) => Math.min(max, Math.max(min, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+
+    function easeInOutCubic(t) {
+      t = clamp(t);
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function easeOutCubic(t) {
+      t = clamp(t);
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    function easeOutBack(t, s = 1.45) {
+      t = clamp(t);
+      const c3 = s + 1;
+      return 1 + c3 * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2);
+    }
+
+    // Progression normalisée sur une fenêtre [start, end]
+    function windowProgress(timeSec, start, end, easingFn = easeInOutCubic) {
+      if (timeSec <= start) return 0;
+      if (timeSec >= end) return 1;
+      return easingFn((timeSec - start) / (end - start));
+    }
+
+    /**
+     * Génère le tracé SVG d'un œil capable de morpher en continu
+     * d'un cercle ouvert (happy = 0) vers un arc souriant fermé (happy = 1).
+     * Utilise 4 courbes de Bézier cubiques à topologie constante pour un morphing sans aucune saccade.
+     */
+    function buildEyePath(rx, ry, happy) {
+      // Paramètres à l'état ouvert (cercle / ovale doux)
+      const k = 0.55228475; // Constante d'approximation circulaire Bézier
+
+      // Points cardinaux à l'état ouvert (happy = 0)
+      const openLeft   = { x: -rx, y: 0 };
+      const openTop    = { x: 0,   y: -ry };
+      const openRight  = { x: rx,  y: 0 };
+      const openBottom = { x: 0,   y: ry };
+
+      // Contrôles à l'état ouvert
+      const oL_c1 = { x: -rx,     y: -ry * k };
+      const oT_c2 = { x: -rx * k, y: -ry };
+      const oT_c1 = { x: rx * k,  y: -ry };
+      const oR_c2 = { x: rx,      y: -ry * k };
+      const oR_c1 = { x: rx,      y: ry * k };
+      const oB_c2 = { x: rx * k,  y: ry };
+      const oB_c1 = { x: -rx * k, y: ry };
+      const oL_c2 = { x: -rx,     y: ry * k };
+
+      // Paramètres à l'état fermé souriant (arc courbé vers le haut, épaisseur douce)
+      const arcW = rx * 1.18;       // Largeur de l'arc souriant
+      const arcPeakY = -ry * 0.58;  // Sommet de l'arc
+      const arcBaseY = ry * 0.28;   // Extrémités basses de l'arc
+      const thickness = 9.5;        // Épaisseur du croissant de sourire
+
+      // Points cardinaux à l'état souriant (happy = 1)
+      const hLeft   = { x: -arcW, y: arcBaseY };
+      const hTop    = { x: 0,     y: arcPeakY - thickness * 0.5 };
+      const hRight  = { x: arcW,  y: arcBaseY };
+      const hBottom = { x: 0,     y: arcPeakY + thickness * 0.5 };
+
+      // Contrôles à l'état souriant (courbe supérieure et courbe inférieure épousant l'arc)
+      const hL_c1 = { x: -arcW * 0.72, y: arcBaseY - ry * 0.55 };
+      const hT_c2 = { x: -arcW * 0.45, y: hTop.y };
+      const hT_c1 = { x: arcW * 0.45,  y: hTop.y };
+      const hR_c2 = { x: arcW * 0.72,  y: arcBaseY - ry * 0.55 };
+
+      const hR_c1 = { x: arcW * 0.68,  y: arcBaseY - ry * 0.35 };
+      const hB_c2 = { x: arcW * 0.42,  y: hBottom.y };
+      const hB_c1 = { x: -arcW * 0.42, y: hBottom.y };
+      const hL_c2 = { x: -arcW * 0.68, y: arcBaseY - ry * 0.35 };
+
+      // Interpolation point par point
+      const pL  = { x: lerp(openLeft.x, hLeft.x, happy),     y: lerp(openLeft.y, hLeft.y, happy) };
+      const pT  = { x: lerp(openTop.x, hTop.x, happy),       y: lerp(openTop.y, hTop.y, happy) };
+      const pR  = { x: lerp(openRight.x, hRight.x, happy),   y: lerp(openRight.y, hRight.y, happy) };
+      const pB  = { x: lerp(openBottom.x, hBottom.x, happy), y: lerp(openBottom.y, hBottom.y, happy) };
+
+      const c1  = { x: lerp(oL_c1.x, hL_c1.x, happy), y: lerp(oL_c1.y, hL_c1.y, happy) };
+      const c2  = { x: lerp(oT_c2.x, hT_c2.x, happy), y: lerp(oT_c2.y, hT_c2.y, happy) };
+      const c3  = { x: lerp(oT_c1.x, hT_c1.x, happy), y: lerp(oT_c1.y, hT_c1.y, happy) };
+      const c4  = { x: lerp(oR_c2.x, hR_c2.x, happy), y: lerp(oR_c2.y, hR_c2.y, happy) };
+      const c5  = { x: lerp(oR_c1.x, hR_c1.x, happy), y: lerp(oR_c1.y, hR_c1.y, happy) };
+      const c6  = { x: lerp(oB_c2.x, hB_c2.x, happy), y: lerp(oB_c2.y, hB_c2.y, happy) };
+      const c7  = { x: lerp(oB_c1.x, hB_c1.x, happy), y: lerp(oB_c1.y, hB_c1.y, happy) };
+      const c8  = { x: lerp(oL_c2.x, hL_c2.x, happy), y: lerp(oL_c2.y, hL_c2.y, happy) };
+
+      return `M ${pL.x.toFixed(2)} ${pL.y.toFixed(2)} ` +
+             `C ${c1.x.toFixed(2)} ${c1.y.toFixed(2)}, ${c2.x.toFixed(2)} ${c2.y.toFixed(2)}, ${pT.x.toFixed(2)} ${pT.y.toFixed(2)} ` +
+             `C ${c3.x.toFixed(2)} ${c3.y.toFixed(2)}, ${c4.x.toFixed(2)} ${c4.y.toFixed(2)}, ${pR.x.toFixed(2)} ${pR.y.toFixed(2)} ` +
+             `C ${c5.x.toFixed(2)} ${c5.y.toFixed(2)}, ${c6.x.toFixed(2)} ${c6.y.toFixed(2)}, ${pB.x.toFixed(2)} ${pB.y.toFixed(2)} ` +
+             `C ${c7.x.toFixed(2)} ${c7.y.toFixed(2)}, ${c8.x.toFixed(2)} ${c8.y.toFixed(2)}, ${pL.x.toFixed(2)} ${pL.y.toFixed(2)} Z`;
+    }
+
+    /**
+     * Génère le tracé SVG de la bouche :
+     * - Neutre (smile = 0) : petit trait serein au repos
+     * - Accueil (smile = 1) : courbe souriante douce, chaleureuse et bienveillante
+     */
+    function buildMouthPath(smile, curiosity) {
+      // Légère ouverture / raccourcissement attentif en phase de curiosité
+      const halfW = lerp(16 - curiosity * 4, 48, smile);
+      const cornerY = lerp(58, 46, smile);
+      const ctrlY = lerp(59 - curiosity * 2, 84, smile);
+
+      return `M ${(-halfW).toFixed(2)} ${cornerY.toFixed(2)} ` +
+             `Q 0 ${ctrlY.toFixed(2)} ${halfW.toFixed(2)} ${cornerY.toFixed(2)}`;
+    }
+
+    // Références DOM
+    const robotHeadGroup      = document.getElementById('robotHeadGroup');
+    const neckAssembly        = document.getElementById('neckAssembly');
+    const leftEar             = document.getElementById('leftEar');
+    const rightEar            = document.getElementById('rightEar');
+    const faceFeatures        = document.getElementById('faceFeatures');
+    const leftEyeGroup        = document.getElementById('leftEyeGroup');
+    const rightEyeGroup       = document.getElementById('rightEyeGroup');
+    const leftEyePath         = document.getElementById('leftEyePath');
+    const rightEyePath        = document.getElementById('rightEyePath');
+    const leftCatchlightMain  = document.getElementById('leftCatchlightMain');
+    const leftCatchlightSub   = document.getElementById('leftCatchlightSub');
+    const rightCatchlightMain = document.getElementById('rightCatchlightMain');
+    const rightCatchlightSub  = document.getElementById('rightCatchlightSub');
+    const mouthPath           = document.getElementById('mouthPath');
+    const leftCheek           = document.getElementById('leftCheek');
+    const rightCheek          = document.getElementById('rightCheek');
+    const groundShadow        = document.getElementById('groundShadow');
+    const ambientAura         = document.getElementById('ambientAura');
+    const replayBtn           = document.getElementById('replayBtn');
+
+    let startTime = null;
+    let hideBtnTimer = null;
+
+    function showReplayButtonBriefly() {
+      replayBtn.classList.add('visible');
+      clearTimeout(hideBtnTimer);
+      hideBtnTimer = setTimeout(() => {
+        replayBtn.classList.remove('visible');
+      }, 2600);
+    }
+
+    function restartAnimation() {
+      startTime = performance.now();
+      showReplayButtonBriefly();
+    }
+
+    replayBtn.addEventListener('click', restartAnimation);
+
+    // Boucle principale 60fps+
+    function animate(now) {
+      if (startTime === null) {
+        startTime = now;
+        showReplayButtonBriefly();
+      }
+
+      // Temps écoulé en secondes
+      const t = (now - startTime) / 1000;
+
+      // -----------------------------------------------------------
+      // 1. COURBES D'ÉVOLUTION DES ÉMOTIONS SELON LA CHRONOLOGIE
+      // -----------------------------------------------------------
+
+      // Scène 2 (2.0s -> 4.0s) : Montée de la curiosité (pic vers 2.8s - 4.0s)
+      const curiosityIn  = windowProgress(t, 1.95, 2.85, t => easeOutBack(t, 1.2));
+      const curiosityOut = windowProgress(t, 3.95, 4.75, easeInOutCubic);
+      const curiosity    = curiosityIn * (1 - curiosityOut);
+
+      // Scène 3 (4.0s -> 6.0s) : Transition vers le grand sourire accueillant
+      const welcome      = windowProgress(t, 4.00, 5.15, t => easeOutBack(t, 1.15));
+
+      // Micro-clignement naturel en veille (vers 1.15s) pour plus de vie
+      let blink = 0;
+      if (t > 1.05 && t < 1.32) {
+        const bt = (t - 1.05) / 0.27;
+        blink = Math.sin(bt * Math.PI); // 0 -> 1 -> 0
+      }
+
+      // -----------------------------------------------------------
+      // 2. MOUVEMENTS ORGANIQUES DE LA TÊTE & RESPIRATION
+      // -----------------------------------------------------------
+
+      // Respiration / flottement doux continu (amplitude augmentant subtilement en Scène 4)
+      const idleFactor = lerp(0.65, 1.0, windowProgress(t, 5.5, 6.5, easeInOutCubic));
+      const breathY = Math.sin(t * 2.1) * (5.5 * idleFactor);
+
+      // Légère élévation lors de la découverte (curiosité) et de la joie (accueil)
+      const discoveryLift = -curiosity * 10 - welcome * 8;
+      const headY = 520 + breathY + discoveryLift;
+
+      // Inclinaison de la tête :
+      // - 0° en Scène 1
+      // - ~13.2° en Scène 2 (curiosité / reconnaissance)
+      // - ~2.2° chaleureux + très léger balancement serein en Scène 3 & 4
+      const gentleSway = Math.sin(t * 1.45) * 1.2 * welcome;
+      const headAngle = curiosity * 13.2 + welcome * 2.2 + gentleSway;
+
+      // Parallaxe 3D subtile des éléments internes de la visière et des oreilles
+      const faceShiftX = curiosity * 11 + welcome * 2 + Math.sin(t * 1.45) * 1.5 * welcome;
+      const faceShiftY = -curiosity * 5 - welcome * 3;
+      const earParallaxX = -faceShiftX * 0.35;
+
+      robotHeadGroup.setAttribute(
+        'transform',
+        `translate(960, ${headY.toFixed(2)}) rotate(${headAngle.toFixed(2)})`
+      );
+
+      // Cou suit avec un léger amorti
+      neckAssembly.setAttribute(
+        'transform',
+        `translate(${(-faceShiftX * 0.4).toFixed(2)}, ${(218 - breathY * 0.25).toFixed(2)}) rotate(${(-headAngle * 0.35).toFixed(2)})`
+      );
+
+      leftEar.setAttribute('transform', `translate(${(-268 + earParallaxX).toFixed(2)}, ${(8 - faceShiftY * 0.3).toFixed(2)})`);
+      rightEar.setAttribute('transform', `translate(${(268 + earParallaxX).toFixed(2)}, ${(8 - faceShiftY * 0.3).toFixed(2)})`);
+
+      faceFeatures.setAttribute('transform', `translate(${faceShiftX.toFixed(2)}, ${faceShiftY.toFixed(2)})`);
+
+      // Ombre au sol réagissant à la hauteur de flottement
+      const heightOffset = 520 - headY;
+      const shadowScale = clamp(1 - heightOffset * 0.0045, 0.82, 1.12);
+      groundShadow.setAttribute('rx', (190 * shadowScale).toFixed(1));
+      groundShadow.setAttribute('ry', (26 * shadowScale).toFixed(1));
+      groundShadow.setAttribute('opacity', (0.85 * shadowScale).toFixed(2));
+
+      // Halo lumineux d'arrière-plan s'intensifiant doucement à l'accueil
+      const auraScale = 1 + welcome * 0.14 + Math.sin(t * 2.1) * 0.03;
+      const auraOpacity = 0.65 + welcome * 0.35;
+      ambientAura.style.transform = `scale(${auraScale.toFixed(3)})`;
+      ambientAura.style.opacity = auraOpacity.toFixed(3);
+
+      // -----------------------------------------------------------
+      // 3. MORPHING DES YEUX, REFLETS SPÉCULAIRES & SOURIRE
+      // -----------------------------------------------------------
+
+      // Rayon de base des yeux : grands et expressifs (34px), s'écarquillent légèrement en Scène 2
+      const baseRx = 33 + curiosity * 3.8;
+      const baseRy = 35 + curiosity * 4.5;
+
+      // Asymétrie très subtile et attachante en Scène 2 (œil droit un soupçon plus grand)
+      const leftRx  = baseRx * (1 - curiosity * 0.03);
+      const leftRy  = baseRy * (1 - curiosity * 0.03) * (1 - blink * 0.88);
+      const rightRx = baseRx * (1 + curiosity * 0.05);
+      const rightRy = baseRy * (1 + curiosity * 0.05) * (1 - blink * 0.88);
+
+      // Position des yeux (légèrement relevés lors du sourire)
+      const eyeY = -12 - welcome * 4;
+      leftEyeGroup.setAttribute('transform', `translate(-96, ${eyeY.toFixed(2)})`);
+      rightEyeGroup.setAttribute('transform', `translate(96, ${eyeY.toFixed(2)})`);
+
+      // Génération des tracés morphés (cercle ouvert -> croissant de sourire)
+      leftEyePath.setAttribute('d', buildEyePath(leftRx, leftRy, welcome));
+      rightEyePath.setAttribute('d', buildEyePath(rightRx, rightRy, welcome));
+
+      // Épaisseur du contour des arcs de sourire
+      const eyeStrokeW = lerp(1.5, 4.2, welcome);
+      leftEyePath.setAttribute('stroke-width', eyeStrokeW.toFixed(2));
+      rightEyePath.setAttribute('stroke-width', eyeStrokeW.toFixed(2));
+
+      // Reflets spéculaires dans les yeux (décalage du regard curieux + disparition quand yeux fermés)
+      const catchOpacity = clamp(1 - welcome * 1.45) * (1 - blink);
+      const lookX = curiosity * 5.5;
+      const lookY = -curiosity * 3.5;
+
+      leftCatchlightMain.setAttribute('cx', (-10 + lookX).toFixed(2));
+      leftCatchlightMain.setAttribute('cy', (-11 + lookY).toFixed(2));
+      leftCatchlightMain.setAttribute('opacity', (0.92 * catchOpacity).toFixed(2));
+
+      leftCatchlightSub.setAttribute('cx', (9 + lookX * 0.7).toFixed(2));
+      leftCatchlightSub.setAttribute('cy', (10 + lookY * 0.7).toFixed(2));
+      leftCatchlightSub.setAttribute('opacity', (0.65 * catchOpacity).toFixed(2));
+
+      rightCatchlightMain.setAttribute('cx', (-10 + lookX).toFixed(2));
+      rightCatchlightMain.setAttribute('cy', (-11 + lookY).toFixed(2));
+      rightCatchlightMain.setAttribute('opacity', (0.92 * catchOpacity).toFixed(2));
+
+      rightCatchlightSub.setAttribute('cx', (9 + lookX * 0.7).toFixed(2));
+      rightCatchlightSub.setAttribute('cy', (10 + lookY * 0.7).toFixed(2));
+      rightCatchlightSub.setAttribute('opacity', (0.65 * catchOpacity).toFixed(2));
+
+      // Morphing de la bouche et apparition des joues bienveillantes
+      mouthPath.setAttribute('d', buildMouthPath(welcome, curiosity));
+      mouthPath.setAttribute('stroke-width', lerp(7.0, 9.2, welcome).toFixed(2));
+
+      leftCheek.setAttribute('opacity', (welcome * 0.95).toFixed(2));
+      rightCheek.setAttribute('opacity', (welcome * 0.95).toFixed(2));
+
+      // Affichage bref du bouton de relecture à la fin de la séquence (7.5s)
+      if (t >= 7.45 && t < 7.52) {
+        showReplayButtonBriefly();
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('load', () => {
+      requestAnimationFrame(animate);
+    });
+  </script>
+</body>
+</html>

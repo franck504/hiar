@@ -1,0 +1,46 @@
+flowchart TD
+    %% Figure 11 : Architecture matérielle et schéma d'interconnexion physique de HIAR
+
+    subgraph IHM["Terminal Utilisateur"]
+        PHONE["Smartphone / Tablette Usager<br/>(Application Flutter « Neo Clinic » & Web)"]
+    end
+
+    subgraph RPI["Micro-ordinateur Maître : Raspberry Pi 4 Model B (4 Go)"]
+        WIFI["Point d'accès Wi-Fi autonome<br/>SSID : HIAR-DEMO (WPA2, 10.42.0.1)"]
+        RPI_SW["Système Ubuntu 22.04 LTS<br/>• Middleware ROS 2 Humble<br/>• Passerelle WebSocket :8765<br/>• Serveur Web Flask :5000<br/>• Base SQLite3 appointments.sqlite3<br/>• Inférence locale Ollama (Qwen 2.5 0.5B)<br/>• Client Cloud API Google Gemini 2.5 Flash"]
+        WIFI <--> RPI_SW
+    end
+
+    PHONE <-->|"Wi-Fi 2,4 GHz<br/>(WebSocket JSON & HTTP)"| WIFI
+
+    subgraph ESP["Microcontrôleur Esclave Temps Réel : ESP32-WROOM-32 (240 MHz)"]
+        ESP_CORE["ESP32 Core C++<br/>• Multiplexage séquentiel 35 ms<br/>• Filtre médian 3 points<br/>• PWM matériel 20 kHz (ledc)<br/>• Arrêt d'urgence matériel (&lt; 25 cm, timeout 2 s)"]
+    end
+
+    RPI_SW <-->|"Liaison série USB (/dev/ttyUSB0)<br/>115200 bauds (Trames texte normalisées)"| ESP_CORE
+
+    subgraph SENSORS_NAV["Ceinture Télémétrique (Navigation Réactive)"]
+        US_FRONT["HC-SR04 Avant<br/>TRIG: GPIO 13 | ECHO: GPIO 34 (Diviseur 5V/3.3V)"]
+        US_LEFT["HC-SR04 Gauche<br/>TRIG: GPIO 2 | ECHO: GPIO 4"]
+        US_RIGHT["HC-SR04 Droit<br/>TRIG: GPIO 5 | ECHO: GPIO 16"]
+    end
+
+    subgraph SENSORS_BIO["Chaîne d'Acquisition Biométrique (Signes Vitaux)"]
+        DS18["Sonde Température DS18B20<br/>DATA: GPIO 23 (Bus 1-Wire + Pull-up 4,7 kΩ)"]
+        MAX30["Oxymètre & Pouls MAX30102<br/>SDA: GPIO 21 | SCL: GPIO 22 (Bus I²C 400 kHz)"]
+    end
+
+    subgraph ACTUATORS["Actionnement et Motorisation Châssis"]
+        L298N["Pont en H L298N<br/>Moteur G : ENA 25 (PWM), IN1 26, IN2 27<br/>Moteur D : ENB 19 (PWM), IN3 14, IN4 18"]
+        MOTORS["2 Moteurs DC à réducteur<br/>(Entraînement différentiel)"]
+    end
+
+    US_FRONT <--> ESP_CORE
+    US_LEFT <--> ESP_CORE
+    US_RIGHT <--> ESP_CORE
+
+    DS18 <-->|"Bus 1-Wire"| ESP_CORE
+    MAX30 <-->|"Bus I²C (0x57)"| ESP_CORE
+
+    ESP_CORE -->|"Signaux logiques & PWM"| L298N
+    L298N -->|"Puissance 7,4V Li-ion"| MOTORS

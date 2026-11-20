@@ -1,0 +1,35 @@
+sequenceDiagram
+    %% Figure 18 : Diagramme de séquence de la détection et du contournement dynamique d'obstacle
+    autonumber
+
+    actor OBS as Obstacle physique
+    participant ESP as ESP32 (Firmware C++)
+    participant OBS_NODE as obstacle_detector_node
+    participant NAV_NODE as navigation_decision_node
+    participant SUP_NODE as robot_supervisor_node
+    participant MOT as L298N & Moteurs DC
+
+    Note over MOT: Le robot est en mouvement FORWARD (vitesse nominale)
+    OBS->>ESP: Rapprochement d'un obstacle frontal (d = 18 cm < 20 cm)
+    ESP->>OBS_NODE: Trame série USB : SENSOR,FRONT,18.0 (/sensors/ultrasonic)
+    
+    rect rgb(255, 235, 235)
+        Note over SUP_NODE: Coupure prioritaire déterministe
+        OBS_NODE->>SUP_NODE: Topic /sensors/obstacle ("FRONT")
+        SUP_NODE->>MOT: Topic /robot/motor_command ("STOP")
+        MOT-->>OBS: Arrêt immédiat de l'avance (PWM forcé à 0)
+    end
+
+    Note over ESP: Multiplexage séquentiel à 35 ms
+    ESP->>OBS_NODE: Trames série : SENSOR,LEFT,45.0 puis SENSOR,RIGHT,12.0
+    OBS_NODE->>NAV_NODE: /sensors/obstacle_left ("FREE") & /sensors/obstacle_right ("OBSTACLE")
+
+    rect rgb(235, 245, 255)
+        Note over NAV_NODE: Évaluation FSM dans l'état DECIDE
+        NAV_NODE->>NAV_NODE: Décision : Pivot gauche vers l'espace libre
+        NAV_NODE->>SUP_NODE: Topic /robot/command ("TURN_LEFT")
+        SUP_NODE->>MOT: Topic /robot/motor_command ("TURN_LEFT" avec invert_steering)
+        MOT-->>OBS: Pivotement physique à gauche pendant 0,6 s
+    end
+
+    Note over NAV_NODE: Transition vers RECHECK (0,2 s) puis reprise de l'avance FORWARD

@@ -1,0 +1,58 @@
+flowchart TB
+    %% Figure 14 : Graphe exhaustif des nœuds et des topics de communication ROS 2 Humble
+
+    subgraph NODES["Nœuds Actifs ROS 2 (rclpy)"]
+        N_BRIDGE(["hmi_websocket_bridge"])
+        N_DEC(["navigation_decision"])
+        N_SUP(["robot_supervisor"])
+        N_OBS(["obstacle_detector"])
+        N_ESP(["esp32_interface"])
+    end
+
+    subgraph TOPICS_NAV["Topics de Navigation et Contrôle"]
+        T_NAV_REQ["/navigation/request<br/>(std_msgs/String JSON)"]
+        T_NAV_CMD["/navigation/command<br/>(std_msgs/String)"]
+        T_NAV_STAT["/navigation/status<br/>(std_msgs/String)"]
+        T_ROBOT_CMD["/robot/command<br/>(std_msgs/String)"]
+        T_MOTOR_CMD["/robot/motor_command<br/>(std_msgs/String)"]
+        T_ROBOT_STAT["/robot/status<br/>(std_msgs/String)"]
+    end
+
+    subgraph TOPICS_SENSORS["Topics Télémétriques (Ceinture 3x HC-SR04)"]
+        T_US_F["/sensors/ultrasonic<br/>(std_msgs/Float32 - Avant)"]
+        T_US_L["/sensors/ultrasonic_left<br/>(std_msgs/Float32 - Gauche)"]
+        T_US_R["/sensors/ultrasonic_right<br/>(std_msgs/Float32 - Droite)"]
+        T_OBS_F["/sensors/obstacle<br/>(std_msgs/String - FRONT)"]
+        T_OBS_L["/sensors/obstacle_left<br/>(std_msgs/String)"]
+        T_OBS_R["/sensors/obstacle_right<br/>(std_msgs/String)"]
+    end
+
+    subgraph TOPICS_VITALS["Topics Biométrie et Diagnostic"]
+        T_VREQ["/vitals/request<br/>(std_msgs/String JSON)"]
+        T_VRES["/vitals/result<br/>(std_msgs/String JSON)"]
+        T_DIAG["/esp32/diagnostics<br/>(std_msgs/String JSON)"]
+    end
+
+    %% Raccordements
+    N_BRIDGE --> T_NAV_REQ --> N_DEC
+    N_BRIDGE --> T_NAV_CMD --> N_DEC
+    N_DEC --> T_NAV_STAT --> N_BRIDGE
+    N_DEC --> T_ROBOT_CMD --> N_SUP
+    N_SUP --> T_MOTOR_CMD --> N_ESP
+    N_SUP --> T_ROBOT_STAT --> N_BRIDGE
+
+    N_ESP --> T_US_F --> N_OBS
+    N_ESP --> T_US_L --> N_OBS
+    N_ESP --> T_US_R --> N_OBS
+
+    T_US_F --> N_DEC
+    T_US_L --> N_DEC
+    T_US_R --> N_DEC
+
+    N_OBS --> T_OBS_F --> N_SUP
+    N_OBS --> T_OBS_L --> N_DEC
+    N_OBS --> T_OBS_R --> N_DEC
+
+    N_BRIDGE --> T_VREQ --> N_ESP
+    N_ESP --> T_VRES --> N_BRIDGE
+    N_ESP --> T_DIAG --> N_BRIDGE

@@ -1,0 +1,93 @@
+classDiagram
+    %% Figure 15 : Diagramme de classes simplifié des composants logiciels clés de HIAR
+
+    class Node {
+        <<ROS 2 Humble>>
+        +create_subscription()
+        +create_publisher()
+        +create_timer()
+        +get_logger()
+    }
+
+    class HmiWebSocketBridgeNode {
+        -int websocket_port
+        -DualEngineIntentParser intent_parser
+        +start_server()
+        +on_client_message(json_data)
+        +publish_nav_request(destination)
+        +publish_vitals_request()
+        +broadcast_status(status_msg)
+    }
+
+    class NavigationDecisionNode {
+        -String current_state
+        -float timeout_duration
+        -float front_distance
+        -float left_distance
+        -float right_distance
+        +on_nav_request(request)
+        +evaluate_fsm()
+        +transition_to(new_state)
+        +publish_robot_command(cmd)
+    }
+
+    class RobotSupervisorNode {
+        -float watchdog_frequency_hz
+        -boolean obstacle_detected
+        -unsigned_long last_heartbeat
+        +on_robot_command(cmd)
+        +on_obstacle_detected(zone)
+        +cyclic_check_10hz()
+        +publish_motor_command(motor_cmd)
+    }
+
+    class ObstacleDetectorNode {
+        -float threshold_stop_cm
+        +on_ultrasonic_front(dist)
+        +on_ultrasonic_left(dist)
+        +on_ultrasonic_right(dist)
+        +qualify_obstacles()
+    }
+
+    class Esp32InterfaceNode {
+        -Serial serial_port
+        -boolean invert_steering
+        +read_serial_frames()
+        +on_motor_command(cmd)
+        +publish_sensor_topics(sensor, value)
+    }
+
+    class DualEngineIntentParser {
+        -Client gemini_client
+        -String ollama_url
+        -LRUCache cache
+        +parse_intent(text) dict
+        -match_reflexe(text) dict
+        -call_gemini_cloud(prompt) dict
+        -call_qwen_local_ollama(prompt) dict
+    }
+
+    class DatabaseManager {
+        -String db_path
+        +get_connection() Connection
+        +execute_transaction(query, params)
+        +run_migrations()
+    }
+
+    class AppointmentService {
+        -DatabaseManager db
+        +create_appointment(name, contact, doctor, period, vitals)
+        +call_next_patient(doctor, period)
+        +close_session(date, doctor, period)
+    }
+
+    Node <|-- HmiWebSocketBridgeNode
+    Node <|-- NavigationDecisionNode
+    Node <|-- RobotSupervisorNode
+    Node <|-- ObstacleDetectorNode
+    Node <|-- Esp32InterfaceNode
+
+    HmiWebSocketBridgeNode --> DualEngineIntentParser : utilise
+    AppointmentService --> DatabaseManager : utilise
+    NavigationDecisionNode ..> RobotSupervisorNode : communique via topics
+    RobotSupervisorNode ..> Esp32InterfaceNode : commande motrice

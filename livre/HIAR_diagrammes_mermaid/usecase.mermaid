@@ -1,0 +1,36 @@
+flowchart LR
+    %% Figure 13 : Diagramme de cas d'utilisation global du système HIAR (UML)
+
+    actor USR["Patient / Usager hospitalier"]
+    actor STAFF["Personnel administratif &amp; Soignant"]
+    actor DOC["Médecin Praticien"]
+    actor ROBOT["Système Robotique HIAR (Superviseur &amp; Moteurs)"]
+
+    subgraph SYSTEM_HIAR["Périmètre du Système Intelligent HIAR"]
+        UC1["Demander une orientation hospitalière<br/>(Choix de destination ou guidage vocal)"]
+        UC2["Suivre l'accompagnement physique du robot<br/>(Déplacement balisé avec évitement)"]
+        UC3["Prendre un rendez-vous en consultation<br/>(Saisie coordonnées &amp; Choix médecin)"]
+        UC4["Mesurer ses constantes vitales<br/>(Température cutanée, BPM, SpO2 %)"]
+        UC5["Consulter les fiches sanitaires OMS<br/>(Informations préventives fiables)"]
+        UC6["Interagir avec l'assistant intelligent<br/>(Questions en langage naturel STT/TTS)"]
+        UC7["Gérer les sessions et créneaux<br/>(Ouverture/fermeture des files médicales)"]
+        UC8["Appeler le patient suivant<br/>(Mise à jour statut ticket 'appelé'/'terminé')"]
+        UC9["Superviser la sécurité et l'état robot<br/>(Arrêt d'urgence, télémétrie batterie)"]
+    end
+
+    USR --> UC1
+    USR --> UC3
+    USR --> UC4
+    USR --> UC5
+    USR --> UC6
+
+    UC1 -.->|&laquo; include &raquo;| UC2
+    UC3 -.->|&laquo; extend &raquo;| UC4
+    UC2 --> ROBOT
+    UC9 --> ROBOT
+
+    STAFF --> UC7
+    STAFF --> UC9
+
+    DOC --> UC8
+    DOC --> UC7

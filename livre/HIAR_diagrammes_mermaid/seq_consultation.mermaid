@@ -1,0 +1,44 @@
+sequenceDiagram
+    %% Figure 21 : Diagramme de séquence de l'inscription en consultation et de la mesure des signes vitaux
+    autonumber
+
+    actor USR as Usager / Patient
+    participant APP as App Flutter « Neo Clinic »
+    participant BRIDGE as hmi_websocket_bridge (:8765)
+    participant ESP as ESP32 (Biométrie C++)
+    participant FLASK as Serveur Flask :5000
+    participant DB as Base SQLite3
+
+    USR->>APP: Renseigne le formulaire (Nom, Téléphone 034..., Médecin A, Période MAT)
+    USR->>APP: Déclenche la prise facultative des signes vitaux
+    APP-->>USR: Présentation du clip vidéo didactique MP4 (Placement de l'index)
+    
+    APP->>BRIDGE: WebSocket JSON : {"action": "vitals_start"}
+    BRIDGE->>ESP: Topic /vitals/request (Session déterministe de 20 secondes)
+
+    rect rgb(235, 245, 255)
+        Note over ESP: Acquisition biométrique conjointe
+        ESP->>ESP: Lecture température corporelle DS18B20 sur bus 1-Wire
+        ESP->>ESP: Extraction AC/DC et calcul SpO2 (%) via ratio R sur MAX30102 (I²C)
+        ESP->>BRIDGE: Topic /vitals/result : {"temperature_c": 36.8, "heart_rate_bpm": 72, "spo2_percent": 98.0}
+    end
+
+    BRIDGE->>APP: Transmission WebSocket des constantes physiologiques
+    
+    rect rgb(255, 240, 240)
+        Note over APP,USR: Confidentialité et Secret Médical
+        APP-->>USR: Affichage STRICTEMENT VISUEL des constantes (Aucune synthèse vocale TTS !)
+    end
+
+    USR->>APP: Valide et confirme l'inscription en consultation
+    APP->>FLASK: Requête HTTP POST /api/appointments (Données patient + Signes vitaux)
+    
+    rect rgb(235, 255, 235)
+        Note over FLASK,DB: Transaction d'isolation stricte ACID
+        FLASK->>DB: Exécution BEGIN IMMEDIATE
+        DB->>DB: Vérification session ouverte & Attribution rang séquentiel (Ticket A-MAT-1)
+        DB-->>FLASK: Succès du commit transactionnel
+    end
+
+    FLASK-->>APP: Réponse HTTP 201 Created : {"ticket": "A-MAT-1", "status": "en attente"}
+    APP-->>USR: Affichage de la carte d'embarquement numérique du ticket de consultation
