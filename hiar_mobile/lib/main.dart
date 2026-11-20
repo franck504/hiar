@@ -36,6 +36,7 @@ class HiarApp extends StatefulWidget {
 
 class _HiarAppState extends State<HiarApp> {
   final HubClient _hub = HubClient.instance;
+  final GlobalKey<ConsultationScreenState> _consultationKey = GlobalKey<ConsultationScreenState>();
 
   String _currentScreen = 'splash';
   String _selectedDestination = 'Pharmacie';
@@ -146,10 +147,14 @@ class _HiarAppState extends State<HiarApp> {
     };
 
     // 2. Réception d'ordres TTS depuis le Raspberry Pi 4 : faire parler le robot à haute voix
-    _hub.onTtsRequested = (textToSpeak) {
+    _hub.onTtsRequested = (textToSpeak, [targetScreen]) {
       _clearVoiceLoading();
+      if (targetScreen != null && targetScreen != _currentScreen) {
+        debugPrint("TTS ignoré car destiné à l'écran '$targetScreen' alors que l'écran actuel est '$_currentScreen'");
+        return;
+      }
       debugPrint("TTS Reçu du Pi 4 -> Émission vocale : « $textToSpeak »");
-      VoiceService.instance.speak(textToSpeak);
+      VoiceService.instance.speak(textToSpeak, forGeneration: VoiceService.instance.currentGeneration);
     };
 
     // 3. Réception d'actions décidées par le Raspberry Pi 4 (après son analyse du texte ou ROS 2)
@@ -487,15 +492,23 @@ class _HiarAppState extends State<HiarApp> {
       } else if (ui['action'] == 'resume') {
         _triggerResume();
       } else if (ui['action'] == 'next') {
-        setState(() {
-          if (_consultationStep < 6) _consultationStep++;
-        });
-        _goToScreen('consultation');
+        if (_currentScreen == 'consultation' && _consultationKey.currentState != null) {
+          _consultationKey.currentState!.nextStep();
+        } else {
+          setState(() {
+            if (_consultationStep < 6) _consultationStep++;
+          });
+          _goToScreen('consultation');
+        }
       } else if (ui['action'] == 'prev') {
-        setState(() {
-          if (_consultationStep > 1) _consultationStep--;
-        });
-        _goToScreen('consultation');
+        if (_currentScreen == 'consultation' && _consultationKey.currentState != null) {
+          _consultationKey.currentState!.prevStep();
+        } else {
+          setState(() {
+            if (_consultationStep > 1) _consultationStep--;
+          });
+          _goToScreen('consultation');
+        }
       }
 
       final targetScreen = ui['screen']?.toString();
@@ -1106,6 +1119,10 @@ class _HiarAppState extends State<HiarApp> {
                 onBack: () => _goToScreen('splash'),
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
+                onStopRobotTap: () {
+                  _hub.publishAction('robot.stop', {});
+                  _triggerStop();
+                },
                 onOpenOrientation: () {
                   _hub.publishAction('home.open_category', {'category': 'ORIENTATION'});
                   _goToScreen('orientation');
@@ -1128,6 +1145,10 @@ class _HiarAppState extends State<HiarApp> {
                 faceExpression: _faceExpression,
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
+                onStopRobotTap: () {
+                  _hub.publishAction('robot.stop', {});
+                  _triggerStop();
+                },
                 onBack: () {
                   _hub.publishAction('app.back', {});
                   _goToScreen('home');
@@ -1173,6 +1194,10 @@ class _HiarAppState extends State<HiarApp> {
                 faceExpression: _faceExpression,
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
+                onStopRobotTap: () {
+                  _hub.publishAction('robot.stop', {});
+                  _triggerStop();
+                },
                 onBack: () {
                   _hub.publishAction('app.back', {});
                   _goToScreen('home');
@@ -1184,6 +1209,7 @@ class _HiarAppState extends State<HiarApp> {
               );
             case 'consultation':
               return ConsultationScreen(
+                key: _consultationKey,
                 initialStep: _consultationStep,
                 dynamicFields: _dynamicFields,
                 voiceState: _voiceState,
@@ -1194,6 +1220,10 @@ class _HiarAppState extends State<HiarApp> {
                 onMicTap: _toggleMic,
                 onSettingsTap: _showServerConfigDialog,
                 isRobotConnected: _isRobotConnected,
+                onStopRobotTap: () {
+                  _hub.publishAction('robot.stop', {});
+                  _triggerStop();
+                },
                 onStepChanged: (newStep) {
                   _consultationStep = newStep;
                   _hub.publishAction('consult.step_changed', {'step': newStep});

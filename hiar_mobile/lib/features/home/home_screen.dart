@@ -17,6 +17,7 @@ class HomeScreen extends StatelessWidget {
   final bool isRobotConnected;
   final String? voiceTip;
   final String? faceExpression;
+  final VoidCallback? onStopRobotTap;
 
   const HomeScreen({
     super.key,
@@ -32,6 +33,7 @@ class HomeScreen extends StatelessWidget {
     this.isRobotConnected = true,
     this.voiceTip,
     this.faceExpression,
+    this.onStopRobotTap,
   });
 
   @override
@@ -40,6 +42,7 @@ class HomeScreen extends StatelessWidget {
       title: "Accueil HIAR",
       showBack: true,
       onBack: onBack,
+      onStopRobotTap: onStopRobotTap,
       voiceState: voiceState,
       voiceStatus: voiceStatus,
       recognizedText: recognizedText,

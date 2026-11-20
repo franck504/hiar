@@ -660,3 +660,207 @@ td.empty {
 .pin-key.pin-submit:hover {
   background: var(--secondary-dark);
 }
+
+/* Onglets d'administration & Tableau de bord */
+.admin-tab-nav {
+  display: flex;
+  gap: 12px;
+  max-width: 1040px;
+  margin: 0 auto 16px;
+  padding: 0 16px;
+}
+
+.admin-tab-btn {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-tab-btn:hover {
+  border-color: var(--brand-blue);
+  color: var(--brand-blue);
+}
+
+.admin-tab-btn.active {
+  background: var(--brand-blue);
+  border-color: var(--brand-blue);
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(11, 79, 124, 0.2);
+}
+
+.dashboard-panel {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.kpi-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 4px solid var(--brand-blue);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.kpi-card-confirmed {
+  border-left-color: var(--wait);
+}
+
+.kpi-card-consulting {
+  border-left-color: #2563EB;
+}
+
+.kpi-card-done {
+  border-left-color: var(--success);
+}
+
+.kpi-card-alerts {
+  border-left-color: #DC2626;
+}
+
+.kpi-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kpi-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.dashboard-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  background: #F8FAFC;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.dashboard-filter-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.dashboard-filter-bar select,
+.dashboard-filter-bar input {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 0.86rem;
+  background: #FFFFFF;
+}
+
+.dashboard-table-container {
+  overflow-x: auto;
+  background: #FFFFFF;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.dashboard-table th {
+  background: #F1F5F9;
+  padding: 12px 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #EDF2F7;
+  color: var(--text-primary);
+}
+
+.dashboard-table tr:hover {
+  background: #F8FAFC;
+}
+
+.ticket-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  background: #E2E8F0;
+  color: #1E293B;
+  border-radius: 6px;
+  font-weight: 700;
+  font-family: monospace;
+}
+
+.vitals-alert {
+  color: #DC2626;
+  font-weight: 700;
+}
+
+.badge-alert-pill {
+  display: inline-block;
+  background: #FEE2E2;
+  color: #DC2626;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.status-confirmed, .status-waiting {
+  background: var(--wait-bg);
+  color: var(--wait);
+}
+
+.status-in_consultation {
+  background: #EFF6FF;
+  color: #2563EB;
+}
+
+.status-done, .status-completed {
+  background: var(--accent-mint);
+  color: var(--success);
+}
+
+.status-cancelled {
+  background: var(--err-bg);
+  color: var(--err);
+}

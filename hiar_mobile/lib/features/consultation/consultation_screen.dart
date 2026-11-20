@@ -6,6 +6,7 @@ import '../../ui/components/action_button.dart';
 import '../../ui/components/vitals_tutorial_player.dart';
 import '../../ui/rail/voice_rail.dart';
 import '../../ui/theme/hiar_colors.dart';
+import '../../voice/voice_service.dart';
 
 class ConsultationScreen extends StatefulWidget {
   final int initialStep;
@@ -23,6 +24,7 @@ class ConsultationScreen extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>>? onConfirmAppointment;
   final VoidCallback onCancel;
   final VoidCallback onFinish;
+  final VoidCallback? onStopRobotTap;
 
   const ConsultationScreen({
     super.key,
@@ -41,13 +43,14 @@ class ConsultationScreen extends StatefulWidget {
     this.onConfirmAppointment,
     required this.onCancel,
     required this.onFinish,
+    this.onStopRobotTap,
   });
 
   @override
-  State<ConsultationScreen> createState() => _ConsultationScreenState();
+  State<ConsultationScreen> createState() => ConsultationScreenState();
 }
 
-class _ConsultationScreenState extends State<ConsultationScreen> {
+class ConsultationScreenState extends State<ConsultationScreen> {
   int _currentStep = 1;
 
   // Données du formulaire (sans valeur par défaut pour laisser le choix réel au patient)
@@ -81,15 +84,55 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     _syncFields();
   }
 
+  bool _canAdvanceFrom(int step) {
+    if (step == 1) return _selectedReason != null;
+    if (step == 2) return _selectedDoctor != null && _selectedPeriod != null;
+    if (step == 3) {
+      return _nameController.text.trim().isNotEmpty && _phoneController.text.trim().isNotEmpty;
+    }
+    if (step == 4) {
+      if (_vitalsRunning) return false;
+      return _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
+    }
+    return true;
+  }
+
+  String _validationErrorMessageFor(int step) {
+    switch (step) {
+      case 1:
+        return "Veuillez choisir un motif de consultation.";
+      case 2:
+        return "Veuillez choisir un médecin et un créneau horaire.";
+      case 3:
+        return "Veuillez renseigner votre nom complet et votre numéro de téléphone.";
+      case 4:
+        if (_vitalsRunning) {
+          return "Mesure des constantes en cours, veuillez patienter.";
+        }
+        return "Veuillez mesurer vos constantes vitales avant de passer au récapitulatif.";
+      default:
+        return "Veuillez compléter cette étape avant de continuer.";
+    }
+  }
+
   @override
   void didUpdateWidget(covariant ConsultationScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.initialStep != oldWidget.initialStep && widget.initialStep != _currentStep) {
-      setState(() {
-        _currentStep = widget.initialStep;
-      });
-      if (_currentStep == 4) {
-        widget.onStepChanged?.call(4);
+      if (widget.initialStep > _currentStep && !_canAdvanceFrom(_currentStep)) {
+        final err = _validationErrorMessageFor(_currentStep);
+        setState(() {
+          _formValidationError = err;
+        });
+        VoiceService.instance.speak(err);
+      } else {
+        setState(() {
+          _currentStep = widget.initialStep;
+          _formValidationError = null;
+        });
+        if (_currentStep == 4) {
+          widget.onStepChanged?.call(4);
+        }
       }
     }
     _syncFields();
@@ -164,6 +207,9 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       _submitError = fields['booking_error'].toString();
       _isSubmitting = false;
     }
+    if (fields.containsKey('form_validation_error') && fields['form_validation_error'] != null) {
+      _formValidationError = fields['form_validation_error'].toString();
+    }
     if (fields.containsKey('selected_reason') && fields['selected_reason'] != null) {
       _selectedReason = fields['selected_reason'].toString();
     }
@@ -220,31 +266,21 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     });
   }
 
+  void nextStep() => _nextStep();
+  void prevStep() => _prevStep();
+
   void _nextStep() {
     setState(() {
       _formValidationError = null;
       _submitError = null;
     });
 
-    if (_currentStep == 1 && _selectedReason == null) {
+    if (!_canAdvanceFrom(_currentStep)) {
+      final err = _validationErrorMessageFor(_currentStep);
       setState(() {
-        _formValidationError = "Veuillez choisir un motif de consultation.";
+        _formValidationError = err;
       });
-      return;
-    }
-
-    if (_currentStep == 2 && (_selectedDoctor == null || _selectedPeriod == null)) {
-      setState(() {
-        _formValidationError = "Veuillez choisir un médecin et un créneau horaire.";
-      });
-      return;
-    }
-
-    if (_currentStep == 3 &&
-        (_nameController.text.trim().isEmpty || _phoneController.text.trim().isEmpty)) {
-      setState(() {
-        _formValidationError = "Veuillez renseigner votre nom complet et votre numéro de téléphone.";
-      });
+      VoiceService.instance.speak(err);
       return;
     }
 
@@ -267,25 +303,41 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       _submitError = null;
     });
 
-    final patientName = _nameController.text.trim();
-    final patientPhone = _phoneController.text.trim();
-
-    if (patientName.isEmpty || patientPhone.isEmpty) {
-      setState(() {
-        _formValidationError = "Nom complet et numéro de téléphone requis (Étape 3).";
-      });
-      return;
-    }
     if (_selectedReason == null) {
       setState(() {
+        _currentStep = 1;
         _formValidationError = "Veuillez sélectionner un motif de consultation (Étape 1).";
       });
+      VoiceService.instance.speak("Veuillez choisir un motif de consultation.");
       return;
     }
     if (_selectedDoctor == null || _selectedPeriod == null) {
       setState(() {
+        _currentStep = 2;
         _formValidationError = "Veuillez choisir un médecin et un créneau (Étape 2).";
       });
+      VoiceService.instance.speak("Veuillez choisir un médecin et un créneau.");
+      return;
+    }
+
+    final patientName = _nameController.text.trim();
+    final patientPhone = _phoneController.text.trim();
+    if (patientName.isEmpty || patientPhone.isEmpty) {
+      setState(() {
+        _currentStep = 3;
+        _formValidationError = "Nom complet et numéro de téléphone requis (Étape 3).";
+      });
+      VoiceService.instance.speak("Nom complet et numéro de téléphone requis.");
+      return;
+    }
+
+    final bool hasMeasured = _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
+    if (!hasMeasured) {
+      setState(() {
+        _currentStep = 4;
+        _formValidationError = "Veuillez mesurer vos constantes vitales avant de confirmer (Étape 4).";
+      });
+      VoiceService.instance.speak("Veuillez mesurer vos constantes vitales avant de confirmer.");
       return;
     }
 
@@ -367,6 +419,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       title: titles[_currentStep] ?? "Consultation",
       step: "Étape $_currentStep sur 5",
       onBack: _prevStep,
+      onStopRobotTap: widget.onStopRobotTap,
       voiceState: widget.voiceState,
       voiceStatus: widget.voiceStatus,
       recognizedText: widget.recognizedText,
@@ -1139,6 +1192,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       title: "Rendez-vous confirmé",
       showBack: true,
       onBack: widget.onFinish,
+      onStopRobotTap: widget.onStopRobotTap,
       voiceState: widget.voiceState,
       voiceStatus: widget.voiceStatus,
       recognizedText: widget.recognizedText,

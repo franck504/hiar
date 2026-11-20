@@ -13,6 +13,7 @@ from vital_signs import _build, _result
 from appointments_store import (
     BookingError,
     create_appointment,
+    get_connection,
     init_db,
     init_sessions_db,
     list_appointments,
@@ -942,7 +943,75 @@ def api_system_diagnostics():
     return jsonify(data), 200
 
 
+@app.route("/api/admin/dashboard", methods=["GET"])
+def api_admin_dashboard():
+    """Tableau de bord administrateur : statistiques globales et historique de tous les rendez-vous."""
+    if not staff_authorized():
+        return staff_auth_error()
+
+    try:
+        init_sessions_db()
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, patient_name, contact, reason_code, doctor, period,
+                       requested_date, requested_time, ticket_number, status,
+                       temperature_c, heart_rate_bpm, spo2_percent, created_at
+                FROM appointments
+                ORDER BY requested_date DESC, id DESC
+                """
+            ).fetchall()
+
+        appts = []
+        for r in rows:
+            item = dict(r)
+            if item.get("ticket_number"):
+                item["ticket_label"] = f"{item.get('doctor') or 'A'}-{item.get('period') or 'MAT'}-{item['ticket_number']}"
+            else:
+                item["ticket_label"] = item.get("requested_time") or "—"
+            appts.append(item)
+
+        total = len(appts)
+        confirmed = sum(1 for a in appts if a.get("status") in ("CONFIRMED", "WAITING"))
+        in_consult = sum(1 for a in appts if a.get("status") == "IN_CONSULTATION")
+        done = sum(1 for a in appts if a.get("status") in ("DONE", "COMPLETED"))
+        cancelled = sum(1 for a in appts if a.get("status") == "CANCELLED")
+
+        def _is_alert(a):
+            t = a.get("temperature_c")
+            hr = a.get("heart_rate_bpm")
+            sp = a.get("spo2_percent")
+            if t is not None and (t >= 38.0 or t <= 35.0):
+                return True
+            if hr is not None and (hr > 100 or hr < 50):
+                return True
+            if sp is not None and sp < 95:
+                return True
+            return False
+
+        alerts = sum(1 for a in appts if _is_alert(a))
+
+        stats = {
+            "total": total,
+            "confirmed": confirmed,
+            "in_consultation": in_consult,
+            "done": done,
+            "cancelled": cancelled,
+            "alerts": alerts,
+        }
+
+        return jsonify({
+            "ok": True,
+            "stats": stats,
+            "appointments": appts,
+        }), 200
+    except Exception as err:
+        app.logger.exception("Erreur lors du chargement du tableau de bord admin")
+        return jsonify({"ok": False, "error": str(err)}), 500
+
+
 @app.route("/api/navigation/cancel", methods=["POST"])
+@app.route("/api/robot/stop", methods=["POST"])
 def api_navigation_cancel():
     published = bridge.cancel_navigation()
     response = {

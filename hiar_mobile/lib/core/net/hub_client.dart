@@ -40,7 +40,7 @@ class HubClient {
 
   // Callbacks
   Function(bool connected)? onConnectionChange;
-  Function(String textToSpeak)? onTtsRequested;
+  Function(String textToSpeak, [String? targetScreen])? onTtsRequested;
   Function(String actionId, Map<String, dynamic> args)? onActionRequested;
   Function(String missionState)? onMissionStatus;
   Function(Map<String, dynamic> instruction)? onServerInstruction;
@@ -54,7 +54,7 @@ class HubClient {
   DateTime? _lastTtsDispatchedTime;
 
   /// Diffuse un ordre TTS en filtrant les doublons rapprochés (< 2.5s)
-  void _triggerTts(String text) {
+  void _triggerTts(String text, {String? targetScreen}) {
     final clean = text.trim();
     if (clean.isEmpty) return;
     final now = DateTime.now();
@@ -67,7 +67,7 @@ class HubClient {
     }
     _lastTtsDispatched = clean;
     _lastTtsDispatchedTime = now;
-    onTtsRequested?.call(clean);
+    onTtsRequested?.call(clean, targetScreen);
   }
 
   /// Active la découverte automatique UDP sur le réseau Wi-Fi local (port 5005)
@@ -313,16 +313,18 @@ class HubClient {
     if (topic == "server/instruction") {
       onServerInstruction?.call(payload);
       final text = payload['text_to_speak'] as String?;
+      final targetScreen = (payload['instruction_ui'] as Map?)?['screen']?.toString() ?? payload['screen']?.toString();
       if (text != null && text.isNotEmpty) {
-        _triggerTts(text);
+        _triggerTts(text, targetScreen: targetScreen);
       }
     }
 
     // 1. Ordre de parler (TTS demandé par le Raspberry Pi 4)
     else if (topic == HiarTopics.voiceTtsRequest) {
       final text = payload['text'] as String?;
+      final targetScreen = payload['screen']?.toString();
       if (text != null && text.isNotEmpty) {
-        _triggerTts(text);
+        _triggerTts(text, targetScreen: targetScreen);
       }
     }
 

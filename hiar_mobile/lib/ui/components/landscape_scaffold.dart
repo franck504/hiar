@@ -20,6 +20,7 @@ class LandscapeScaffold extends StatelessWidget {
   final String? faceExpression;
   final VoidCallback? onMicTap;
   final VoidCallback? onSilenceTap;
+  final VoidCallback? onStopRobotTap;
   final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
 
@@ -38,6 +39,7 @@ class LandscapeScaffold extends StatelessWidget {
     this.faceExpression,
     this.onMicTap,
     this.onSilenceTap,
+    this.onStopRobotTap,
     this.onSettingsTap,
     this.isRobotConnected = true,
   });
@@ -59,6 +61,7 @@ class LandscapeScaffold extends StatelessWidget {
               faceExpression: faceExpression,
               onMicTap: onMicTap,
               onSilenceTap: onSilenceTap,
+              onStopRobotTap: onStopRobotTap,
               onSettingsTap: onSettingsTap,
               isRobotConnected: isRobotConnected,
             ),
@@ -118,6 +121,24 @@ class LandscapeScaffold extends StatelessWidget {
                               ],
                             ),
                           ),
+                          if (onStopRobotTap != null) ...[
+                            const SizedBox(width: 10),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFDC2626),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                                elevation: 1.5,
+                              ),
+                              icon: const Icon(Icons.stop_rounded, size: 20),
+                              label: const Text(
+                                "STOP ROBOT",
+                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.6),
+                              ),
+                              onPressed: onStopRobotTap,
+                            ),
+                          ],
                         ],
                       ),
                     ),

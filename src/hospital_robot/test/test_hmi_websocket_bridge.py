@@ -193,9 +193,13 @@ def test_bridge_lifecycle_and_messages(bridge_node):
             assert stop_inst["instruction_ui"]["action"] == "stop"
             assert stop_inst["value_to_show"]["value"] == "STOPPED"
 
-            # Vérification de la commande STOP sur /navigation/command
+            # Vérification de la commande STOP sur /navigation/command, /robot/command et /robot/motor_command
             assert len(node.navigation_command_pub.published) > 0
             assert node.navigation_command_pub.published[-1].data == "STOP"
+            assert len(node.robot_command_pub.published) > 0
+            assert node.robot_command_pub.published[-1].data == "STOP"
+            assert len(node.motor_command_pub.published) > 0
+            assert node.motor_command_pub.published[-1].data == "STOP"
 
             # 5. Test d'action tactile sur l'écran : orientation laboratoire
             touch_envelope = {

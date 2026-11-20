@@ -137,7 +137,7 @@ class VoiceRail extends StatelessWidget {
             const SizedBox(height: 10),
 
             // 3. Rangée de boutons circulaires flottants façon UI_style.jpeg
-            //    [ Silence/Son ]  [ Micro central Sarcelle ]  [ Paramètres ]
+            //    [ Silence/Son ]  [ Micro central Sarcelle ]  [ Stop Urgence ]  [ Paramètres ]
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -148,9 +148,20 @@ class VoiceRail extends StatelessWidget {
                   tooltip: voiceState == VoiceState.speaking ? "Couper la voix" : "Voix active",
                   onTap: voiceState == VoiceState.speaking ? onSilenceTap : null,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _buildMicButton(isListening: isListening, isThinking: isThinking),
-                const SizedBox(width: 12),
+                if (onStopRobotTap != null) ...[
+                  const SizedBox(width: 8),
+                  HiarCircularButton(
+                    icon: Icons.stop_rounded,
+                    isDestructive: true,
+                    size: 38,
+                    iconSize: 20,
+                    tooltip: "Arrêt d'urgence du robot",
+                    onTap: onStopRobotTap,
+                  ),
+                ],
+                const SizedBox(width: 8),
                 HiarCircularButton(
                   icon: Icons.settings_outlined,
                   size: 38,

@@ -14,6 +14,7 @@ class InformationScreen extends StatefulWidget {
   final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
   final String? faceExpression;
+  final VoidCallback? onStopRobotTap;
 
   const InformationScreen({
     super.key,
@@ -26,6 +27,7 @@ class InformationScreen extends StatefulWidget {
     this.onSettingsTap,
     this.isRobotConnected = true,
     this.faceExpression,
+    this.onStopRobotTap,
   });
 
   @override
@@ -101,6 +103,7 @@ class _InformationScreenState extends State<InformationScreen> {
     return LandscapeScaffold(
       title: "Renseignements santé",
       onBack: widget.onBack,
+      onStopRobotTap: widget.onStopRobotTap,
       voiceState: widget.voiceState,
       voiceStatus: widget.voiceStatus,
       recognizedText: widget.recognizedText,

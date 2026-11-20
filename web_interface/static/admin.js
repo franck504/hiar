@@ -109,25 +109,176 @@
     }
   }
 
+  let activeTab = "hardware";
+  let cachedAppointments = [];
+
+  function switchTab(tab) {
+    activeTab = tab;
+    const isHard = tab === "hardware";
+    const tabHard = $("tab-btn-hardware");
+    const tabDash = $("tab-btn-dashboard");
+    const panelHard = $("diagnostics-panel");
+    const panelDash = $("dashboard-panel");
+
+    if (tabHard) {
+      tabHard.classList.toggle("active", isHard);
+      tabHard.setAttribute("aria-selected", isHard ? "true" : "false");
+    }
+    if (tabDash) {
+      tabDash.classList.toggle("active", !isHard);
+      tabDash.setAttribute("aria-selected", !isHard ? "true" : "false");
+    }
+    if (panelHard) panelHard.hidden = !isHard;
+    if (panelDash) panelDash.hidden = isHard;
+
+    if (isHard) {
+      refreshDiagnostics();
+    } else {
+      loadDashboardData();
+    }
+  }
+
   function unlockAdmin() {
     $("login-panel").hidden = true;
-    $("diagnostics-panel").hidden = false;
     $("admin-topbar-actions").hidden = false;
-    refreshDiagnostics();
-    if (!timer) timer = setInterval(refreshDiagnostics, 3000);
+    if ($("admin-tab-nav")) $("admin-tab-nav").hidden = false;
+    switchTab(activeTab);
+    if (!timer) timer = setInterval(() => {
+      if (activeTab === "hardware") refreshDiagnostics();
+      else loadDashboardData();
+    }, 4000);
   }
 
   function lockAdmin(message) {
     clearInterval(timer);
     timer = null;
     localStorage.removeItem("hiar_web_pin");
+    if ($("admin-tab-nav")) $("admin-tab-nav").hidden = true;
     $("diagnostics-panel").hidden = true;
+    if ($("dashboard-panel")) $("dashboard-panel").hidden = true;
     $("admin-topbar-actions").hidden = true;
     $("login-panel").hidden = false;
     const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4") ];
     digits.forEach(d => { if (d) d.value = ""; });
     if (digits[0]) digits[0].focus();
     if (message) say("login-feedback", message);
+  }
+
+  async function loadDashboardData() {
+    try {
+      const pin = localStorage.getItem("hiar_web_pin") || "";
+      const res = await fetch("/api/admin/dashboard", {
+        headers: { "X-Web-PIN": pin },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.ok) return;
+
+      const stats = data.stats || {};
+      if ($("kpi-total")) $("kpi-total").textContent = stats.total || 0;
+      if ($("kpi-confirmed")) $("kpi-confirmed").textContent = stats.confirmed || 0;
+      if ($("kpi-consulting")) $("kpi-consulting").textContent = stats.in_consultation || 0;
+      if ($("kpi-done")) $("kpi-done").textContent = stats.done || 0;
+      if ($("kpi-alerts")) $("kpi-alerts").textContent = stats.alerts || 0;
+
+      cachedAppointments = data.appointments || [];
+      renderDashboardTable();
+    } catch (err) {
+      console.error("Erreur dashboard:", err);
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str || "").replace(/[&<>"']/g, (m) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[m]));
+  }
+
+  function renderDashboardTable() {
+    const tbody = $("dashboard-history-body");
+    if (!tbody) return;
+
+    const docFilter = $("filter-doctor")?.value || "";
+    const stFilter = $("filter-status")?.value || "";
+    const searchFilter = ($("filter-search")?.value || "").toLowerCase().trim();
+
+    const filtered = cachedAppointments.filter((a) => {
+      if (docFilter && (a.doctor || "") !== docFilter) return false;
+      if (stFilter && (a.status || "") !== stFilter) return false;
+      if (searchFilter) {
+        const haystack = `${a.patient_name || ""} ${a.contact || ""} ${a.ticket_label || ""} ${a.reason_code || ""}`.toLowerCase();
+        if (!haystack.includes(searchFilter)) return false;
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#64748b; padding:24px;">Aucun rendez-vous trouvé.</td></tr>';
+      return;
+    }
+
+    const STATUS_LABELS = {
+      CONFIRMED: "En attente",
+      WAITING: "En attente",
+      IN_CONSULTATION: "En consultation",
+      DONE: "Terminé",
+      COMPLETED: "Terminé",
+      CANCELLED: "Annulé",
+    };
+
+    const rows = filtered.map((a) => {
+      const tr = document.createElement("tr");
+
+      let vitalsHtml = "—";
+      const parts = [];
+      let hasAlert = false;
+      if (a.temperature_c != null) {
+        const isHot = a.temperature_c >= 38.0 || a.temperature_c <= 35.0;
+        if (isHot) hasAlert = true;
+        parts.push(`<span class="${isHot ? 'vitals-alert' : ''}">${a.temperature_c}°C</span>`);
+      }
+      if (a.heart_rate_bpm != null) {
+        const isAbnormalHr = a.heart_rate_bpm > 100 || a.heart_rate_bpm < 50;
+        if (isAbnormalHr) hasAlert = true;
+        parts.push(`<span class="${isAbnormalHr ? 'vitals-alert' : ''}">${a.heart_rate_bpm} bpm</span>`);
+      }
+      if (a.spo2_percent != null) {
+        const isHypoxia = a.spo2_percent < 95;
+        if (isHypoxia) hasAlert = true;
+        parts.push(`<span class="${isHypoxia ? 'vitals-alert' : ''}">${a.spo2_percent}%</span>`);
+      }
+      if (parts.length > 0) {
+        vitalsHtml = parts.join(" · ");
+        if (hasAlert) {
+          vitalsHtml += ' <span class="badge-alert-pill">Alerte</span>';
+        }
+      }
+
+      const st = a.status || "CONFIRMED";
+      const stLabel = STATUS_LABELS[st] || st;
+      const stClass = "status-" + st.toLowerCase();
+
+      const dateStr = a.requested_date ? (a.requested_time ? `${a.requested_date} ${a.requested_time}` : a.requested_date) : "—";
+      const doctorStr = a.doctor ? `Dr. ${a.doctor} (${a.period || 'MAT'})` : "—";
+
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(dateStr)}</strong></td>
+        <td><span class="ticket-badge">${escapeHtml(a.ticket_label || "—")}</span></td>
+        <td>${escapeHtml(a.patient_name || "—")}</td>
+        <td>${escapeHtml(a.contact || "—")}</td>
+        <td>${escapeHtml(a.reason_code || "—")}</td>
+        <td>${escapeHtml(doctorStr)}</td>
+        <td>${vitalsHtml}</td>
+        <td><span class="status-pill ${stClass}">${escapeHtml(stLabel)}</span></td>
+      `;
+      return tr;
+    });
+
+    tbody.replaceChildren(...rows);
   }
 
   function initPinAuth() {
@@ -216,11 +367,47 @@
       });
     }
 
+    const stopBtn = $("admin-emergency-stop-btn");
+    if (stopBtn) {
+      stopBtn.addEventListener("click", async () => {
+        if (!confirm("Voulez-vous vraiment ARRÊTER D'URGENCE le robot ?")) return;
+        try {
+          const res = await fetch("/api/navigation/cancel", { method: "POST" });
+          const data = await res.json();
+          if (data.ok) {
+            alert("ARRÊT D'URGENCE EXÉCUTÉ ! Ordre STOP transmis sur /navigation/command, /robot/command et /robot/motor_command.");
+          } else {
+            alert("Échec de l'arrêt d'urgence : " + (data.error || "inconnu"));
+          }
+        } catch (err) {
+          alert("Erreur réseau : " + err.message);
+        }
+      });
+    }
+
+    const tabHardBtn = $("tab-btn-hardware");
+    if (tabHardBtn) tabHardBtn.addEventListener("click", () => switchTab("hardware"));
+
+    const tabDashBtn = $("tab-btn-dashboard");
+    if (tabDashBtn) tabDashBtn.addEventListener("click", () => switchTab("dashboard"));
+
     const refreshBtn = $("diag-refresh-btn");
     if (refreshBtn) refreshBtn.addEventListener("click", refreshDiagnostics);
 
     const refreshTopBtn = $("diag-refresh-top-btn");
     if (refreshTopBtn) refreshTopBtn.addEventListener("click", refreshDiagnostics);
+
+    const dashRefreshBtn = $("dashboard-refresh-btn");
+    if (dashRefreshBtn) dashRefreshBtn.addEventListener("click", loadDashboardData);
+
+    const filterDoctor = $("filter-doctor");
+    if (filterDoctor) filterDoctor.addEventListener("change", renderDashboardTable);
+
+    const filterStatus = $("filter-status");
+    if (filterStatus) filterStatus.addEventListener("change", renderDashboardTable);
+
+    const filterSearch = $("filter-search");
+    if (filterSearch) filterSearch.addEventListener("input", renderDashboardTable);
 
     const savedPin = localStorage.getItem("hiar_web_pin");
     if (savedPin && savedPin.length === 4) {

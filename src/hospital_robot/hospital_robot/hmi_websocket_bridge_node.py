@@ -290,6 +290,8 @@ class HMIWebSocketBridgeNode(Node):
         # ----------------------------------------------------
         self.hmi_request_pub = self.create_publisher(String, "/hmi/request", 10)
         self.navigation_command_pub = self.create_publisher(String, "/navigation/command", 10)
+        self.robot_command_pub = self.create_publisher(String, "/robot/command", 10)
+        self.motor_command_pub = self.create_publisher(String, "/robot/motor_command", 10)
         self.vitals_request_pub = self.create_publisher(String, "/vitals/request", 10)
         self.diagnostics_request_pub = self.create_publisher(String, "/esp32/diagnostics/request", 10)
 
@@ -755,7 +757,7 @@ class HMIWebSocketBridgeNode(Node):
                     "robot_status": {"face_expression": "neutral", "status_label": "Robot prêt"},
                 }
                 await self.broadcast("server/instruction", cancel_instruction)
-                await self.broadcast("voice/tts/request", {"text": cancel_instruction["text_to_speak"], "priority": "normal"})
+                await self.broadcast("voice/tts/request", {"text": cancel_instruction["text_to_speak"], "priority": "normal", "screen": "home"})
                 return
             else:
                 self.get_logger().info("ℹ️ Annulation reçue sans action en attente.")
@@ -810,7 +812,7 @@ class HMIWebSocketBridgeNode(Node):
             await self.broadcast("server/instruction", instruction)
             await self.broadcast(
                 "voice/tts/request",
-                {"text": redirect_speech, "priority": "normal"},
+                {"text": redirect_speech, "priority": "normal", "screen": "consultation"},
             )
             return
 
@@ -861,6 +863,7 @@ class HMIWebSocketBridgeNode(Node):
                     {
                         "text": tts_text,
                         "priority": instruction.get("speech_priority", "normal"),
+                        "screen": ui_screen or self._current_screen,
                     },
                 )
 
@@ -955,7 +958,7 @@ class HMIWebSocketBridgeNode(Node):
             await self.broadcast("server/instruction", instruction)
             await self.broadcast(
                 "voice/tts/request",
-                {"text": instruction["text_to_speak"], "priority": "normal"},
+                {"text": instruction["text_to_speak"], "priority": "normal", "screen": "orientation"},
             )
 
         elif action_id == "orientation.cancel":
@@ -977,7 +980,7 @@ class HMIWebSocketBridgeNode(Node):
             await self.broadcast("server/instruction", instruction)
             await self.broadcast(
                 "voice/tts/request",
-                {"text": instruction["text_to_speak"], "priority": "normal"},
+                {"text": instruction["text_to_speak"], "priority": "normal", "screen": "home"},
             )
 
         elif action_id in {"vitals.acquire", "vitals.measure", "consult.measure_vitals"}:
@@ -1014,7 +1017,7 @@ class HMIWebSocketBridgeNode(Node):
             )
             await self.broadcast(
                 "voice/tts/request",
-                {"text": prompt_text, "priority": "normal"},
+                {"text": prompt_text, "priority": "normal", "screen": "consultation"},
             )
 
         elif action_id in {"robot.stop", "mission.stop", "navigation.cancel"}:
@@ -1083,7 +1086,7 @@ class HMIWebSocketBridgeNode(Node):
                     "voice_hints": ["Terminer", "Accueil"],
                 }
                 await self.broadcast("server/instruction", instruction)
-                await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal"})
+                await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal", "screen": "consultation"})
             else:
                 err_msg = res.get("error", "Impossible d'enregistrer le rendez-vous.")
                 speech = f"Attention : {err_msg}"
@@ -1106,7 +1109,7 @@ class HMIWebSocketBridgeNode(Node):
                     "voice_hints": ["Réessayer", "Annuler"],
                 }
                 await self.broadcast("server/instruction", instruction)
-                await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal"})
+                await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal", "screen": "consultation"})
 
         elif action_id == "consult.start":
             self._current_screen = "consultation"
@@ -1143,7 +1146,7 @@ class HMIWebSocketBridgeNode(Node):
                     },
                 }
                 await self.broadcast("server/instruction", instruction)
-                await self.broadcast("voice/tts/request", {"text": vitals_guide_speech, "priority": "normal"})
+                await self.broadcast("voice/tts/request", {"text": vitals_guide_speech, "priority": "normal", "screen": "consultation"})
 
         elif action_id == "consult.cancel":
             self._current_screen = "home"
@@ -1324,7 +1327,7 @@ class HMIWebSocketBridgeNode(Node):
         if text_to_speak:
             self.broadcast_threadsafe(
                 "voice/tts/request",
-                {"text": text_to_speak, "priority": "normal"},
+                {"text": text_to_speak, "priority": "normal", "screen": "consultation"},
             )
 
     def _on_obstacle(self, msg):
@@ -1525,10 +1528,16 @@ class HMIWebSocketBridgeNode(Node):
         self.get_logger().info(f"Published to /hmi/request: {msg.data}")
 
     def _publish_navigation_command(self, command: str):
+        cmd = command.strip().upper()
         msg = String()
-        msg.data = command.strip().upper()
+        msg.data = cmd
         self.navigation_command_pub.publish(msg)
         self.get_logger().info(f"Published to /navigation/command: {msg.data}")
+        if cmd == "STOP":
+            self.robot_command_pub.publish(msg)
+            self.get_logger().info(f"Published to /robot/command: {msg.data}")
+            self.motor_command_pub.publish(msg)
+            self.get_logger().info(f"Published to /robot/motor_command: {msg.data}")
 
     def _publish_vitals_request(self, request_id: str):
         msg = String()

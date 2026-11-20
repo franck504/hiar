@@ -27,6 +27,12 @@
     </nav>
 
     <div id="admin-topbar-actions" class="staff-topbar-actions" style="margin-left: auto;" hidden>
+      <button type="button" id="admin-emergency-stop-btn"
+              class="btn btn-danger btn-small"
+              aria-label="Arrêt d'urgence du robot" title="Arrêt d'urgence immédiat du robot"
+              style="background-color: #dc2626; color: #ffffff; font-weight: 700; border: none; border-radius: 8px; margin-right: 8px; padding: 6px 12px; cursor: pointer;">
+        STOP ROBOT
+      </button>
       <button type="button" id="diag-refresh-top-btn"
               class="btn btn-outline icon-btn staff-refresh-icon"
               aria-label="Actualiser les capteurs" title="Actualiser les capteurs">
@@ -49,6 +55,15 @@
   </header>
 
   <main>
+    <div id="admin-tab-nav" class="admin-tab-nav" hidden>
+      <button type="button" id="tab-btn-hardware" class="admin-tab-btn active" role="tab" aria-selected="true" aria-controls="diagnostics-panel">
+        Capteurs &amp; Matériel
+      </button>
+      <button type="button" id="tab-btn-dashboard" class="admin-tab-btn" role="tab" aria-selected="false" aria-controls="dashboard-panel">
+        Tableau de bord &amp; Historique RDV
+      </button>
+    </div>
+
     <section id="login-panel" class="panel pin-login-panel">
       <div class="pin-card-header">
         <h1>Code d'accès</h1>
@@ -97,6 +112,86 @@
 
       <div id="diag-grid" class="diag-grid">
         <!-- Cartes de capteurs rendues dynamiquement -->
+      </div>
+    </section>
+
+    <section id="dashboard-panel" class="panel dashboard-panel" aria-live="polite" hidden>
+      <div class="section-heading">
+        <div>
+          <h1 class="diag-title" style="font-size: 1.5rem;">Tableau de bord des consultations</h1>
+          <p class="muted" id="dashboard-subtitle" style="margin: 4px 0 0;">Indicateurs clés et historique des rendez-vous</p>
+        </div>
+        <div class="diag-header-actions">
+          <button type="button" id="dashboard-refresh-btn" class="btn btn-outline btn-small">Actualiser</button>
+        </div>
+      </div>
+
+      <!-- Indicateurs clés KPI -->
+      <div class="admin-kpi-grid" id="admin-kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Rendez-vous</span>
+          <span class="kpi-value" id="kpi-total">0</span>
+        </div>
+        <div class="kpi-card kpi-card-confirmed">
+          <span class="kpi-label">En attente</span>
+          <span class="kpi-value" id="kpi-confirmed">0</span>
+        </div>
+        <div class="kpi-card kpi-card-consulting">
+          <span class="kpi-label">En consultation</span>
+          <span class="kpi-value" id="kpi-consulting">0</span>
+        </div>
+        <div class="kpi-card kpi-card-done">
+          <span class="kpi-label">Terminés</span>
+          <span class="kpi-value" id="kpi-done">0</span>
+        </div>
+        <div class="kpi-card kpi-card-alerts">
+          <span class="kpi-label">Alertes constantes</span>
+          <span class="kpi-value" id="kpi-alerts">0</span>
+        </div>
+      </div>
+
+      <!-- Filtres de recherche -->
+      <div class="dashboard-filter-bar">
+        <label for="filter-doctor">Médecin :
+          <select id="filter-doctor">
+            <option value="">Tous les médecins</option>
+            <option value="A">Médecin A</option>
+            <option value="B">Médecin B</option>
+          </select>
+        </label>
+        <label for="filter-status">Statut :
+          <select id="filter-status">
+            <option value="">Tous les statuts</option>
+            <option value="CONFIRMED">En attente</option>
+            <option value="IN_CONSULTATION">En consultation</option>
+            <option value="DONE">Terminé</option>
+            <option value="CANCELLED">Annulé</option>
+          </select>
+        </label>
+        <label for="filter-search">Recherche :
+          <input type="text" id="filter-search" placeholder="Nom, ticket, contact..." />
+        </label>
+      </div>
+
+      <!-- Tableau d'historique -->
+      <div class="dashboard-table-container">
+        <table class="dashboard-table" id="dashboard-history-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Ticket</th>
+              <th>Patient</th>
+              <th>Contact</th>
+              <th>Motif</th>
+              <th>Médecin</th>
+              <th>Constantes</th>
+              <th>Statut</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-history-body">
+            <!-- Rendu dynamique JS -->
+          </tbody>
+        </table>
       </div>
     </section>
   </main>

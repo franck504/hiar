@@ -27,6 +27,8 @@ class RosBridge:
         self._node = None
         self._publisher = None
         self._navigation_command_publisher = None
+        self._robot_command_publisher = None
+        self._motor_command_publisher = None
 
         self._vitals_request_publisher = None
         self._vitals_result_subscription = None
@@ -61,6 +63,18 @@ class RosBridge:
             self._navigation_command_publisher = (
                 self._node.create_publisher(
                     String, "/navigation/command", 10
+                )
+            )
+
+            self._robot_command_publisher = (
+                self._node.create_publisher(
+                    String, "/robot/command", 10
+                )
+            )
+
+            self._motor_command_publisher = (
+                self._node.create_publisher(
+                    String, "/robot/motor_command", 10
                 )
             )
 
@@ -122,9 +136,13 @@ class RosBridge:
             return False
 
     def cancel_navigation(self):
-        """Publie STOP sur /navigation/command."""
+        """Publie STOP sur /navigation/command, /robot/command et /robot/motor_command."""
 
-        if self._navigation_command_publisher is None:
+        if (
+            self._navigation_command_publisher is None
+            and self._robot_command_publisher is None
+            and self._motor_command_publisher is None
+        ):
             self.error = (
                 "Publication de commande de navigation indisponible"
             )
@@ -135,7 +153,12 @@ class RosBridge:
             message.data = "STOP"
 
             with self._lock:
-                self._navigation_command_publisher.publish(message)
+                if self._navigation_command_publisher:
+                    self._navigation_command_publisher.publish(message)
+                if self._robot_command_publisher:
+                    self._robot_command_publisher.publish(message)
+                if self._motor_command_publisher:
+                    self._motor_command_publisher.publish(message)
 
             self.error = None
             return True

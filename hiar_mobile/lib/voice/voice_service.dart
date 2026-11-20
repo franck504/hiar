@@ -242,10 +242,19 @@ class VoiceService {
     }
   }
 
-  /// Synthèse vocale parlée (TTS) avec anti-doublon strict (supprime les répétitions rapprochées)
-  Future<void> speak(String text) async {
+  int _generation = 0;
+  int get currentGeneration => _generation;
+
+  /// Synthèse vocale parlée (TTS) avec anti-doublon strict et vérification de génération (évite de parler pour un écran passé)
+  Future<void> speak(String text, {int? forGeneration}) async {
     final cleanText = text.trim();
     if (cleanText.isEmpty) return;
+
+    final targetGen = forGeneration ?? _generation;
+    if (targetGen != _generation) {
+      debugPrint("VoiceService: Parole annulée car l'écran a changé (gen $targetGen != $_generation)");
+      return;
+    }
 
     final now = DateTime.now();
     if (_lastSpokenPhrase != null &&
@@ -263,7 +272,7 @@ class VoiceService {
     state = VoiceServiceState.speaking;
     onStateChanged?.call(state, "HIAR parle…");
 
-    debugPrint("VoiceService: Demande speak: « $cleanText »");
+    debugPrint("VoiceService: Demande speak (gen $_generation): « $cleanText »");
     lastSpokenText = cleanText;
     _recentSpokenTexts.add(cleanText);
     if (_recentSpokenTexts.length > 5) {
@@ -277,10 +286,18 @@ class VoiceService {
 
     final res = await _tts.speak(cleanText);
     debugPrint("VoiceService: Résultat _tts.speak: $res");
+
+    // Si entre-temps l'écran a changé pendant le lancement du TTS, couper immédiatement
+    if (targetGen != _generation) {
+      await _tts.stop();
+      _isSpeaking = false;
+    }
   }
 
-  /// Interrompt la parole (Silence immédiat)
+  /// Interrompt la parole (Silence immédiat) et invalide les messages vocaux de l'écran précédent
   Future<void> stopSpeaking() async {
+    _generation++;
+    _lastSpokenPhrase = null;
     await _tts.stop();
     _isSpeaking = false;
     lastSpokenEndTime = DateTime.now();

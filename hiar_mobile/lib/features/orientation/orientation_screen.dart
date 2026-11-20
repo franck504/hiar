@@ -15,6 +15,7 @@ class OrientationScreen extends StatelessWidget {
   final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
   final String? faceExpression;
+  final VoidCallback? onStopRobotTap;
 
   const OrientationScreen({
     super.key,
@@ -27,6 +28,7 @@ class OrientationScreen extends StatelessWidget {
     this.onSettingsTap,
     this.isRobotConnected = true,
     this.faceExpression,
+    this.onStopRobotTap,
   });
 
   @override
@@ -65,6 +67,7 @@ class OrientationScreen extends StatelessWidget {
     return LandscapeScaffold(
       title: "Orientation",
       onBack: onBack,
+      onStopRobotTap: onStopRobotTap,
       voiceState: voiceState,
       voiceStatus: voiceStatus,
       recognizedText: recognizedText,

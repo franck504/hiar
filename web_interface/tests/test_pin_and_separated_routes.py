@@ -33,10 +33,46 @@ def test_admin_route_has_correct_title_and_no_queue_panel(client):
     assert "<title>Gestion de HIAR — HIAR</title>" in html
     assert "diagnostics-panel" in html
     assert "diag-grid" in html
+    assert "dashboard-panel" in html
+    assert "admin-tab-nav" in html
+    assert "tab-btn-hardware" in html
+    assert "tab-btn-dashboard" in html
+    assert "admin-emergency-stop-btn" in html
     assert "login-panel" in html
     # La file de consultation NE DOIT PAS être dans /admin
     assert "queue-panel" not in html
     assert "queue-body" not in html
+
+
+def test_admin_dashboard_api(client):
+    """Vérifie l'API du tableau de bord d'administration et l'historique."""
+    # 1. Non authentifié -> 401
+    unauth = client.get("/api/admin/dashboard")
+    assert unauth.status_code == 401
+
+    # 2. Authentifié via X-Web-PIN -> 200
+    res = client.get("/api/admin/dashboard", headers={"X-Web-PIN": "4321"})
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is True
+    assert "stats" in data
+    assert "appointments" in data
+    assert "total" in data["stats"]
+    assert "confirmed" in data["stats"]
+
+
+def test_robot_stop_api(client, monkeypatch):
+    """Vérifie l'endpoint /api/robot/stop d'arrêt d'urgence."""
+    class FakeBridge:
+        error = None
+        def cancel_navigation(self):
+            return True
+
+    import app as app_module
+    monkeypatch.setattr(app_module, "bridge", FakeBridge())
+    res = client.post("/api/robot/stop")
+    assert res.status_code == 200
+    assert res.get_json()["ok"] is True
 
 
 def test_both_pages_share_navigation_links(client):
