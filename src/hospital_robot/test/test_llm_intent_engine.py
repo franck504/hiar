@@ -373,6 +373,31 @@ class TestHybridGeminiQwenBackend:
         assert res.backend_used == "qwen_local_network_error"
         assert ollama.generate.call_count == 1
 
+    def test_voice_intent_parser_hybrid_gemini_to_qwen_fallback(self):
+        gemini = GeminiBackend(api_keys=["key_1"])
+        ollama = OllamaBackend()
+        ollama.generate = MagicMock(return_value=json.dumps({
+            "intent": "ORIENTATION",
+            "target": "LABORATORY",
+            "text_to_speak": "Qwen vous accompagne au laboratoire d'analyses.",
+            "screen": "orientation",
+        }))
+        hybrid = HybridGeminiQwenBackend(gemini=gemini, ollama=ollama)
+        cfg = LLMConfig(backend="hybrid_gemini_qwen", cache_enabled=True)
+        engine = LLMIntentEngine(config=cfg, backend_override=hybrid)
+        parser = VoiceIntentParser(enable_llm=True, llm_engine=engine)
+
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("Gemini inaccessible")):
+            intent = parser.parse("Où faire mes prises de sang ?")
+
+        assert intent.intent_type == "ORIENTATION"
+        assert intent.target_value == "LABORATORY"
+        assert intent.details.get("backend_used") == "qwen_local_network_error"
+        assert intent.details.get("llm_generated") is True
+        assert ollama.generate.call_count == 1
+        instruction = parser.build_instruction(intent)
+        assert "laboratoire" in instruction["text_to_speak"].lower()
+
     def test_load_dotenv_file_parses_keys(self, tmp_path, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY_1", raising=False)
         monkeypatch.delenv("HIAR_GEMINI_MODEL", raising=False)
@@ -586,9 +611,10 @@ class TestGeminiSoloMode:
         instruction = parser.build_instruction(intent)
         assert instruction["text_to_speak"] == "Je suis HIAR et je peux surtout vous guider dans l'hôpital."
 
-    def test_bridge_forces_gemini_solo_even_if_env_sets_hybrid(self, monkeypatch):
+    def test_bridge_configures_hybrid_mode_with_qwen_fallback(self, monkeypatch):
         import socket
         from hospital_robot.hmi_websocket_bridge_node import HMIWebSocketBridgeNode
+        from hospital_robot.llm_intent_engine import HybridGeminiQwenBackend
 
         monkeypatch.setenv("HIAR_LLM_BACKEND", "hybrid_gemini_qwen")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -597,11 +623,28 @@ class TestGeminiSoloMode:
 
         node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
         try:
+            assert isinstance(node.intent_parser.llm_engine._backend, HybridGeminiQwenBackend)
+            assert node.intent_parser.llm_engine.config.backend == "hybrid_gemini_qwen"
+            assert node.intent_parser.llm_engine.config.cache_enabled is True
+            assert node.intent_parser.enable_deterministic_fallback is True
+            assert node._llm_prewarming is True
+        finally:
+            node.destroy_node()
+
+    def test_bridge_supports_gemini_solo_override(self, monkeypatch):
+        import socket
+        from hospital_robot.hmi_websocket_bridge_node import HMIWebSocketBridgeNode
+        from hospital_robot.llm_intent_engine import GeminiBackend
+
+        monkeypatch.setenv("HIAR_LLM_BACKEND", "gemini")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+
+        node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
+        try:
             assert isinstance(node.intent_parser.llm_engine._backend, GeminiBackend)
             assert node.intent_parser.llm_engine.config.backend == "gemini"
-            assert node.intent_parser.llm_engine.config.cache_enabled is False
-            assert node.intent_parser.enable_deterministic_fallback is False
-            assert node._llm_prewarming is False
         finally:
             node.destroy_node()
 

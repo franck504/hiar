@@ -194,6 +194,7 @@ class VoiceIntentParser:
         llm_latency_ms = 0.0
         llm_backend_used = ""
         llm_error: Optional[str] = None
+        llm_res: Optional[Any] = None
         if use_llm and self.enable_llm and self.llm_engine:
             if self.llm_engine.is_available():
                 llm_attempted = True
@@ -246,6 +247,9 @@ class VoiceIntentParser:
             details["latency_ms"] = llm_latency_ms
             details["backend_used"] = llm_backend_used
             details["model"] = self._active_model_label(llm_backend_used)
+            if llm_res and getattr(llm_res, "text_to_speak", None):
+                details["llm_text_to_speak"] = llm_res.text_to_speak
+                details["llm_generated"] = True
             if llm_error:
                 details["llm_error"] = llm_error
                 if not self.enable_deterministic_fallback:

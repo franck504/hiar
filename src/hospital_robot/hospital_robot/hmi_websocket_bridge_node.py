@@ -70,15 +70,30 @@ except ImportError:
 try:
     from hospital_robot.voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from hospital_robot.vitals_data_parser import build_vitals_instruction, parse_vitals_frame
-    from hospital_robot.llm_intent_engine import LLMConfig, load_dotenv_file
+    from hospital_robot.llm_intent_engine import (
+        GeminiBackend,
+        HybridGeminiQwenBackend,
+        LLMConfig,
+        OllamaBackend,
+        load_dotenv_file,
+    )
 except ImportError:
     from voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from vitals_data_parser import build_vitals_instruction, parse_vitals_frame
     try:
-        from llm_intent_engine import LLMConfig, load_dotenv_file
+        from llm_intent_engine import (
+            GeminiBackend,
+            HybridGeminiQwenBackend,
+            LLMConfig,
+            OllamaBackend,
+            load_dotenv_file,
+        )
     except ImportError:
         LLMConfig = None  # type: ignore
         load_dotenv_file = None  # type: ignore
+        GeminiBackend = None  # type: ignore
+        HybridGeminiQwenBackend = None  # type: ignore
+        OllamaBackend = None  # type: ignore
 
 import websockets
 try:
@@ -119,9 +134,8 @@ class HMIWebSocketBridgeNode(Node):
             if env_loaded is not None:
                 self.get_logger().info(f"[LLM] Variables chargées depuis {env_loaded}")
 
-        # Branche feature/gemini-solo : Gemini API uniquement
-        # (Qwen local, Cache LRU et Parseur déterministe désactivés sans supprimer leur code)
-        default_backend = "gemini"
+        # Mode hybride : Gemini API Cloud prioritaire avec Secours Qwen Local (Edge Ollama)
+        default_backend = os.environ.get("HIAR_LLM_BACKEND", "hybrid_gemini_qwen").strip() or "hybrid_gemini_qwen"
         default_gemini_model = os.environ.get("HIAR_GEMINI_MODEL", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
         try:
             default_gemini_timeout = float(os.environ.get("HIAR_GEMINI_TIMEOUT", "8.0"))
@@ -131,6 +145,8 @@ class HMIWebSocketBridgeNode(Node):
             default_gemini_cooldown = int(os.environ.get("HIAR_GEMINI_COOLDOWN", "60"))
         except ValueError:
             default_gemini_cooldown = 60
+        cache_enabled = os.environ.get("HIAR_LLM_CACHE_ENABLED", "true").lower() in ("true", "1", "yes")
+        enable_det_fallback = os.environ.get("HIAR_LLM_DETERMINISTIC_FALLBACK", "true").lower() in ("true", "1", "yes")
 
         if ROS_AVAILABLE:
             self.declare_parameter("websocket_host", "0.0.0.0")
@@ -147,7 +163,7 @@ class HMIWebSocketBridgeNode(Node):
             self.host = host or str(self.get_parameter("websocket_host").value)
             self.port = port or int(self.get_parameter("websocket_port").value)
             enable_llm = bool(self.get_parameter("enable_llm").value)
-            llm_backend = "gemini"
+            llm_backend = str(self.get_parameter("llm_backend").value)
             llm_host = str(self.get_parameter("llm_host").value)
             llm_model = str(self.get_parameter("llm_model").value)
             llm_timeout = float(self.get_parameter("llm_timeout").value)
@@ -158,7 +174,7 @@ class HMIWebSocketBridgeNode(Node):
             self.host = host or "0.0.0.0"
             self.port = port or 5000
             enable_llm = True
-            llm_backend = "gemini"
+            llm_backend = default_backend
             llm_host = "http://127.0.0.1:11434"
             llm_model = "qwen2.5:0.5b"
             llm_timeout = 15.0
@@ -166,7 +182,7 @@ class HMIWebSocketBridgeNode(Node):
             gemini_timeout = default_gemini_timeout
             gemini_cooldown = default_gemini_cooldown
 
-        # Mode GEMINI SOLO : aucun fallback Qwen, aucun cache LRU, aucun fallback regex
+        # Composants de traitement métier (Sécurité locale → Cache LRU → Gemini Cloud → Secours Qwen Local → Déterministe)
         if LLMConfig is not None:
             llm_cfg = LLMConfig(
                 enabled=enable_llm,
@@ -177,17 +193,17 @@ class HMIWebSocketBridgeNode(Node):
                 gemini_model=gemini_model,
                 gemini_timeout_sec=gemini_timeout,
                 gemini_cooldown_sec=gemini_cooldown,
-                cache_enabled=False,
+                cache_enabled=cache_enabled,
             )
             self.intent_parser = VoiceIntentParser(
                 enable_llm=enable_llm,
                 llm_config=llm_cfg,
-                enable_deterministic_fallback=False,
+                enable_deterministic_fallback=enable_det_fallback,
             )
         else:
-            self.intent_parser = VoiceIntentParser(enable_deterministic_fallback=False)
+            self.intent_parser = VoiceIntentParser(enable_deterministic_fallback=enable_det_fallback)
 
-        # Vérification démarrage GEMINI SOLO (aucun pré-chauffage Qwen/Ollama)
+        # Préchauffage en arrière-plan de Qwen 2.5 en RAM (secours immédiat si hybride ou ollama)
         self._llm_status: str = "offline"
         self._llm_detail: str = "Désactivé"
         self._llm_prewarming: bool = False
@@ -195,15 +211,55 @@ class HMIWebSocketBridgeNode(Node):
             engine = self.intent_parser.llm_engine
             self._llm_status, self._llm_detail = engine.get_diagnostics_status()
             backend_obj = getattr(engine, "_backend", None)
-            gemini_keys = getattr(backend_obj, "key_count", 0)
-            if gemini_keys > 0:
-                self.get_logger().info(
-                    f"[LLM] ☁️ Mode GEMINI SOLO actif ({gemini_keys} clé(s), modèle={engine.config.gemini_model}) — Qwen, Cache LRU et Regex désactivés."
-                )
-            else:
-                self.get_logger().warning(
-                    "[LLM] ⚠️ Mode GEMINI SOLO : aucune clé GEMINI_API_KEY_N trouvée dans .env !"
-                )
+            is_hybrid = isinstance(backend_obj, HybridGeminiQwenBackend) if HybridGeminiQwenBackend else False
+            is_ollama = isinstance(backend_obj, OllamaBackend) if OllamaBackend else False
+
+            if is_hybrid or is_ollama:
+                self._llm_prewarming = True
+
+                def _prewarm_llm():
+                    try:
+                        time.sleep(1.0)
+                        gemini_b = getattr(backend_obj, "gemini", None)
+                        gemini_keys = getattr(gemini_b, "key_count", 0) if gemini_b else 0
+                        if gemini_keys > 0:
+                            self.get_logger().info(
+                                f"[LLM] ☁️ Gemini API primaire prêt ({gemini_keys} clé(s), modèle={engine.config.gemini_model})."
+                            )
+                        else:
+                            self.get_logger().info(
+                                "[LLM] ℹ️ Aucune clé GEMINI_API_KEY_N dans .env — fonctionnement direct sur Qwen local."
+                            )
+
+                        self.get_logger().info("[LLM] 🔥 Pré-chauffage secours Qwen 2.5 en RAM...")
+                        res = engine.prewarm_local_fallback()
+                        if res.get("warmed"):
+                            self.get_logger().info(
+                                f"[LLM] ✅ Qwen 2.5 secours prêt en RAM ({res.get('latency_ms', 0.0):.0f}ms)."
+                            )
+                        elif res.get("qwen_available"):
+                            self.get_logger().warning(
+                                f"[LLM] ⚠️ Pré-chauffage Qwen 2.5 partiel : {res.get('error', 'timeout')}"
+                            )
+                        else:
+                            self.get_logger().info("[LLM] ℹ️ Ollama (Qwen secours) non démarré localement.")
+                    except Exception as ex:
+                        self.get_logger().warning(f"[LLM] Pre-warm warning: {ex}")
+                    finally:
+                        self._llm_prewarming = False
+                        self._llm_status, self._llm_detail = engine.get_diagnostics_status()
+
+                threading.Thread(target=_prewarm_llm, daemon=True).start()
+            elif isinstance(backend_obj, GeminiBackend) if GeminiBackend else False:
+                gemini_keys = getattr(backend_obj, "key_count", 0)
+                if gemini_keys > 0:
+                    self.get_logger().info(
+                        f"[LLM] ☁️ Mode GEMINI SOLO actif ({gemini_keys} clé(s), modèle={engine.config.gemini_model})."
+                    )
+                else:
+                    self.get_logger().warning(
+                        "[LLM] ⚠️ Mode GEMINI SOLO : aucune clé GEMINI_API_KEY_N trouvée dans .env !"
+                    )
 
         self._pending_orientation: Optional[Dict[str, Any]] = None
         self._active_destination_label: Optional[str] = None
@@ -633,17 +689,19 @@ class HMIWebSocketBridgeNode(Node):
         if is_cache:
             engine_str = "⚡ Cache LRU local (Zéro quota | Latence: <1ms)"
         elif is_llm and backend_used.startswith("gemini"):
-            engine_str = f"☁️ Gemini API SOLO {model} ({backend_used} | Latence: {latency_ms:.0f}ms)"
+            engine_str = f"☁️ Gemini API {model} ({backend_used} | Latence: {latency_ms:.0f}ms)"
+        elif is_llm and "qwen" in backend_used:
+            engine_str = f"🛡️ Qwen local fallback {model} ({backend_used} | Latence: {latency_ms:.0f}ms)"
         elif is_llm:
-            engine_str = f"🧠 LLM {model} ({backend_used} | Latence: {latency_ms:.0f}ms)"
+            engine_str = f"🧠 LLM {model} ({backend_used or 'local'} | Latence: {latency_ms:.0f}ms)"
         elif intent.intent_type == "STOP":
             engine_str = "🛑 Réflexe Sécurité Local (STOP prioritaire | Latence: <1ms)"
-        elif intent.details.get("llm_error"):
-            engine_str = f"⚠️ Gemini SOLO erreur ({intent.details['llm_error']} | Latence: {latency_ms:.0f}ms)"
+        elif intent.details.get("deterministic_fallback"):
+            engine_str = "⚙️ Filet Déterministe (Regex local | Latence: <1ms)"
         elif intent.intent_type != "UNKNOWN":
             engine_str = "⚙️ Filet Déterministe (Regex local | Latence: <1ms)"
         else:
-            engine_str = f"❓ Non reconnu / Hors périmètre (Gemini SOLO | Latence: {latency_ms:.0f}ms)"
+            engine_str = f"❓ Non reconnu / Hors périmètre (Latence: {latency_ms:.0f}ms)"
 
         # 1. Action ROS 2 Navigation Command (ex: STOP, RESUME, HOME)
         if intent.ros_command:

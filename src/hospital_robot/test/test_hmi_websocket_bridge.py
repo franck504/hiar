@@ -37,11 +37,12 @@ def bridge_node():
     port = get_free_port()
     node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
 
-    # Vérifie que la branche feature/gemini-solo démarre bien en mode GEMINI SOLO
-    from hospital_robot.llm_intent_engine import GeminiBackend, MockBackend
-    assert isinstance(node.intent_parser.llm_engine._backend, GeminiBackend)
-    assert node.intent_parser.llm_engine.config.cache_enabled is False
-    assert node.intent_parser.enable_deterministic_fallback is False
+    # Vérifie que le bridge démarre par défaut en mode hybride Gemini prioritaire + Qwen local fallback
+    from hospital_robot.llm_intent_engine import HybridGeminiQwenBackend, MockBackend
+    assert isinstance(node.intent_parser.llm_engine._backend, HybridGeminiQwenBackend)
+    assert node.intent_parser.llm_engine.config.backend == "hybrid_gemini_qwen"
+    assert node.intent_parser.llm_engine.config.cache_enabled is True
+    assert node.intent_parser.enable_deterministic_fallback is True
 
     # Stub hors ligne du backend Gemini pour des tests WebSocket rapides et reproductibles
     stub_gemini = MockBackend(canned_responses={
