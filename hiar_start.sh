@@ -24,8 +24,20 @@ done
 ps aux | grep -E 'app\.py|hiar_robot\.launch\.py|install/hospital_robot/lib/hospital_robot' | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true
 sleep 1
 
-source /opt/ros/humble/setup.bash
-source "$PROJECT_ROOT/install/setup.bash"
+if [ -f /opt/ros/humble/setup.bash ]; then
+    source /opt/ros/humble/setup.bash
+else
+    echo "⚠️ AVERTISSEMENT : /opt/ros/humble/setup.bash introuvable."
+fi
+
+if [ -f "$PROJECT_ROOT/install/setup.bash" ]; then
+    source "$PROJECT_ROOT/install/setup.bash"
+else
+    echo "❌ ERREUR : Le dossier install/setup.bash est introuvable."
+    echo "👉 Le projet n'a pas encore été compilé sur cette machine."
+    echo "👉 Exécutez : source /opt/ros/humble/setup.bash && colcon build --symlink-install"
+    exit 1
+fi
 
 # Charger les variables d'environnement locales (clés API Gemini, jeton staff, etc.)
 if [ -f "$PROJECT_ROOT/.env" ]; then
@@ -33,6 +45,8 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
     # shellcheck disable=SC1091
     source "$PROJECT_ROOT/.env"
     set +a
+else
+    echo "⚠️ AVERTISSEMENT : Fichier .env manquant (copiez .env.example vers .env si nécessaire)."
 fi
 
 echo "=========================================================="
