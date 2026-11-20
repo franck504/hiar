@@ -476,7 +476,7 @@ class TestVoiceIntentParserWithLLM:
         failing_backend = MockBackend()
         failing_backend.generate = MagicMock(side_effect=TimeoutError("all down"))
         engine = LLMIntentEngine(config=LLMConfig(backend="mock"), backend_override=failing_backend)
-        parser = VoiceIntentParser(enable_llm=True, llm_engine=engine)
+        parser = VoiceIntentParser(enable_llm=True, llm_engine=engine, enable_deterministic_fallback=True)
 
         intent = parser.parse("Emmène-moi à la pharmacie", current_screen="home")
         assert intent.intent_type == "ORIENTATION"
@@ -626,7 +626,7 @@ class TestGeminiSoloMode:
             assert isinstance(node.intent_parser.llm_engine._backend, HybridGeminiQwenBackend)
             assert node.intent_parser.llm_engine.config.backend == "hybrid_gemini_qwen"
             assert node.intent_parser.llm_engine.config.cache_enabled is True
-            assert node.intent_parser.enable_deterministic_fallback is True
+            assert node.intent_parser.enable_deterministic_fallback is False
             assert node._llm_prewarming is True
         finally:
             node.destroy_node()

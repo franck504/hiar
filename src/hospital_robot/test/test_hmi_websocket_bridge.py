@@ -42,7 +42,7 @@ def bridge_node():
     assert isinstance(node.intent_parser.llm_engine._backend, HybridGeminiQwenBackend)
     assert node.intent_parser.llm_engine.config.backend == "hybrid_gemini_qwen"
     assert node.intent_parser.llm_engine.config.cache_enabled is True
-    assert node.intent_parser.enable_deterministic_fallback is True
+    assert node.intent_parser.enable_deterministic_fallback is False
 
     # Stub hors ligne du backend Gemini pour des tests WebSocket rapides et reproductibles
     stub_gemini = MockBackend(canned_responses={

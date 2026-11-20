@@ -146,7 +146,7 @@ class HMIWebSocketBridgeNode(Node):
         except ValueError:
             default_gemini_cooldown = 60
         cache_enabled = os.environ.get("HIAR_LLM_CACHE_ENABLED", "true").lower() in ("true", "1", "yes")
-        enable_det_fallback = os.environ.get("HIAR_LLM_DETERMINISTIC_FALLBACK", "true").lower() in ("true", "1", "yes")
+        enable_det_fallback = os.environ.get("HIAR_LLM_DETERMINISTIC_FALLBACK", "false").lower() in ("true", "1", "yes")
 
         if ROS_AVAILABLE:
             self.declare_parameter("websocket_host", "0.0.0.0")

@@ -138,11 +138,14 @@ class VoiceIntentParser:
         enable_llm: bool = True,
         llm_config: Optional[Any] = None,
         llm_engine: Optional[Any] = None,
-        enable_deterministic_fallback: bool = True,
+        enable_deterministic_fallback: Optional[bool] = None,
     ):
         """Initialise le parseur d'intentions avec support optionnel d'un LLM."""
         self.enable_llm = enable_llm
-        self.enable_deterministic_fallback = enable_deterministic_fallback
+        if enable_deterministic_fallback is None:
+            self.enable_deterministic_fallback = not enable_llm
+        else:
+            self.enable_deterministic_fallback = bool(enable_deterministic_fallback)
         if llm_engine is not None:
             self.llm_engine = llm_engine
         elif enable_llm and LLMIntentEngine is not None:
