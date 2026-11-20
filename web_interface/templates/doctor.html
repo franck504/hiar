@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#2C7777">
-  <title>HIAR — Espace médecin</title>
+  <meta name="theme-color" content="#0B4F7C">
+  <title>Rendez-vous — HIAR</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='hiar-tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='staff.css') }}">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="HIAR — Accueil"><svg class="brand-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <a class="brand" href="/patients" aria-label="HIAR — Accueil"><svg class="brand-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
       <rect x="4" y="4" width="40" height="40" rx="13" fill="none" stroke="currentColor" stroke-width="2.5"/>
       <rect x="11" y="13" width="26" height="21" rx="7" fill="none" stroke="currentColor" stroke-width="2.2"/>
       <circle cx="19" cy="22" r="2.3" fill="currentColor"/>
@@ -19,7 +19,14 @@
       <path d="M18 29 Q24 34 30 29" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
       <path d="M24 13 V8 M20 8 H28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
     </svg></a>
-    <span class="topbar-title">Espace médecin</span>
+    <span class="topbar-title">Rendez-vous</span>
+    <span class="sr-only">Espace médecin</span>
+
+    <nav class="topbar-nav" aria-label="Navigation principale">
+      <a href="/patients" class="topbar-nav-link active">Rendez-vous</a>
+      <a href="/admin" class="topbar-nav-link">Gestion de HIAR</a>
+    </nav>
+
     <div id="doctor-topbar-actions" class="staff-topbar-actions" style="margin-left: auto;" hidden>
       <button type="button" id="refresh-btn"
               class="btn btn-outline icon-btn staff-refresh-icon"
@@ -43,15 +50,47 @@
   </header>
 
   <main>
-    <section id="login-panel" class="panel">
-      <h1>Connexion du médecin</h1>
-      <p class="muted">Accès réservé au médecin, avec son jeton personnel.</p>
-      <form id="login-form">
-        <label for="token">Jeton médecin</label>
-        <input id="token" type="password" autocomplete="off"
-               autocapitalize="none" spellcheck="false" required>
-        <div class="doctor-quick-select" style="margin: 12px 0;">
-          <p class="muted" style="margin-bottom: 6px; font-size: 13px;">Sélection rapide :</p>
+    <section id="login-panel" class="panel pin-login-panel">
+      <div class="pin-card-header">
+        <h1>Code d'accès</h1>
+        <p class="muted">Entrez le code PIN à 4 chiffres pour accéder aux rendez-vous.</p>
+      </div>
+      <form id="login-form" autocomplete="off">
+        <input id="token" type="hidden" value="">
+        <div class="pin-inputs" id="pin-inputs">
+          <input type="password" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-1" data-idx="0" autofocus required>
+          <input type="password" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-2" data-idx="1" required>
+          <input type="password" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-3" data-idx="2" required>
+          <input type="password" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-4" data-idx="3" required>
+        </div>
+        <p id="login-feedback" class="feedback" role="status" aria-live="polite"></p>
+
+        <div class="pin-keypad" aria-label="Pavé numérique">
+          <button type="button" class="pin-key" data-val="1">1</button>
+          <button type="button" class="pin-key" data-val="2">2</button>
+          <button type="button" class="pin-key" data-val="3">3</button>
+          <button type="button" class="pin-key" data-val="4">4</button>
+          <button type="button" class="pin-key" data-val="5">5</button>
+          <button type="button" class="pin-key" data-val="6">6</button>
+          <button type="button" class="pin-key" data-val="7">7</button>
+          <button type="button" class="pin-key" data-val="8">8</button>
+          <button type="button" class="pin-key" data-val="9">9</button>
+          <button type="button" class="pin-key pin-clear" data-val="C" title="Effacer">C</button>
+          <button type="button" class="pin-key" data-val="0">0</button>
+          <button type="submit" class="pin-key pin-submit" id="pin-submit-key" title="Valider">OK</button>
+        </div>
+
+        <button type="submit" class="btn" style="margin-top: 18px; width: 100%;">Valider le code PIN</button>
+      </form>
+    </section>
+
+    <section id="queue-panel" class="panel" hidden>
+      <div class="toolbar">
+        <div>
+          <h1 id="queue-title">Rendez-vous des patients</h1>
+          <p class="muted" id="queue-date"></p>
+        </div>
+        <div class="doctor-quick-select" style="margin-left: auto;">
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="A">Médecin A</button>
             <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="B">Médecin B</button>
@@ -59,24 +98,10 @@
             <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="D">Médecin D</button>
           </div>
         </div>
-        <p id="login-feedback" class="feedback"
-           role="status" aria-live="polite"></p>
-        <button type="submit" class="btn">Accéder à ma file</button>
-      </form>
-    </section>
-
-    <section id="queue-panel" class="panel" hidden>
-      <div class="toolbar">
-        <div>
-          <h1 id="queue-title">Ma file</h1>
-          <p class="muted" id="queue-date"></p>
-        </div>
-
       </div>
 
-      <div id="sessions" class="toolbar-actions"></div>
-      <p id="queue-feedback" class="feedback"
-         role="status" aria-live="polite"></p>
+      <div id="sessions" class="toolbar-actions" style="margin: 12px 0;"></div>
+      <p id="queue-feedback" class="feedback" role="status" aria-live="polite"></p>
 
       <div class="table-wrap">
         <table>
@@ -89,23 +114,6 @@
           </thead>
           <tbody id="queue-body"></tbody>
         </table>
-      </div>
-    </section>
-
-    <section id="diagnostics-panel" class="panel diag-panel" aria-live="polite">
-      <div class="section-heading">
-        <div>
-          <h2 class="diag-title">État des capteurs &amp; matériel du robot</h2>
-          <p class="muted" id="diag-subtitle" style="margin: 2px 0 0;">Chargement du diagnostic temps réel…</p>
-        </div>
-        <div class="diag-header-actions">
-          <span id="diag-bridge-pill" class="diag-pill diag-offline">Pont en attente</span>
-          <button type="button" id="diag-refresh-btn" class="btn btn-outline btn-small">Actualiser</button>
-        </div>
-      </div>
-
-      <div id="diag-grid" class="diag-grid">
-        <!-- Cartes de capteurs rendues dynamiquement par doctor.js -->
       </div>
     </section>
   </main>

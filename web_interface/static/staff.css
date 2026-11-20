@@ -536,3 +536,127 @@ td.empty {
 .diag-warn { background: var(--wait-bg); color: var(--wait); }
 .diag-error,
 .diag-offline { background: var(--err-bg); color: var(--err); }
+
+/* Navigation d'en-tête unifiée [/patients : Rendez-vous] & [/admin : Gestion de HIAR] */
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 20px;
+}
+
+.topbar-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.topbar-nav-link:hover {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.topbar-nav-link.active {
+  color: var(--secondary);
+  background: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+/* Formulaire d'authentification par Code PIN à 4 chiffres */
+.pin-login-panel {
+  max-width: 380px;
+  margin: 48px auto;
+  text-align: center;
+}
+
+.pin-card-header {
+  margin-bottom: 24px;
+}
+
+.pin-inputs {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 0 16px;
+}
+
+.pin-digit {
+  width: 52px;
+  height: 62px;
+  border-radius: 14px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--secondary);
+  font-size: 1.8rem;
+  font-weight: 800;
+  text-align: center;
+  outline: none;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-card);
+}
+
+.pin-digit:focus {
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 3px rgba(11, 79, 124, 0.20);
+  transform: translateY(-2px);
+}
+
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-width: 250px;
+  margin: 18px auto 0;
+}
+
+.pin-key {
+  height: 52px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.pin-key:hover {
+  background: var(--primary-light);
+  border-color: var(--secondary-light);
+  color: var(--secondary);
+}
+
+.pin-key:active {
+  transform: scale(0.94);
+  background: var(--primary-soft);
+}
+
+.pin-key.pin-clear {
+  color: #DC2626;
+  font-weight: 800;
+}
+
+.pin-key.pin-submit {
+  background: var(--secondary);
+  color: #FFFFFF;
+  border-color: var(--secondary);
+  font-weight: 800;
+}
+
+.pin-key.pin-submit:hover {
+  background: var(--secondary-dark);
+}

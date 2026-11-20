@@ -18,10 +18,10 @@
   --primary-light: #D9ECFB;
   --primary-soft: #C4E7FA;
 
-  /* 2. Secondary (Teal médical & Turquoise doux) */
-  --secondary: #2C7777;
-  --secondary-light: #A7D6DA;
-  --secondary-dark: #3B6E71;
+  /* 2. Secondary (Bleu médical officiel HIAR — Tête robot & Bleu doux) */
+  --secondary: #0B4F7C;
+  --secondary-light: #7BBCE3;
+  --secondary-dark: #083B5E;
 
   /* 3. Accents & statuts */
   --accent-cyan: #9ADFF7;
@@ -54,12 +54,12 @@
   --gradient-canvas: linear-gradient(135deg, #FFFFFF 0%, #F8FBFE 60%, #EDF6FD 100%);
   --gradient-teal: linear-gradient(135deg, #B3E3F1 0%, #A7D6DA 50%, #9DCFCF 100%);
   --gradient-medical: linear-gradient(135deg, #ECFFF9 0%, #C8F1E7 50%, #82DFF7 100%);
-  --gradient-hero: linear-gradient(135deg, #19313A 0%, #3B6E71 50%, #2C7777 100%);
+  --gradient-hero: linear-gradient(135deg, #052840 0%, #083B5E 50%, #0B4F7C 100%);
 
-  /* 8. Ombres douces */
-  --shadow-card: 0 8px 24px rgba(38, 93, 119, 0.10);
-  --shadow-floating: 0 12px 30px rgba(38, 93, 119, 0.14);
-  --shadow-btn: 0 4px 12px rgba(38, 93, 119, 0.10);
+  /* 8. Ombres douces (synchronisées avec la tête du robot rgba(11, 79, 124, ...)) */
+  --shadow-card: 0 8px 24px rgba(11, 79, 124, 0.10);
+  --shadow-floating: 0 12px 30px rgba(11, 79, 124, 0.14);
+  --shadow-btn: 0 4px 14px rgba(11, 79, 124, 0.18);
 
   /* Typographie */
   --font-body: "Inter", system-ui, "Segoe UI", Arial, sans-serif;

@@ -2,6 +2,8 @@
   "use strict";
 
   let token = "";
+  let pin = "";
+  let currentDoctor = "A";
   let timer = null;
 
   const DOCTOR_TOKENS = {
@@ -25,23 +27,28 @@
 
   function say(id, message) {
     const el = $(id);
+    if (!el) return;
     el.textContent = message || "";
     el.classList.toggle("error", Boolean(message));
   }
 
   async function api(url, options = {}) {
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    };
+    if (token) headers["X-Doctor-Token"] = token;
+    if (pin) headers["X-Web-PIN"] = pin;
+    if (currentDoctor) headers["X-Doctor-Code"] = currentDoctor;
+
     const response = await fetch(url, {
       ...options,
-      headers: {
-        "X-Doctor-Token": token,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
+      headers,
     });
     let body = {};
     try { body = await response.json(); } catch (_) { /* corps vide */ }
     if (response.status === 401) {
-      logout("Jeton invalide ou expiré.");
+      lockQueue("Session expirée. Veuillez saisir le code PIN.");
       throw new Error("auth");
     }
     if (!response.ok) {
@@ -50,15 +57,28 @@
     return body;
   }
 
-  function logout(message) {
-    token = "";
-    localStorage.removeItem("hiar_doctor_token");
+  function lockQueue(message) {
     clearInterval(timer);
+    timer = null;
+    localStorage.removeItem("hiar_web_pin");
+    localStorage.removeItem("hiar_doctor_token");
     $("queue-panel").hidden = true;
     $("doctor-topbar-actions").hidden = true;
     $("login-panel").hidden = false;
-    $("token").value = "";
-    say("login-feedback", message || "");
+    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4") ];
+    digits.forEach(d => { if (d) d.value = ""; });
+    if ($("token")) $("token").value = "";
+    if (digits[0]) digits[0].focus();
+    if (message) say("login-feedback", message);
+  }
+
+  function unlockQueue() {
+    $("login-panel").hidden = true;
+    $("queue-panel").hidden = false;
+    $("doctor-topbar-actions").hidden = false;
+    refresh();
+    if (timer) clearInterval(timer);
+    timer = setInterval(refresh, 5000);
   }
 
   async function setSession(period, isOpen) {
@@ -76,14 +96,15 @@
 
   function renderSessions(sessions) {
     const box = $("sessions");
+    if (!box) return;
     box.replaceChildren();
     Object.keys(PERIODS).forEach((period) => {
-      const found = sessions.find((s) => s.period === period);
+      const found = (sessions || []).find((s) => s.period === period);
       const open = Boolean(found && found.is_open);
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "btn btn-outline";
-      button.textContent = PERIODS[period] + " : " + (open ? "ouvert (fermer)" : "fermé (ouvrir)");
+      button.className = "btn btn-outline btn-small";
+      button.textContent = PERIODS[period] + " : " + (open ? "Ouvert (fermer)" : "Fermé (ouvrir)");
       button.addEventListener("click", () => setSession(period, !open));
       box.append(button);
     });
@@ -111,6 +132,7 @@
 
   function renderQueue(items) {
     const body = $("queue-body");
+    if (!body) return;
     body.replaceChildren();
     if (!items.length) {
       const tr = document.createElement("tr");
@@ -128,11 +150,11 @@
       cell(tr, item.contact || "—");
       cell(tr, item.reason);
 
-      // Signes vitaux mesurés par HIAR
+      // Signes vitaux mesurés par HIAR (sans emojis dans les chaînes clés)
       const vitals = [];
-      if (item.temperature_c != null) vitals.push("🌡️ " + item.temperature_c + " °C");
-      if (item.heart_rate_bpm != null) vitals.push("❤️ " + item.heart_rate_bpm + " bpm");
-      if (item.spo2_percent != null) vitals.push("🫁 " + item.spo2_percent + " %");
+      if (item.temperature_c != null) vitals.push("T° " + item.temperature_c + " °C");
+      if (item.heart_rate_bpm != null) vitals.push("Pouls " + item.heart_rate_bpm + " bpm");
+      if (item.spo2_percent != null) vitals.push("SpO2 " + item.spo2_percent + " %");
       const vitalsCell = cell(tr, vitals.length ? vitals.join("  |  ") : "Non mesurées");
       vitalsCell.className = "vitals-cell";
 
@@ -161,11 +183,13 @@
     const day = today();
     try {
       const [sessions, queue] = await Promise.all([
-        api("/api/doctor/sessions?date=" + day),
-        api("/api/doctor/appointments?date=" + day),
+        api("/api/doctor/sessions?date=" + day + "&doctor=" + currentDoctor),
+        api("/api/doctor/appointments?date=" + day + "&doctor=" + currentDoctor),
       ]);
-      $("queue-title").textContent = "Ma file — médecin " + queue.doctor;
-      $("queue-date").textContent = "Date : " + day;
+      const title = $("queue-title");
+      if (title) title.textContent = "Rendez-vous des patients — Médecin " + (queue.doctor || currentDoctor);
+      const dateEl = $("queue-date");
+      if (dateEl) dateEl.textContent = "Date : " + day;
       renderSessions(sessions.sessions || []);
       renderQueue(queue.appointments || []);
     } catch (err) {
@@ -173,158 +197,157 @@
     }
   }
 
-  async function performLogin(candidateToken) {
-    token = candidateToken.trim();
-    say("login-feedback", "");
-    try {
-      await api("/api/doctor/sessions?date=" + today());
-    } catch (err) {
-      if (err.message !== "auth") say("login-feedback", err.message);
-      return false;
+  function initPinAndForm() {
+    const form = $("login-form");
+    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4") ];
+
+    function getEnteredPin() {
+      return digits.map(d => d ? d.value : "").join("");
     }
-    localStorage.setItem("hiar_doctor_token", token);
-    $("login-panel").hidden = true;
-    $("queue-panel").hidden = false;
-    $("doctor-topbar-actions").hidden = false;
-    await refresh();
-    if (timer) clearInterval(timer);
-    timer = setInterval(refresh, 5000);
-    return true;
-  }
 
-  $("login-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    await performLogin($("token").value);
-  });
+    function clearDigits() {
+      digits.forEach(d => { if (d) d.value = ""; });
+      if (digits[0]) digits[0].focus();
+    }
 
-  document.querySelectorAll(".quick-doc-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const doc = btn.dataset.doc;
-      if (DOCTOR_TOKENS[doc]) {
-        $("token").value = DOCTOR_TOKENS[doc];
-        performLogin(DOCTOR_TOKENS[doc]);
-      }
+    digits.forEach((d, i) => {
+      if (!d) return;
+      d.addEventListener("input", () => {
+        if (d.value.length >= 1) {
+          d.value = d.value.slice(-1);
+          if (i < 3 && digits[i + 1]) digits[i + 1].focus();
+          else if (getEnteredPin().length === 4) form.requestSubmit();
+        }
+      });
+      d.addEventListener("keydown", (e) => {
+        if (e.key === "Backspace" && !d.value && i > 0 && digits[i - 1]) {
+          digits[i - 1].focus();
+        }
+      });
     });
-  });
 
-  $("refresh-btn").addEventListener("click", refresh);
-  $("logout-btn").addEventListener("click", () => logout(""));
+    document.querySelectorAll(".pin-key").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const val = btn.dataset.val;
+        if (val === "C") {
+          clearDigits();
+          say("login-feedback", "");
+          return;
+        }
+        if (val !== undefined && val !== "") {
+          for (let i = 0; i < 4; i++) {
+            if (digits[i] && !digits[i].value) {
+              digits[i].value = val;
+              if (i < 3 && digits[i + 1]) digits[i + 1].focus();
+              else if (getEnteredPin().length === 4) form.requestSubmit();
+              break;
+            }
+          }
+        }
+      });
+    });
 
-  // =========================================================================
-  // MONITEUR TEMPS RÉEL DES CAPTEURS & MATÉRIEL (ESP32, ROS 2, LLM)
-  // =========================================================================
-  const DIAG_LABELS = {
-    ok: "En ligne",
-    warn: "Attention",
-    error: "Erreur",
-    offline: "Hors ligne",
-    unknown: "Inconnu",
-  };
+    if (form) {
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const enteredPin = getEnteredPin();
+        const fallbackToken = $("token") ? $("token").value.trim() : "";
 
-  function normalizeStatus(st) {
-    const s = String(st || "offline").toLowerCase();
-    if (s === "ok" || s === "online" || s === "connected" || s === "ready") return "ok";
-    if (s === "warn" || s === "warning" || s === "degraded") return "warn";
-    if (s === "error" || s === "fault") return "error";
-    return "offline";
-  }
+        // Cas 1 : Connexion par code PIN 4 chiffres
+        if (enteredPin.length === 4) {
+          say("login-feedback", "");
+          try {
+            const res = await fetch("/api/auth/pin", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pin: enteredPin }),
+            });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+              pin = enteredPin;
+              token = DOCTOR_TOKENS[currentDoctor] || DOCTOR_TOKENS.A;
+              localStorage.setItem("hiar_web_pin", enteredPin);
+              localStorage.setItem("hiar_doctor_token", token);
+              unlockQueue();
+              return;
+            } else {
+              say("login-feedback", data.error || "Code PIN incorrect.");
+              clearDigits();
+              return;
+            }
+          } catch (_) {
+            say("login-feedback", "Erreur réseau. Veuillez réessayer.");
+            return;
+          }
+        }
 
-  function makeDiagCard(icon, title, status, detail, meta) {
-    const norm = normalizeStatus(status);
-    const card = document.createElement("div");
-    card.className = "diag-card diag-card-" + norm;
-
-    const head = document.createElement("div");
-    head.className = "diag-card-head";
-
-    const titleWrap = document.createElement("span");
-    titleWrap.className = "diag-card-title";
-    titleWrap.textContent = icon + " " + title;
-
-    const badge = document.createElement("span");
-    badge.className = "diag-pill diag-" + norm;
-    badge.textContent = DIAG_LABELS[norm] || norm;
-
-    head.append(titleWrap, badge);
-
-    const detailEl = document.createElement("p");
-    detailEl.className = "diag-card-detail";
-    detailEl.textContent = detail || "—";
-
-    card.append(head, detailEl);
-
-    if (meta) {
-      const metaEl = document.createElement("p");
-      metaEl.className = "diag-card-meta";
-      metaEl.textContent = meta;
-      card.append(metaEl);
+        // Cas 2 : Connexion de secours par jeton médecin (si token rempli)
+        if (fallbackToken) {
+          token = fallbackToken;
+          pin = "";
+          try {
+            await api("/api/doctor/sessions?date=" + today());
+            localStorage.setItem("hiar_doctor_token", token);
+            unlockQueue();
+          } catch (err) {
+            say("login-feedback", "Jeton médecin invalide.");
+          }
+        } else {
+          say("login-feedback", "Veuillez saisir les 4 chiffres du code PIN.");
+        }
+      });
     }
-    return card;
-  }
 
-  function renderDiagnostics(data) {
-    const grid = $("diag-grid");
-    const pill = $("diag-bridge-pill");
-    const subtitle = $("diag-subtitle");
-    if (!grid || !pill || !subtitle) return;
+    document.querySelectorAll(".quick-doc-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const doc = btn.dataset.doc;
+        currentDoctor = doc;
+        document.querySelectorAll(".quick-doc-btn").forEach(b => {
+          b.classList.toggle("btn-primary", b.dataset.doc === doc);
+        });
+        if (DOCTOR_TOKENS[doc]) {
+          token = DOCTOR_TOKENS[doc];
+        }
+        refresh();
+      });
+    });
 
-    const online = Boolean(data && data.bridge_online);
-    pill.className = "diag-pill " + (online ? "diag-ok" : "diag-offline");
-    pill.textContent = online ? "Temps réel actif" : "Pont hors ligne";
+    const refreshBtn = $("refresh-btn");
+    if (refreshBtn) refreshBtn.addEventListener("click", refresh);
 
-    const net = (data && data.network) || {};
-    const timeStr = new Date().toLocaleTimeString("fr-FR");
-    subtitle.textContent = online
-      ? "IP Robot : " + (net.ip || "—") + " · Firmware : " + (data.firmware_diagnostics || "—") + " · Mis à jour à " + timeStr
-      : "En attente du pont ROS 2 (hmi_websocket_bridge) · Vérifié à " + timeStr;
+    const logoutBtn = $("logout-btn");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", () => {
+        fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+          lockQueue();
+        });
+      });
+    }
 
-    const esp32 = (data && data.esp32) || {};
-    const sensors = (data && data.sensors) || {};
-    const rosNodes = (data && data.ros_nodes) || {};
-    const llm = (data && data.llm) || {};
-
-    const usFront = sensors.ultrasonic || {};
-    const usLeft = sensors.ultrasonic_left || {};
-    const usRight = sensors.ultrasonic_right || {};
-    const temp = sensors.ds18b20 || {};
-    const pulse = sensors.max30102 || {};
-    const motors = sensors.motors || {};
-
-    const cards = [
-      makeDiagCard("🔌", "ESP32", esp32.status, esp32.detail || "Non connecté", esp32.port ? "Port : " + esp32.port : ""),
-      makeDiagCard("⬆️", "Ultrason Avant (HC-SR04)", usFront.status, usFront.detail || "Inconnu", usFront.distance_cm != null ? "GPIO 13/34 · " + usFront.distance_cm + " cm" : "GPIO 13/34"),
-      makeDiagCard("⬅️", "Ultrason Gauche (HC-SR04)", usLeft.status, usLeft.detail || "Inconnu", usLeft.distance_cm != null ? "GPIO 2/4 · " + usLeft.distance_cm + " cm" : "GPIO 2/4"),
-      makeDiagCard("➡️", "Ultrason Droite (HC-SR04)", usRight.status, usRight.detail || "Inconnu", usRight.distance_cm != null ? "GPIO 5/16 · " + usRight.distance_cm + " cm" : "GPIO 5/16"),
-      makeDiagCard("🌡️", "Température DS18B20", temp.status, temp.detail || "Inconnu", "Bus 1-Wire"),
-      makeDiagCard("❤️", "Pouls / SpO2 MAX30102", pulse.status, pulse.detail || "Inconnu", "Bus I²C (0x57)"),
-      makeDiagCard("⚙️", "Moteurs & Traction", motors.status, motors.detail || "Inconnu", motors.mode ? "Mode : " + motors.mode : ""),
-      makeDiagCard("🤖", "Nœuds ROS 2", rosNodes.status, rosNodes.detail || "—", ""),
-      makeDiagCard("🧠", "IA Vocale (LLM)", llm.status, llm.detail || "—", ""),
-    ];
-
-    grid.replaceChildren(...cards);
-  }
-
-  async function refreshDiagnostics() {
-    try {
-      const response = await fetch("/api/system/diagnostics");
-      if (!response.ok) return;
-      const data = await response.json();
-      renderDiagnostics(data);
-    } catch (_) {
-      renderDiagnostics({ bridge_online: false });
+    // Restauration de session automatique si PIN mémorisé
+    const savedPin = localStorage.getItem("hiar_web_pin");
+    if (savedPin && savedPin.length === 4) {
+      fetch("/api/auth/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: savedPin }),
+      }).then(r => r.json()).then(data => {
+        if (data && data.ok) {
+          pin = savedPin;
+          token = DOCTOR_TOKENS[currentDoctor] || DOCTOR_TOKENS.A;
+          unlockQueue();
+        } else {
+          localStorage.removeItem("hiar_web_pin");
+        }
+      }).catch(() => {});
+    } else {
+      const savedToken = localStorage.getItem("hiar_doctor_token");
+      if (savedToken) {
+        token = savedToken;
+        unlockQueue();
+      }
     }
   }
 
-  const diagBtn = $("diag-refresh-btn");
-  if (diagBtn) diagBtn.addEventListener("click", refreshDiagnostics);
-  refreshDiagnostics();
-  setInterval(refreshDiagnostics, 3000);
-
-  // Restauration automatique de session si jeton mémorisé
-  const savedToken = localStorage.getItem("hiar_doctor_token");
-  if (savedToken) {
-    $("token").value = savedToken;
-    performLogin(savedToken);
-  }
+  document.addEventListener("DOMContentLoaded", initPinAndForm);
 })();

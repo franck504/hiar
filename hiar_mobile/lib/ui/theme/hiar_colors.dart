@@ -9,9 +9,9 @@ class HiarColors {
   static const Color primary = Color(0xFF82DFF7);       // Cyan lumineux
   static const Color primaryLight = Color(0xFFD9ECFB);  // Bleu ciel clair
   static const Color primarySoft = Color(0xFFC4E7FA);   // Bleu pastel
-  static const Color secondary = Color(0xFF2C7777);     // Teal médical (CTA & cartes clés)
-  static const Color secondaryLight = Color(0xFFA7D6DA);// Turquoise doux
-  static const Color secondaryDark = Color(0xFF3B6E71); // Deep Teal
+  static const Color secondary = Color(0xFF0B4F7C);     // Bleu médical HIAR officiel (tête robot)
+  static const Color secondaryLight = Color(0xFF7BBCE3);// Bleu doux
+  static const Color secondaryDark = Color(0xFF083B5E); // Deep Blue
   static const Color accent = Color(0xFF9ADFF7);        // Cyan pastel
   static const Color success = Color(0xFF2B8F83);       // Vert médical
   static const Color mint = Color(0xFFECFFF9);          // Vert menthe
@@ -33,7 +33,7 @@ class HiarColors {
   static const Color textMuted = Color(0xFF8AA6A7);     // Gris turquoise
   static const Color border = Color(0xFFD0E5EF);        // Bordures légères
   static const Color divider = Color(0xFFE6EEF2);       // Séparateurs
-  static const Color shadow = Color(0xFF244B5A);        // Ombres douces
+  static const Color shadow = Color(0xFF0B4F7C);        // Ombres bleues HIAR
 
   // Alias historiques HIAR (compatibilité complète dans toute l'app)
   static const Color marine = textPrimary;
@@ -152,13 +152,13 @@ class HiarGradients {
   );
 }
 
-/// Ombres douces officielles : rgba(38, 93, 119, 0.10 / 0.14)
+/// Ombres douces officielles : rgba(11, 79, 124, 0.10 / 0.14)
 class HiarShadows {
   HiarShadows._();
 
   static final List<BoxShadow> card = [
     BoxShadow(
-      color: const Color(0xFF265D77).withOpacity(0.10),
+      color: const Color(0xFF0B4F7C).withOpacity(0.10),
       blurRadius: 24,
       offset: const Offset(0, 8),
     ),
@@ -166,7 +166,7 @@ class HiarShadows {
 
   static final List<BoxShadow> floating = [
     BoxShadow(
-      color: const Color(0xFF265D77).withOpacity(0.14),
+      color: const Color(0xFF0B4F7C).withOpacity(0.14),
       blurRadius: 30,
       offset: const Offset(0, 12),
     ),
@@ -174,7 +174,7 @@ class HiarShadows {
 
   static final List<BoxShadow> softButton = [
     BoxShadow(
-      color: const Color(0xFF265D77).withOpacity(0.10),
+      color: const Color(0xFF0B4F7C).withOpacity(0.10),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),

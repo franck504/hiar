@@ -4,7 +4,7 @@ import os
 import time
 from datetime import datetime
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, session
 
 from catalog import CATALOG, INFO_DISCLAIMER
 from requests_model import build_request
@@ -41,33 +41,75 @@ BOOKING_ERROR_STATUS = {
 }
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "hiar_hospital_robot_secret_key_session_2026")
 bridge = RosBridge()
+
+
+def get_web_pin() -> str:
+    """Retourne le code PIN à 4 chiffres configuré en dur dans le .env."""
+    return str(os.environ.get("HIAR_WEB_PIN", "1234")).strip()
+
+
+def is_authenticated() -> bool:
+    """Vérifie si la session Flask ou l'en-tête HTTP contient un PIN valide."""
+    if session.get("authenticated") is True:
+        return True
+    supplied_pin = request.headers.get("X-Web-PIN", "").strip()
+    if supplied_pin and len(supplied_pin) == 4 and hmac.compare_digest(get_web_pin(), supplied_pin):
+        return True
+    return False
 
 
 @app.route("/")
 def home():
-    """Page d'accueil du web : Portail unique Médecin (Login et Liste des rendez-vous)."""
-    return render_template("doctor.html")
+    """Page d'accueil du web : Portail [ /patients : Rendez-vous ]."""
+    return render_template("patients.html")
 
 
-@app.route("/staff")
-def staff_page():
-    # Page sans aucune donnée : les rendez-vous ne sont servis que par l'API,
-    # protégée par le jeton du personnel.
-    return render_template("staff.html")
+@app.route("/patients")
+def patients_page():
+    """Route [ /patients : Rendez-vous ] — Suivi de la file et consultations."""
+    return render_template("patients.html")
 
 
 @app.route("/admin")
 def admin_page():
-    """Page d'administration et de supervision du personnel médical."""
-    return render_template("staff.html")
-
+    """Route [ /admin : Gestion de HIAR ] — État de santé des capteurs et télémétrie."""
+    return render_template("admin.html")
 
 
 @app.route("/doctor")
 def doctor_page():
-    """Page de gestion de la file du médecin (le jeton est saisi côté page)."""
-    return render_template("doctor.html")
+    """Rétro-compatibilité : alias vers /patients."""
+    return render_template("patients.html")
+
+
+@app.route("/staff")
+def staff_page():
+    """Rétro-compatibilité : page du personnel."""
+    return render_template("staff.html")
+
+
+@app.route("/api/auth/pin", methods=["POST"])
+def api_auth_pin():
+    """Authentification sécurisée par code PIN à 4 chiffres (sans récupération de mot de passe)."""
+    data = request.get_json(silent=True) or request.form or {}
+    supplied = str(data.get("pin", "")).strip()
+    expected = get_web_pin()
+    if len(supplied) == 4 and hmac.compare_digest(expected, supplied):
+        session["authenticated"] = True
+        return jsonify({"ok": True, "pin": supplied, "redirect": "/patients"}), 200
+    return jsonify({"ok": False, "error": "Code PIN incorrect."}), 401
+
+
+@app.route("/api/auth/logout", methods=["POST", "GET"])
+@app.route("/logout", methods=["POST", "GET"])
+def api_auth_logout():
+    """Déconnexion et invalidation de la session Web."""
+    session.clear()
+    if request.is_json:
+        return jsonify({"ok": True, "redirect": "/patients"}), 200
+    return redirect("/patients")
 
 
 @app.route("/api/appointments", methods=["POST"])
@@ -327,7 +369,9 @@ def api_public_consultation_sessions():
 
 
 def staff_authorized():
-    """Vérifie le jeton d'accès du personnel médical."""
+    """Vérifie le jeton d'accès du personnel médical ou la session PIN."""
+    if is_authenticated():
+        return True
     expected = os.environ.get("HIAR_STAFF_API_TOKEN", "")
     supplied = request.headers.get("X-Staff-Token", "")
     return bool(expected) and hmac.compare_digest(expected, supplied)
@@ -335,12 +379,12 @@ def staff_authorized():
 
 def staff_auth_error():
     """Construit la réponse lorsque l'accès du personnel est refusé."""
-    if not os.environ.get("HIAR_STAFF_API_TOKEN"):
+    if not os.environ.get("HIAR_STAFF_API_TOKEN") and not os.environ.get("HIAR_WEB_PIN"):
         status_code = 503
         error = "Accès du personnel non configuré sur le serveur."
     else:
         status_code = 401
-        error = "Authentification du personnel requise."
+        error = "Authentification requise (Code PIN ou jeton personnel)."
 
     app.logger.warning(
         "Refus d'accès : %s %s — HTTP %s",
@@ -352,7 +396,13 @@ def staff_auth_error():
 
 
 def doctor_identity():
-    """Retourne le code du médecin identifié par son jeton."""
+    """Retourne le code du médecin identifié par son jeton ou par session PIN."""
+    if is_authenticated():
+        doc_code = request.headers.get("X-Doctor-Code") or request.args.get("doctor") or "A"
+        if doc_code not in DOCTORS:
+            doc_code = "A"
+        return doc_code, None
+
     configured = {
         code: os.environ.get(f"HIAR_DOCTOR_TOKEN_{code}", "")
         for code in DOCTORS

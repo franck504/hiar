@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0B4F7C">
+  <title>Gestion de HIAR — HIAR</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='hiar-tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='staff.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/admin" aria-label="HIAR — Accueil"><svg class="brand-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect x="4" y="4" width="40" height="40" rx="13" fill="none" stroke="currentColor" stroke-width="2.5"/>
+      <rect x="11" y="13" width="26" height="21" rx="7" fill="none" stroke="currentColor" stroke-width="2.2"/>
+      <circle cx="19" cy="22" r="2.3" fill="currentColor"/>
+      <circle cx="29" cy="22" r="2.3" fill="currentColor"/>
+      <path d="M18 29 Q24 34 30 29" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M24 13 V8 M20 8 H28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </svg></a>
+    <span class="topbar-title">Gestion de HIAR</span>
+
+    <nav class="topbar-nav" aria-label="Navigation principale">
+      <a href="/patients" class="topbar-nav-link">Rendez-vous</a>
+      <a href="/admin" class="topbar-nav-link active">Gestion de HIAR</a>
+    </nav>
+
+    <div id="admin-topbar-actions" class="staff-topbar-actions" style="margin-left: auto;" hidden>
+      <button type="button" id="diag-refresh-top-btn"
+              class="btn btn-outline icon-btn staff-refresh-icon"
+              aria-label="Actualiser les capteurs" title="Actualiser les capteurs">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20 7v5h-5M4 17v-5h5M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"
+                fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button type="button" id="admin-logout-btn"
+              class="btn btn-outline icon-btn staff-logout-icon"
+              aria-label="Déconnexion" title="Déconnexion">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M10 17l5-5-5-5M15 12H3M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"
+                fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section id="login-panel" class="panel pin-login-panel">
+      <div class="pin-card-header">
+        <h1>Code d'accès</h1>
+        <p class="muted">Entrez le code PIN à 4 chiffres pour accéder à la gestion de HIAR.</p>
+      </div>
+      <form id="login-form" autocomplete="off">
+        <input id="token" type="hidden" value="">
+        <div class="pin-inputs" id="pin-inputs">
+          <input type="password" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-1" data-idx="0" autofocus required>
+          <input type="password" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-2" data-idx="1" required>
+          <input type="password" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-3" data-idx="2" required>
+          <input type="password" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-4" data-idx="3" required>
+        </div>
+        <p id="login-feedback" class="feedback" role="status" aria-live="polite"></p>
+
+        <div class="pin-keypad" aria-label="Pavé numérique">
+          <button type="button" class="pin-key" data-val="1">1</button>
+          <button type="button" class="pin-key" data-val="2">2</button>
+          <button type="button" class="pin-key" data-val="3">3</button>
+          <button type="button" class="pin-key" data-val="4">4</button>
+          <button type="button" class="pin-key" data-val="5">5</button>
+          <button type="button" class="pin-key" data-val="6">6</button>
+          <button type="button" class="pin-key" data-val="7">7</button>
+          <button type="button" class="pin-key" data-val="8">8</button>
+          <button type="button" class="pin-key" data-val="9">9</button>
+          <button type="button" class="pin-key pin-clear" data-val="C" title="Effacer">C</button>
+          <button type="button" class="pin-key" data-val="0">0</button>
+          <button type="submit" class="pin-key pin-submit" id="pin-submit-key" title="Valider">OK</button>
+        </div>
+
+        <button type="submit" class="btn" style="margin-top: 18px; width: 100%;">Valider le code PIN</button>
+      </form>
+    </section>
+
+    <section id="diagnostics-panel" class="panel diag-panel" aria-live="polite" hidden>
+      <div class="section-heading">
+        <div>
+          <h1 class="diag-title" style="font-size: 1.5rem;">Gestion de HIAR</h1>
+          <p class="muted" id="diag-subtitle" style="margin: 4px 0 0;">Chargement du diagnostic temps réel…</p>
+        </div>
+        <div class="diag-header-actions">
+          <span id="diag-bridge-pill" class="diag-pill diag-offline">Pont en attente</span>
+          <button type="button" id="diag-refresh-btn" class="btn btn-outline btn-small">Actualiser</button>
+        </div>
+      </div>
+
+      <div id="diag-grid" class="diag-grid">
+        <!-- Cartes de capteurs rendues dynamiquement -->
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='admin.js') }}" defer></script>
+</body>
+</html>
