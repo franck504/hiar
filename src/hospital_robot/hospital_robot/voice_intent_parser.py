@@ -438,7 +438,7 @@ class VoiceIntentParser:
             return "qwen2.5:0.5b"
         cfg = self.llm_engine.config
         if backend_used.startswith("groq"):
-            return getattr(cfg, "groq_model", "llama-3.3-70b-versatile")
+            return getattr(cfg, "groq_model", "qwen/qwen3.8-27b")
         if backend_used.startswith("gemini"):
             return getattr(cfg, "gemini_model", "gemini-3.5-flash-lite")
         if backend_used == "cache":

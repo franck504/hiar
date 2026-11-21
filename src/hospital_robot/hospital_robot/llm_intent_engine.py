@@ -177,7 +177,7 @@ class LLMConfig:
     max_tokens: int = 180
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     # --- Groq API (primaire) ---
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "qwen/qwen3.8-27b"
     groq_timeout_sec: float = 8.0
     groq_cooldown_sec: int = 60
     # --- Cache LRU ---
@@ -445,6 +445,7 @@ class GroqBackend(LLMBackendInterface):
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {api_key}",
+                    "User-Agent": "HIAR-Robot/1.0 (Hospital Assistant)",
                 },
                 method="POST",
             )

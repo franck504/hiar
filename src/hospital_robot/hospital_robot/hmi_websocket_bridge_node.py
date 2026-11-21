@@ -136,7 +136,7 @@ class HMIWebSocketBridgeNode(Node):
 
         # Mode hybride : Groq API Cloud prioritaire avec Secours Qwen Local (Edge Ollama)
         default_backend = os.environ.get("HIAR_LLM_BACKEND", "hybrid_groq_qwen").strip() or "hybrid_groq_qwen"
-        default_groq_model = os.environ.get("HIAR_GROQ_MODEL", "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
+        default_groq_model = os.environ.get("HIAR_GROQ_MODEL", "qwen/qwen3.8-27b").strip() or "qwen/qwen3.8-27b"
         try:
             default_groq_timeout = float(os.environ.get("HIAR_GROQ_TIMEOUT", "8.0"))
         except ValueError:
