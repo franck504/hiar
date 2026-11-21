@@ -71,8 +71,8 @@ try:
     from hospital_robot.voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from hospital_robot.vitals_data_parser import build_vitals_instruction, parse_vitals_frame
     from hospital_robot.llm_intent_engine import (
-        GeminiBackend,
-        HybridGeminiQwenBackend,
+        GroqBackend,
+        HybridGroqQwenBackend,
         LLMConfig,
         OllamaBackend,
         load_dotenv_file,
@@ -82,8 +82,8 @@ except ImportError:
     from vitals_data_parser import build_vitals_instruction, parse_vitals_frame
     try:
         from llm_intent_engine import (
-            GeminiBackend,
-            HybridGeminiQwenBackend,
+            GroqBackend,
+            HybridGroqQwenBackend,
             LLMConfig,
             OllamaBackend,
             load_dotenv_file,
@@ -91,8 +91,8 @@ except ImportError:
     except ImportError:
         LLMConfig = None  # type: ignore
         load_dotenv_file = None  # type: ignore
-        GeminiBackend = None  # type: ignore
-        HybridGeminiQwenBackend = None  # type: ignore
+        GroqBackend = None  # type: ignore
+        HybridGroqQwenBackend = None  # type: ignore
         OllamaBackend = None  # type: ignore
 
 import websockets
@@ -128,23 +128,23 @@ class HMIWebSocketBridgeNode(Node):
     ):
         super().__init__(node_name)
 
-        # Charger .env si présent (GEMINI_API_KEY_1..N, HIAR_GEMINI_MODEL, ...)
+        # Charger .env si présent (GROQ_API_KEY_1..N, HIAR_GROQ_MODEL, ...)
         if load_dotenv_file is not None:
             env_loaded = load_dotenv_file()
             if env_loaded is not None:
                 self.get_logger().info(f"[LLM] Variables chargées depuis {env_loaded}")
 
-        # Mode hybride : Gemini API Cloud prioritaire avec Secours Qwen Local (Edge Ollama)
-        default_backend = os.environ.get("HIAR_LLM_BACKEND", "hybrid_gemini_qwen").strip() or "hybrid_gemini_qwen"
-        default_gemini_model = os.environ.get("HIAR_GEMINI_MODEL", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+        # Mode hybride : Groq API Cloud prioritaire avec Secours Qwen Local (Edge Ollama)
+        default_backend = os.environ.get("HIAR_LLM_BACKEND", "hybrid_groq_qwen").strip() or "hybrid_groq_qwen"
+        default_groq_model = os.environ.get("HIAR_GROQ_MODEL", "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
         try:
-            default_gemini_timeout = float(os.environ.get("HIAR_GEMINI_TIMEOUT", "8.0"))
+            default_groq_timeout = float(os.environ.get("HIAR_GROQ_TIMEOUT", "8.0"))
         except ValueError:
-            default_gemini_timeout = 8.0
+            default_groq_timeout = 8.0
         try:
-            default_gemini_cooldown = int(os.environ.get("HIAR_GEMINI_COOLDOWN", "60"))
+            default_groq_cooldown = int(os.environ.get("HIAR_GROQ_COOLDOWN", "60"))
         except ValueError:
-            default_gemini_cooldown = 60
+            default_groq_cooldown = 60
         cache_enabled = os.environ.get("HIAR_LLM_CACHE_ENABLED", "true").lower() in ("true", "1", "yes")
         enable_det_fallback = os.environ.get("HIAR_LLM_DETERMINISTIC_FALLBACK", "false").lower() in ("true", "1", "yes")
 
@@ -156,9 +156,9 @@ class HMIWebSocketBridgeNode(Node):
             self.declare_parameter("llm_host", "http://127.0.0.1:11434")
             self.declare_parameter("llm_model", "qwen2.5:0.5b")
             self.declare_parameter("llm_timeout", 15.0)
-            self.declare_parameter("gemini_model", default_gemini_model)
-            self.declare_parameter("gemini_timeout", default_gemini_timeout)
-            self.declare_parameter("gemini_cooldown", default_gemini_cooldown)
+            self.declare_parameter("groq_model", default_groq_model)
+            self.declare_parameter("groq_timeout", default_groq_timeout)
+            self.declare_parameter("groq_cooldown", default_groq_cooldown)
 
             self.host = host or str(self.get_parameter("websocket_host").value)
             self.port = port or int(self.get_parameter("websocket_port").value)
@@ -167,9 +167,9 @@ class HMIWebSocketBridgeNode(Node):
             llm_host = str(self.get_parameter("llm_host").value)
             llm_model = str(self.get_parameter("llm_model").value)
             llm_timeout = float(self.get_parameter("llm_timeout").value)
-            gemini_model = str(self.get_parameter("gemini_model").value)
-            gemini_timeout = float(self.get_parameter("gemini_timeout").value)
-            gemini_cooldown = int(self.get_parameter("gemini_cooldown").value)
+            groq_model = str(self.get_parameter("groq_model").value)
+            groq_timeout = float(self.get_parameter("groq_timeout").value)
+            groq_cooldown = int(self.get_parameter("groq_cooldown").value)
         else:
             self.host = host or "0.0.0.0"
             self.port = port or 5000
@@ -178,11 +178,11 @@ class HMIWebSocketBridgeNode(Node):
             llm_host = "http://127.0.0.1:11434"
             llm_model = "qwen2.5:0.5b"
             llm_timeout = 15.0
-            gemini_model = default_gemini_model
-            gemini_timeout = default_gemini_timeout
-            gemini_cooldown = default_gemini_cooldown
+            groq_model = default_groq_model
+            groq_timeout = default_groq_timeout
+            groq_cooldown = default_groq_cooldown
 
-        # Composants de traitement métier (Sécurité locale → Cache LRU → Gemini Cloud → Secours Qwen Local → Déterministe)
+        # Composants de traitement métier (Sécurité locale → Cache LRU → Groq Cloud → Secours Qwen Local)
         if LLMConfig is not None:
             llm_cfg = LLMConfig(
                 enabled=enable_llm,
@@ -190,9 +190,9 @@ class HMIWebSocketBridgeNode(Node):
                 host=llm_host,
                 model_name=llm_model,
                 timeout_sec=llm_timeout,
-                gemini_model=gemini_model,
-                gemini_timeout_sec=gemini_timeout,
-                gemini_cooldown_sec=gemini_cooldown,
+                groq_model=groq_model,
+                groq_timeout_sec=groq_timeout,
+                groq_cooldown_sec=groq_cooldown,
                 cache_enabled=cache_enabled,
             )
             self.intent_parser = VoiceIntentParser(
@@ -211,7 +211,7 @@ class HMIWebSocketBridgeNode(Node):
             engine = self.intent_parser.llm_engine
             self._llm_status, self._llm_detail = engine.get_diagnostics_status()
             backend_obj = getattr(engine, "_backend", None)
-            is_hybrid = isinstance(backend_obj, HybridGeminiQwenBackend) if HybridGeminiQwenBackend else False
+            is_hybrid = isinstance(backend_obj, HybridGroqQwenBackend) if HybridGroqQwenBackend else False
             is_ollama = isinstance(backend_obj, OllamaBackend) if OllamaBackend else False
 
             if is_hybrid or is_ollama:
@@ -220,15 +220,15 @@ class HMIWebSocketBridgeNode(Node):
                 def _prewarm_llm():
                     try:
                         time.sleep(1.0)
-                        gemini_b = getattr(backend_obj, "gemini", None)
-                        gemini_keys = getattr(gemini_b, "key_count", 0) if gemini_b else 0
-                        if gemini_keys > 0:
+                        groq_b = getattr(backend_obj, "groq", None)
+                        groq_keys = getattr(groq_b, "key_count", 0) if groq_b else 0
+                        if groq_keys > 0:
                             self.get_logger().info(
-                                f"[LLM] ☁️ Gemini API primaire prêt ({gemini_keys} clé(s), modèle={engine.config.gemini_model})."
+                                f"[LLM] ☁️ Groq API primaire prêt ({groq_keys} clé(s), modèle={engine.config.groq_model})."
                             )
                         else:
                             self.get_logger().info(
-                                "[LLM] ℹ️ Aucune clé GEMINI_API_KEY_N dans .env — fonctionnement direct sur Qwen local."
+                                "[LLM] ℹ️ Aucune clé GROQ_API_KEY_N dans .env — fonctionnement direct sur Qwen local."
                             )
 
                         self.get_logger().info("[LLM] 🔥 Pré-chauffage secours Qwen 2.5 en RAM...")
@@ -250,15 +250,15 @@ class HMIWebSocketBridgeNode(Node):
                         self._llm_status, self._llm_detail = engine.get_diagnostics_status()
 
                 threading.Thread(target=_prewarm_llm, daemon=True).start()
-            elif isinstance(backend_obj, GeminiBackend) if GeminiBackend else False:
-                gemini_keys = getattr(backend_obj, "key_count", 0)
-                if gemini_keys > 0:
+            elif isinstance(backend_obj, GroqBackend) if GroqBackend else False:
+                groq_keys = getattr(backend_obj, "key_count", 0)
+                if groq_keys > 0:
                     self.get_logger().info(
-                        f"[LLM] ☁️ Mode GEMINI SOLO actif ({gemini_keys} clé(s), modèle={engine.config.gemini_model})."
+                        f"[LLM] ☁️ Mode GROQ SOLO actif ({groq_keys} clé(s), modèle={engine.config.groq_model})."
                     )
                 else:
                     self.get_logger().warning(
-                        "[LLM] ⚠️ Mode GEMINI SOLO : aucune clé GEMINI_API_KEY_N trouvée dans .env !"
+                        "[LLM] ⚠️ Mode GROQ SOLO : aucune clé GROQ_API_KEY_N trouvée dans .env !"
                     )
 
         self._pending_orientation: Optional[Dict[str, Any]] = None
@@ -690,6 +690,8 @@ class HMIWebSocketBridgeNode(Node):
 
         if is_cache:
             engine_str = "⚡ Cache LRU local (Zéro quota | Latence: <1ms)"
+        elif is_llm and backend_used.startswith("groq"):
+            engine_str = f"☁️ Groq API {model} ({backend_used} | Latence: {latency_ms:.0f}ms)"
         elif is_llm and backend_used.startswith("gemini"):
             engine_str = f"☁️ Gemini API {model} ({backend_used} | Latence: {latency_ms:.0f}ms)"
         elif is_llm and "qwen" in backend_used:

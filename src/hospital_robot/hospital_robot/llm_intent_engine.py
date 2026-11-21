@@ -1,12 +1,11 @@
 """Moteur d'inférence LLM pour le robot hospitalier HIAR.
 
-Architecture 5 niveaux :
+Architecture 4 niveaux :
   1. Réflexe local déterministe (STOP/ARRÊTE/URGENCE) — < 1 ms, jamais réseau
   2. Cache LRU local — < 1 ms, zéro quota
-  3. Backend PRINCIPAL : Gemini API (gemini-2.5-flash-lite), rotation round-robin
+  3. Backend PRINCIPAL : Groq API (llama-3.3-70b-versatile), rotation round-robin
      des clés avec cooldown par clé sur HTTP 429
   4. Backend FALLBACK  : Qwen 2.5 0.5B via Ollama (pré-chargé en RAM sur Pi)
-  5. Filet de sécurité final : parseur déterministe (dans voice_intent_parser.py)
 """
 
 from dataclasses import dataclass
@@ -168,8 +167,8 @@ class LLMConfig:
     """Configuration du moteur LLM."""
 
     enabled: bool = True
-    # "hybrid_gemini_qwen" | "gemini" | "ollama" | "llama_cpp" | "mock"
-    backend: str = "hybrid_gemini_qwen"
+    # "hybrid_groq_qwen" | "groq" | "ollama" | "llama_cpp" | "mock"
+    backend: str = "hybrid_groq_qwen"
     # --- Ollama / llama.cpp (secours local) ---
     host: str = "http://127.0.0.1:11434"
     model_name: str = "qwen2.5:0.5b"
@@ -177,10 +176,10 @@ class LLMConfig:
     temperature: float = 0.1
     max_tokens: int = 180
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
-    # --- Gemini API (primaire) ---
-    gemini_model: str = "gemini-3.5-flash-lite"
-    gemini_timeout_sec: float = 8.0
-    gemini_cooldown_sec: int = 60
+    # --- Groq API (primaire) ---
+    groq_model: str = "llama-3.3-70b-versatile"
+    groq_timeout_sec: float = 8.0
+    groq_cooldown_sec: int = 60
     # --- Cache LRU ---
     cache_enabled: bool = True
     cache_ttl_min: int = 10
@@ -214,7 +213,7 @@ class LLMResponse:
 # ---------------------------------------------------------------------------
 
 class AllKeysCooldownError(Exception):
-    """Levée quand toutes les clés Gemini sont en cooldown."""
+    """Levée quand toutes les clés Groq sont en cooldown."""
 
 
 # ---------------------------------------------------------------------------
@@ -291,25 +290,25 @@ class LLMBackendInterface:
 
 
 # ---------------------------------------------------------------------------
-# Backend Gemini (rotation de clés round-robin)
+# Backend Groq API (rotation de clés round-robin)
 # ---------------------------------------------------------------------------
 
-class GeminiBackend(LLMBackendInterface):
-    """Client HTTP natif (urllib) pour l'API Gemini avec rotation round-robin des clés.
+class GroqBackend(LLMBackendInterface):
+    """Client HTTP natif (urllib) pour l'API Groq avec rotation round-robin des clés.
 
     Sources des clés (par ordre de priorité, dédupliquées) :
       - `api_keys` passé au constructeur (utile pour les tests)
-      - Variables `GEMINI_API_KEY_1` .. `GEMINI_API_KEY_20`
-      - Variable `GEMINI_API_KEYS` (liste séparée par des virgules)
-      - Variable `GEMINI_API_KEY` (clé unique)
+      - Variables `GROQ_API_KEY_1` .. `GROQ_API_KEY_20`
+      - Variable `GROQ_API_KEYS` (liste séparée par des virgules)
+      - Variable `GROQ_API_KEY` (clé unique)
 
     En cas de HTTP 429 (quota atteint), la clé fautive est placée en cooldown
-    (`config.gemini_cooldown_sec`, 60 s par défaut) et la boucle essaie
+    (`config.groq_cooldown_sec`, 60 s par défaut) et la boucle essaie
     immédiatement les autres clés disponibles. Si TOUTES les clés sont en
     cooldown, lève `AllKeysCooldownError`.
     """
 
-    _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+    _GROQ_BASE = "https://api.groq.com/openai/v1/chat/completions"
 
     def __init__(self, api_keys: Optional[List[str]] = None):
         # Liste de [api_key_str, cooldown_until_monotonic]
@@ -327,26 +326,26 @@ class GeminiBackend(LLMBackendInterface):
         """Charge les clés API depuis l'environnement."""
         collected: List[str] = []
         for i in range(1, 21):
-            k = os.environ.get(f"GEMINI_API_KEY_{i}", "").strip()
+            k = os.environ.get(f"GROQ_API_KEY_{i}", "").strip()
             if k:
                 collected.append(k)
-        csv_keys = os.environ.get("GEMINI_API_KEYS", "").strip()
+        csv_keys = os.environ.get("GROQ_API_KEYS", "").strip()
         if csv_keys:
             for k in csv_keys.split(","):
                 k = k.strip()
                 if k:
                     collected.append(k)
         if not collected:
-            single = os.environ.get("GEMINI_API_KEY", "").strip()
+            single = os.environ.get("GROQ_API_KEY", "").strip()
             if single:
                 collected.append(single)
 
         unique_keys = list(dict.fromkeys(collected))
         self._keys = [[k, 0.0] for k in unique_keys]
         if unique_keys:
-            logger.info(f"[LLM] GeminiBackend : {len(unique_keys)} clé(s) API chargée(s).")
+            logger.info(f"[LLM] GroqBackend : {len(unique_keys)} clé(s) API chargée(s).")
         else:
-            logger.info("[LLM] GeminiBackend : aucune clé GEMINI_API_KEY_N configurée.")
+            logger.info("[LLM] GroqBackend : aucune clé GROQ_API_KEY_N configurée.")
 
     def reload_keys(self) -> None:
         """Recharge les clés depuis l'environnement sans redémarrer le nœud."""
@@ -404,35 +403,27 @@ class GeminiBackend(LLMBackendInterface):
         return self.available_key_count() > 0
 
     def _build_request_bytes(self, user_prompt: str, config: LLMConfig) -> bytes:
-        gen_cfg: Dict[str, Any] = {
-            "responseMimeType": "application/json",
-            "temperature": config.temperature,
-            "maxOutputTokens": config.max_tokens,
-        }
-        if "gemini-3" in config.gemini_model.lower():
-            gen_cfg["thinkingConfig"] = {"thinkingLevel": "MINIMAL"}
-
         body = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": f"{config.system_prompt}\n\nMessage patient: {user_prompt}"}
-                    ]
-                }
+            "model": config.groq_model,
+            "messages": [
+                {"role": "system", "content": config.system_prompt},
+                {"role": "user", "content": user_prompt},
             ],
-            "generationConfig": gen_cfg,
+            "temperature": config.temperature,
+            "max_tokens": config.max_tokens,
+            "response_format": {"type": "json_object"},
         }
         return json.dumps(body).encode("utf-8")
 
     def generate(self, user_prompt: str, config: LLMConfig) -> str:
-        """Appelle l'API Gemini en tournant sur les clés disponibles.
+        """Appelle l'API Groq en tournant sur les clés disponibles.
 
         Lève `AllKeysCooldownError` si aucune clé n'est disponible ou si toutes
         les clés actives renvoient HTTP 429.
         """
         n_keys = self.key_count
         if n_keys == 0:
-            raise AllKeysCooldownError("Aucune clé API Gemini configurée.")
+            raise AllKeysCooldownError("Aucune clé API Groq configurée.")
 
         data = self._build_request_bytes(user_prompt, config)
         tried_indices: set = set()
@@ -441,53 +432,51 @@ class GeminiBackend(LLMBackendInterface):
         for _ in range(n_keys):
             result = self._get_available_key()
             if result is None:
-                raise AllKeysCooldownError("Toutes les clés Gemini sont en cooldown.")
+                raise AllKeysCooldownError("Toutes les clés Groq sont en cooldown.")
 
             idx, api_key = result
             if idx in tried_indices:
-                raise AllKeysCooldownError("Toutes les clés Gemini disponibles ont déjà échoué.")
+                raise AllKeysCooldownError("Toutes les clés Groq disponibles ont déjà échoué.")
             tried_indices.add(idx)
 
-            url = (
-                f"{self._GEMINI_BASE}/{config.gemini_model}:generateContent"
-                f"?key={api_key}"
-            )
             req = urllib.request.Request(
-                url,
+                self._GROQ_BASE,
                 data=data,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                },
                 method="POST",
             )
 
             try:
-                with urllib.request.urlopen(req, timeout=config.gemini_timeout_sec) as resp:
+                with urllib.request.urlopen(req, timeout=config.groq_timeout_sec) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
                     text = (
-                        raw.get("candidates", [{}])[0]
-                        .get("content", {})
-                        .get("parts", [{}])[0]
-                        .get("text", "")
+                        raw.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", "")
                     )
-                    self._last_backend = f"gemini_key#{idx + 1}"
+                    self._last_backend = f"groq_key#{idx + 1}"
                     if switched_from is not None:
                         logger.info(
                             f"[LLM] Key#{switched_from + 1} cooldown, bascule → key#{idx + 1} OK"
                         )
                     else:
-                        logger.debug(f"[LLM] Gemini key#{idx + 1} OK → {text[:80]}")
+                        logger.debug(f"[LLM] Groq key#{idx + 1} OK → {text[:80]}")
                     return text
 
             except urllib.error.HTTPError as e:
                 if e.code == 429:
                     logger.warning(
                         f"[LLM] Key#{idx + 1} quota atteint (HTTP 429) → "
-                        f"cooldown {config.gemini_cooldown_sec}s"
+                        f"cooldown {config.groq_cooldown_sec}s"
                     )
-                    self._set_cooldown(idx, config.gemini_cooldown_sec)
+                    self._set_cooldown(idx, config.groq_cooldown_sec)
                     switched_from = idx
                     continue
                 if e.code in (401, 403):
-                    # Clé révoquée ou invalide : mise en pause longue pour ne pas bloquer les autres
+                    # Clé révoquée ou invalide : mise en pause longue
                     logger.warning(
                         f"[LLM] Key#{idx + 1} refusée (HTTP {e.code}) → pause 300s"
                     )
@@ -496,7 +485,7 @@ class GeminiBackend(LLMBackendInterface):
                     continue
                 raise
 
-        raise AllKeysCooldownError("Toutes les clés Gemini sont en cooldown.")
+        raise AllKeysCooldownError("Toutes les clés Groq sont en cooldown.")
 
 
 # ---------------------------------------------------------------------------
@@ -600,52 +589,52 @@ class LlamaCppBackend(LLMBackendInterface):
 
 
 # ---------------------------------------------------------------------------
-# Backend Hybride Gemini (primaire) + Qwen (fallback)
+# Backend Hybride Groq (primaire) + Qwen (fallback)
 # ---------------------------------------------------------------------------
 
-class HybridGeminiQwenBackend(LLMBackendInterface):
-    """Gemini API en primaire, Qwen Ollama en fallback automatique.
+class HybridGroqQwenBackend(LLMBackendInterface):
+    """Groq API en primaire, Qwen Ollama en fallback automatique.
 
     Flux :
-      1. Clés Gemini dispo → appel Gemini (avec rotation round-robin)
+      1. Clés Groq dispo → appel Groq (avec rotation round-robin)
       2. AllKeysCooldownError ou erreur réseau/timeout → bascule sur Qwen local
-      3. Si Qwen échoue aussi → propage l'erreur au moteur (qui laisse place au filet déterministe)
+      3. Si Qwen échoue aussi → propage l'erreur au moteur
     """
 
     def __init__(
         self,
-        gemini: Optional[GeminiBackend] = None,
+        groq: Optional[GroqBackend] = None,
         ollama: Optional[OllamaBackend] = None,
     ):
-        self.gemini = gemini or GeminiBackend()
+        self.groq = groq or GroqBackend()
         self.ollama = ollama or OllamaBackend()
         self._last_backend: str = ""
 
     def is_available(self, config: LLMConfig) -> bool:
-        return self.gemini.is_available(config) or self.ollama.is_available(config)
+        return self.groq.is_available(config) or self.ollama.is_available(config)
 
     def generate(self, user_prompt: str, config: LLMConfig) -> str:
         fallback_reason = "qwen_local_no_keys"
 
-        if self.gemini.key_count > 0:
+        if self.groq.key_count > 0:
             try:
-                text = self.gemini.generate(user_prompt, config)
-                self._last_backend = self.gemini._last_backend or "gemini_key#1"
+                text = self.groq.generate(user_prompt, config)
+                self._last_backend = self.groq._last_backend or "groq_key#1"
                 return text
             except AllKeysCooldownError:
-                n_keys = self.gemini.key_count
+                n_keys = self.groq.key_count
                 logger.warning(
-                    f"[LLM] Toutes les clés Gemini ({n_keys}) en pause → secours Qwen local"
+                    f"[LLM] Toutes les clés Groq ({n_keys}) en pause → secours Qwen local"
                 )
                 fallback_reason = "qwen_local_all_cooldown"
             except (urllib.error.URLError, TimeoutError, OSError) as e:
-                logger.warning(f"[LLM] Gemini réseau/timeout → secours Qwen local : {e}")
+                logger.warning(f"[LLM] Groq réseau/timeout → secours Qwen local : {e}")
                 fallback_reason = "qwen_local_network_error"
             except Exception as e:
-                logger.warning(f"[LLM] Gemini erreur inattendue → secours Qwen local : {e}")
+                logger.warning(f"[LLM] Groq erreur inattendue → secours Qwen local : {e}")
                 fallback_reason = "qwen_local_error"
         else:
-            logger.debug("[LLM] Aucune clé Gemini configurée → Qwen local direct")
+            logger.debug("[LLM] Aucune clé Groq configurée → Qwen local direct")
 
         # Fallback Qwen local
         text = self.ollama.generate(user_prompt, config)
@@ -752,10 +741,10 @@ class LLMIntentEngine:
             self._backend = backend_override
         elif self.config.backend == "mock":
             self._backend = MockBackend()
-        elif self.config.backend == "gemini":
-            self._backend = GeminiBackend()
-        elif self.config.backend == "hybrid_gemini_qwen":
-            self._backend = HybridGeminiQwenBackend()
+        elif self.config.backend == "groq":
+            self._backend = GroqBackend()
+        elif self.config.backend in ("hybrid_groq_qwen", "hybrid_gemini_qwen"):
+            self._backend = HybridGroqQwenBackend()
         elif self.config.backend == "llama_cpp":
             self._backend = LlamaCppBackend()
         else:
@@ -785,9 +774,9 @@ class LLMIntentEngine:
         return self._is_available_cached
 
     def prewarm_local_fallback(self) -> Dict[str, Any]:
-        """Pré-charge Qwen 2.5 en RAM (Option 2 : secours immédiat) sans consommer de quota Gemini."""
+        """Pré-charge Qwen 2.5 en RAM (secours immédiat) sans consommer de quota Groq."""
         ollama: Optional[OllamaBackend] = None
-        if isinstance(self._backend, HybridGeminiQwenBackend):
+        if isinstance(self._backend, HybridGroqQwenBackend):
             ollama = self._backend.ollama
         elif isinstance(self._backend, OllamaBackend):
             ollama = self._backend
@@ -832,34 +821,34 @@ class LLMIntentEngine:
             return "offline", "Désactivé"
 
         b = self._backend
-        if isinstance(b, HybridGeminiQwenBackend):
-            total_keys = b.gemini.key_count
-            avail_keys = b.gemini.available_key_count()
+        if isinstance(b, HybridGroqQwenBackend):
+            total_keys = b.groq.key_count
+            avail_keys = b.groq.available_key_count()
             qwen_ok = b.ollama.is_available(self.config)
             qwen_tag = "Qwen secours prêt" if qwen_ok else "Qwen hors ligne"
 
             if total_keys > 0 and avail_keys == total_keys:
-                return "ok", f"Gemini actif ({total_keys} clé(s)) + {qwen_tag}"
+                return "ok", f"Groq actif ({total_keys} clé(s)) + {qwen_tag}"
             if total_keys > 0 and avail_keys > 0:
                 cooling = total_keys - avail_keys
-                return "ok", f"Gemini ({avail_keys}/{total_keys} clés, {cooling} en pause) + {qwen_tag}"
+                return "ok", f"Groq ({avail_keys}/{total_keys} clés, {cooling} en pause) + {qwen_tag}"
             if total_keys > 0 and avail_keys == 0:
                 if qwen_ok:
-                    return "warn", f"Qwen local (Gemini {total_keys}/{total_keys} en pause)"
-                return "offline", "Gemini en pause et Qwen hors ligne"
-            # Aucune clé Gemini configurée
+                    return "warn", f"Qwen local (Groq {total_keys}/{total_keys} en pause)"
+                return "offline", "Groq en pause et Qwen hors ligne"
+            # Aucune clé Groq configurée
             if qwen_ok:
-                return "ok", "Qwen local actif (aucune clé Gemini)"
-            return "offline", "Aucune clé Gemini et Ollama indisponible"
+                return "ok", "Qwen local actif (aucune clé Groq)"
+            return "offline", "Aucune clé Groq et Ollama indisponible"
 
-        if isinstance(b, GeminiBackend):
+        if isinstance(b, GroqBackend):
             total_keys = b.key_count
             avail_keys = b.available_key_count()
             if total_keys == 0:
-                return "offline", "Gemini SOLO — aucune clé configurée"
+                return "offline", "Groq SOLO — aucune clé configurée"
             if avail_keys > 0:
-                return "ok", f"Gemini SOLO ({avail_keys}/{total_keys} clé(s) actives)"
-            return "warn", f"Gemini SOLO en pause ({b.cooldown_status()})"
+                return "ok", f"Groq SOLO ({avail_keys}/{total_keys} clé(s) actives)"
+            return "warn", f"Groq SOLO en pause ({b.cooldown_status()})"
 
         if isinstance(b, OllamaBackend):
             if b.is_available(self.config):
@@ -971,13 +960,13 @@ class LLMIntentEngine:
 
         except AllKeysCooldownError as e:
             latency_ms = (time.time() - start_time) * 1000.0
-            logger.warning(f"[LLM] Toutes les clés Gemini en pause : {e}")
+            logger.warning(f"[LLM] Toutes les clés Groq en pause : {e}")
             return LLMResponse(
                 intent="UNKNOWN",
                 latency_ms=latency_ms,
                 success=False,
-                error=f"All Gemini keys on cooldown: {e}",
-                backend_used="gemini_all_cooldown",
+                error=f"All Groq keys on cooldown: {e}",
+                backend_used="groq_all_cooldown",
             )
         except urllib.error.URLError as e:
             latency_ms = (time.time() - start_time) * 1000.0
@@ -1001,7 +990,7 @@ class LLMIntentEngine:
             )
 
     def _log_inference(self, backend_used: str, latency_ms: float) -> None:
-        if backend_used.startswith("gemini_key#"):
+        if backend_used.startswith("groq_key#"):
             logger.info(f"[LLM] ✅ {backend_used} OK ({latency_ms:.0f}ms)")
         elif "qwen_local" in backend_used or "cooldown" in backend_used:
             logger.info(

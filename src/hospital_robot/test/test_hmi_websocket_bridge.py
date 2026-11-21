@@ -37,15 +37,15 @@ def bridge_node():
     port = get_free_port()
     node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
 
-    # Vérifie que le bridge démarre par défaut en mode hybride Gemini prioritaire + Qwen local fallback
-    from hospital_robot.llm_intent_engine import HybridGeminiQwenBackend, MockBackend
-    assert isinstance(node.intent_parser.llm_engine._backend, HybridGeminiQwenBackend)
-    assert node.intent_parser.llm_engine.config.backend == "hybrid_gemini_qwen"
+    # Vérifie que le bridge démarre par défaut en mode hybride Groq prioritaire + Qwen local fallback
+    from hospital_robot.llm_intent_engine import HybridGroqQwenBackend, MockBackend
+    assert isinstance(node.intent_parser.llm_engine._backend, HybridGroqQwenBackend)
+    assert node.intent_parser.llm_engine.config.backend == "hybrid_groq_qwen"
     assert node.intent_parser.llm_engine.config.cache_enabled is True
     assert node.intent_parser.enable_deterministic_fallback is False
 
-    # Stub hors ligne du backend Gemini pour des tests WebSocket rapides et reproductibles
-    stub_gemini = MockBackend(canned_responses={
+    # Stub hors ligne du backend Groq pour des tests WebSocket rapides et reproductibles
+    stub_groq = MockBackend(canned_responses={
         "oui": json.dumps({
             "intent": "CONFIRM_YES",
             "target": None,
@@ -65,8 +65,8 @@ def bridge_node():
             "screen": "consultation",
         }),
     })
-    stub_gemini._last_backend = "gemini_key#1"
-    node.intent_parser.llm_engine._backend = stub_gemini
+    stub_groq._last_backend = "groq_key#1"
+    node.intent_parser.llm_engine._backend = stub_groq
 
     # Enregistreur de messages publiés sur les publishers ROS 2
     class _PubRecorder:

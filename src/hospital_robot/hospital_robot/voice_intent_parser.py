@@ -160,12 +160,11 @@ class VoiceIntentParser:
         use_llm: bool = True,
         current_screen: str = "",
     ) -> ParsedIntent:
-        """Analyse le texte brut selon l'architecture à 5 niveaux :
+        """Analyse le texte brut selon l'architecture à 4 niveaux :
           1. Réflexe de sécurité local (STOP) — < 1 ms, jamais réseau
           2. Cache LRU local — < 1 ms, zéro quota
-          3. Gemini API primaire (rotation de clés)
+          3. Groq API primaire (rotation de clés)
           4. Qwen 2.5 local (fallback automatique)
-          5. Parseur déterministe (filet de sécurité final)
         """
         norm = normalize_text(raw_text)
 
@@ -230,7 +229,7 @@ class VoiceIntentParser:
                     logger.warning(f"Error during LLM inference: {e}")
             elif not self.enable_deterministic_fallback:
                 llm_attempted = True
-                llm_error = "Gemini indisponible (aucune clé active ou toutes en pause)"
+                llm_error = "Service LLM indisponible (aucune clé active ou toutes en pause)"
 
         # 5. FILET DE SÉCURITÉ DÉTERMINISTE (uniquement si activé)
         if self.enable_deterministic_fallback:
@@ -256,8 +255,9 @@ class VoiceIntentParser:
             if llm_error:
                 details["llm_error"] = llm_error
                 if not self.enable_deterministic_fallback:
+                    service_name = "Groq" if (self.llm_engine and "groq" in getattr(self.llm_engine.config, "backend", "")) else "Gemini" if (self.llm_engine and "gemini" in getattr(self.llm_engine.config, "backend", "")) else "IA"
                     details["llm_text_to_speak"] = (
-                        "Le service Gemini est momentanément indisponible. Veuillez réessayer."
+                        f"Le service {service_name} est momentanément indisponible. Veuillez réessayer."
                     )
         return ParsedIntent(
             intent_type="UNKNOWN",
@@ -437,6 +437,8 @@ class VoiceIntentParser:
         if not self.llm_engine:
             return "qwen2.5:0.5b"
         cfg = self.llm_engine.config
+        if backend_used.startswith("groq"):
+            return getattr(cfg, "groq_model", "llama-3.3-70b-versatile")
         if backend_used.startswith("gemini"):
             return getattr(cfg, "gemini_model", "gemini-3.5-flash-lite")
         if backend_used == "cache":

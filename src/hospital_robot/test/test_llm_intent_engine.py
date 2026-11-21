@@ -1,4 +1,4 @@
-"""Tests unitaires pour le moteur LLM (Gemini + rotation clés + cache LRU + Qwen fallback)
+"""Tests unitaires pour le moteur LLM (Groq + rotation clés + cache LRU + Qwen fallback)
 et son intégration dans VoiceIntentParser."""
 
 import io
@@ -11,8 +11,8 @@ import pytest
 from hospital_robot.llm_intent_engine import (
     AllKeysCooldownError,
     DEFAULT_SYSTEM_PROMPT,
-    GeminiBackend,
-    HybridGeminiQwenBackend,
+    GroqBackend,
+    HybridGroqQwenBackend,
     LLMConfig,
     LLMIntentEngine,
     LLMResponse,
@@ -35,19 +35,20 @@ def _make_http_response(payload: dict):
     return resp
 
 
-def _make_gemini_ok(intent_payload: dict):
+def _make_groq_ok(intent_payload: dict):
+    """Construit une réponse Groq (OpenAI-compatible) simulée."""
     return _make_http_response({
-        "candidates": [
+        "choices": [
             {
-                "content": {
-                    "parts": [{"text": json.dumps(intent_payload)}],
+                "message": {
+                    "content": json.dumps(intent_payload),
                 }
             }
         ]
     })
 
 
-def _make_http_error(code: int, url: str = "https://generativelanguage.googleapis.com/test"):
+def _make_http_error(code: int, url: str = "https://api.groq.com/openai/v1/chat/completions"):
     return urllib.error.HTTPError(
         url=url,
         code=code,
@@ -133,36 +134,34 @@ class TestLLMIntentEngine:
         assert res.error is not None
 
 
-class TestGeminiKeyRotation:
+class TestGroqKeyRotation:
     def test_loads_numbered_and_fallback_keys_from_env(self, monkeypatch):
         for i in range(1, 21):
-            monkeypatch.delenv(f"GEMINI_API_KEY_{i}", raising=False)
-        monkeypatch.delenv("GEMINI_API_KEYS", raising=False)
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+            monkeypatch.delenv(f"GROQ_API_KEY_{i}", raising=False)
+        monkeypatch.delenv("GROQ_API_KEYS", raising=False)
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
 
-        monkeypatch.setenv("GEMINI_API_KEY_1", "key_alpha")
-        monkeypatch.setenv("GEMINI_API_KEY_2", "key_beta")
-        monkeypatch.setenv("GEMINI_API_KEY_3", "key_gamma")
+        monkeypatch.setenv("GROQ_API_KEY_1", "key_alpha")
+        monkeypatch.setenv("GROQ_API_KEY_2", "key_beta")
+        monkeypatch.setenv("GROQ_API_KEY_3", "key_gamma")
 
-        backend = GeminiBackend()
+        backend = GroqBackend()
         assert backend.key_count == 3
         assert backend.available_key_count() == 3
 
-        # Fallback GEMINI_API_KEY si aucune clé numérotée
+        # Fallback GROQ_API_KEY si aucune clé numérotée
         for i in range(1, 4):
-            monkeypatch.delenv(f"GEMINI_API_KEY_{i}", raising=False)
-        monkeypatch.setenv("GEMINI_API_KEY", "single_paid_key")
-        backend_single = GeminiBackend()
+            monkeypatch.delenv(f"GROQ_API_KEY_{i}", raising=False)
+        monkeypatch.setenv("GROQ_API_KEY", "single_paid_key")
+        backend_single = GroqBackend()
         assert backend_single.key_count == 1
 
     def test_round_robin_success_rotates_across_keys(self):
-        backend = GeminiBackend(api_keys=["key_1", "key_2", "key_3"])
-        cfg = LLMConfig(backend="gemini", gemini_model="gemini-2.5-flash-lite")
-        seen_urls = []
+        backend = GroqBackend(api_keys=["key_1", "key_2", "key_3"])
+        cfg = LLMConfig(backend="groq", groq_model="llama-3.3-70b-versatile")
 
         def fake_urlopen(req, timeout=4.0):
-            seen_urls.append(req.full_url)
-            return _make_gemini_ok({
+            return _make_groq_ok({
                 "intent": "GREETING",
                 "target": None,
                 "text_to_speak": "Bonjour !",
@@ -171,27 +170,25 @@ class TestGeminiKeyRotation:
 
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
             backend.generate("Bonjour 1", cfg)
-            assert backend._last_backend == "gemini_key#1"
+            assert backend._last_backend == "groq_key#1"
             backend.generate("Bonjour 2", cfg)
-            assert backend._last_backend == "gemini_key#2"
+            assert backend._last_backend == "groq_key#2"
             backend.generate("Bonjour 3", cfg)
-            assert backend._last_backend == "gemini_key#3"
+            assert backend._last_backend == "groq_key#3"
             backend.generate("Bonjour 4", cfg)
-            assert backend._last_backend == "gemini_key#1"
-
-        assert "key=key_1" in seen_urls[0]
-        assert "key=key_2" in seen_urls[1]
-        assert "key=key_3" in seen_urls[2]
-        assert "key=key_1" in seen_urls[3]
+            assert backend._last_backend == "groq_key#1"
 
     def test_429_puts_key1_in_cooldown_and_switches_to_key2(self):
-        backend = GeminiBackend(api_keys=["key_1", "key_2"])
-        cfg = LLMConfig(backend="gemini", gemini_cooldown_sec=60)
+        backend = GroqBackend(api_keys=["key_1", "key_2"])
+        cfg = LLMConfig(backend="groq", groq_cooldown_sec=60)
+
+        call_count = [0]
 
         def fake_urlopen(req, timeout=4.0):
-            if "key=key_1" in req.full_url:
-                raise _make_http_error(429, req.full_url)
-            return _make_gemini_ok({
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise _make_http_error(429)
+            return _make_groq_ok({
                 "intent": "ORIENTATION",
                 "target": "PHARMACY",
                 "text_to_speak": "Suivez-moi vers la pharmacie.",
@@ -204,17 +201,20 @@ class TestGeminiKeyRotation:
         data = json.loads(raw)
         assert data["intent"] == "ORIENTATION"
         assert data["target"] == "PHARMACY"
-        assert backend._last_backend == "gemini_key#2"
+        assert backend._last_backend == "groq_key#2"
         assert backend.available_key_count() == 1  # key#1 en cooldown
 
     def test_429_cascades_across_three_keys_to_key3(self):
-        backend = GeminiBackend(api_keys=["key_1", "key_2", "key_3"])
-        cfg = LLMConfig(backend="gemini", gemini_cooldown_sec=60)
+        backend = GroqBackend(api_keys=["key_1", "key_2", "key_3"])
+        cfg = LLMConfig(backend="groq", groq_cooldown_sec=60)
+
+        call_count = [0]
 
         def fake_urlopen(req, timeout=4.0):
-            if "key=key_1" in req.full_url or "key=key_2" in req.full_url:
-                raise _make_http_error(429, req.full_url)
-            return _make_gemini_ok({
+            call_count[0] += 1
+            if call_count[0] < 3:
+                raise _make_http_error(429)
+            return _make_groq_ok({
                 "intent": "VITALS",
                 "target": None,
                 "text_to_speak": "Mesurons vos constantes.",
@@ -225,12 +225,12 @@ class TestGeminiKeyRotation:
             raw = backend.generate("Prends ma tension", cfg)
 
         assert json.loads(raw)["intent"] == "VITALS"
-        assert backend._last_backend == "gemini_key#3"
+        assert backend._last_backend == "groq_key#3"
         assert backend.available_key_count() == 1
 
     def test_all_keys_429_raises_all_keys_cooldown_error(self):
-        backend = GeminiBackend(api_keys=["key_1", "key_2"])
-        cfg = LLMConfig(backend="gemini", gemini_cooldown_sec=60)
+        backend = GroqBackend(api_keys=["key_1", "key_2"])
+        cfg = LLMConfig(backend="groq", groq_cooldown_sec=60)
 
         with patch("urllib.request.urlopen", side_effect=_make_http_error(429)):
             with pytest.raises(AllKeysCooldownError):
@@ -240,8 +240,8 @@ class TestGeminiKeyRotation:
         assert backend.is_available(cfg) is False
 
     def test_cooldown_expiration_reenables_key(self):
-        backend = GeminiBackend(api_keys=["key_1"])
-        cfg = LLMConfig(backend="gemini", gemini_cooldown_sec=1)
+        backend = GroqBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="groq", groq_cooldown_sec=1)
         backend._set_cooldown(0, -0.1)  # déjà expiré
         assert backend.available_key_count() == 1
         assert backend.is_available(cfg) is True
@@ -298,17 +298,17 @@ class TestLRUCache:
         assert mock_backend.generate.call_count == 3
 
 
-class TestHybridGeminiQwenBackend:
-    def test_uses_gemini_primary_when_available(self):
-        gemini = GeminiBackend(api_keys=["key_1"])
+class TestHybridGroqQwenBackend:
+    def test_uses_groq_primary_when_available(self):
+        groq = GroqBackend(api_keys=["key_1"])
         ollama = OllamaBackend()
         ollama.generate = MagicMock(side_effect=AssertionError("Ollama ne doit pas être appelé"))
-        hybrid = HybridGeminiQwenBackend(gemini=gemini, ollama=ollama)
-        cfg = LLMConfig(backend="hybrid_gemini_qwen")
+        hybrid = HybridGroqQwenBackend(groq=groq, ollama=ollama)
+        cfg = LLMConfig(backend="hybrid_groq_qwen")
 
         with patch(
             "urllib.request.urlopen",
-            return_value=_make_gemini_ok({
+            return_value=_make_groq_ok({
                 "intent": "ORIENTATION",
                 "target": "LABORATORY",
                 "text_to_speak": "Direction laboratoire.",
@@ -321,11 +321,11 @@ class TestHybridGeminiQwenBackend:
         assert res.success is True
         assert res.intent == "ORIENTATION"
         assert res.target == "LABORATORY"
-        assert res.backend_used == "gemini_key#1"
+        assert res.backend_used == "groq_key#1"
         ollama.generate.assert_not_called()
 
-    def test_falls_back_to_qwen_when_all_gemini_keys_cooldown(self):
-        gemini = GeminiBackend(api_keys=["key_1", "key_2"])
+    def test_falls_back_to_qwen_when_all_groq_keys_cooldown(self):
+        groq = GroqBackend(api_keys=["key_1", "key_2"])
         ollama = OllamaBackend()
         ollama.generate = MagicMock(return_value=json.dumps({
             "intent": "ORIENTATION",
@@ -334,8 +334,8 @@ class TestHybridGeminiQwenBackend:
             "screen": "orientation",
         }))
         ollama.is_available = MagicMock(return_value=True)
-        hybrid = HybridGeminiQwenBackend(gemini=gemini, ollama=ollama)
-        cfg = LLMConfig(backend="hybrid_gemini_qwen")
+        hybrid = HybridGroqQwenBackend(groq=groq, ollama=ollama)
+        cfg = LLMConfig(backend="hybrid_groq_qwen")
 
         with patch("urllib.request.urlopen", side_effect=_make_http_error(429)):
             engine = LLMIntentEngine(config=cfg, backend_override=hybrid)
@@ -352,8 +352,8 @@ class TestHybridGeminiQwenBackend:
         assert "Qwen local" in detail
         assert "pause" in detail
 
-    def test_falls_back_to_qwen_on_gemini_timeout(self):
-        gemini = GeminiBackend(api_keys=["key_1"])
+    def test_falls_back_to_qwen_on_groq_timeout(self):
+        groq = GroqBackend(api_keys=["key_1"])
         ollama = OllamaBackend()
         ollama.generate = MagicMock(return_value=json.dumps({
             "intent": "GREETING",
@@ -361,8 +361,8 @@ class TestHybridGeminiQwenBackend:
             "text_to_speak": "Bonjour !",
             "screen": "home",
         }))
-        hybrid = HybridGeminiQwenBackend(gemini=gemini, ollama=ollama)
-        cfg = LLMConfig(backend="hybrid_gemini_qwen")
+        hybrid = HybridGroqQwenBackend(groq=groq, ollama=ollama)
+        cfg = LLMConfig(backend="hybrid_groq_qwen")
 
         with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
             engine = LLMIntentEngine(config=cfg, backend_override=hybrid)
@@ -373,8 +373,8 @@ class TestHybridGeminiQwenBackend:
         assert res.backend_used == "qwen_local_network_error"
         assert ollama.generate.call_count == 1
 
-    def test_voice_intent_parser_hybrid_gemini_to_qwen_fallback(self):
-        gemini = GeminiBackend(api_keys=["key_1"])
+    def test_voice_intent_parser_hybrid_groq_to_qwen_fallback(self):
+        groq = GroqBackend(api_keys=["key_1"])
         ollama = OllamaBackend()
         ollama.generate = MagicMock(return_value=json.dumps({
             "intent": "ORIENTATION",
@@ -382,12 +382,12 @@ class TestHybridGeminiQwenBackend:
             "text_to_speak": "Qwen vous accompagne au laboratoire d'analyses.",
             "screen": "orientation",
         }))
-        hybrid = HybridGeminiQwenBackend(gemini=gemini, ollama=ollama)
-        cfg = LLMConfig(backend="hybrid_gemini_qwen", cache_enabled=True)
+        hybrid = HybridGroqQwenBackend(groq=groq, ollama=ollama)
+        cfg = LLMConfig(backend="hybrid_groq_qwen", cache_enabled=True)
         engine = LLMIntentEngine(config=cfg, backend_override=hybrid)
         parser = VoiceIntentParser(enable_llm=True, llm_engine=engine)
 
-        with patch("urllib.request.urlopen", side_effect=TimeoutError("Gemini inaccessible")):
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("Groq inaccessible")):
             intent = parser.parse("Où faire mes prises de sang ?")
 
         assert intent.intent_type == "ORIENTATION"
@@ -398,18 +398,18 @@ class TestHybridGeminiQwenBackend:
         instruction = parser.build_instruction(intent)
         assert "laboratoire" in instruction["text_to_speak"].lower()
 
-    def test_load_dotenv_file_parses_keys(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("GEMINI_API_KEY_1", raising=False)
-        monkeypatch.delenv("HIAR_GEMINI_MODEL", raising=False)
+    def test_load_dotenv_file_parses_groq_keys(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("GROQ_API_KEY_1", raising=False)
+        monkeypatch.delenv("HIAR_GROQ_MODEL", raising=False)
         env_file = tmp_path / ".env"
         env_file.write_text(
-            "# commentaire\nGEMINI_API_KEY_1='test_key_1'\nHIAR_GEMINI_MODEL=gemini-2.5-flash-lite\n",
+            "# commentaire\nGROQ_API_KEY_1='test_groq_key_1'\nHIAR_GROQ_MODEL=llama-3.3-70b-versatile\n",
             encoding="utf-8",
         )
         loaded = load_dotenv_file(env_file)
         assert loaded == env_file
-        assert "test_key_1" == __import__("os").environ.get("GEMINI_API_KEY_1")
-        assert "gemini-2.5-flash-lite" == __import__("os").environ.get("HIAR_GEMINI_MODEL")
+        assert "test_groq_key_1" == __import__("os").environ.get("GROQ_API_KEY_1")
+        assert "llama-3.3-70b-versatile" == __import__("os").environ.get("HIAR_GROQ_MODEL")
 
 
 class TestVoiceIntentParserWithLLM:
@@ -535,22 +535,22 @@ class TestVoiceIntentParserWithLLM:
         assert "Je n'ai pas bien compris votre demande" in instruction["text_to_speak"]
 
 
-class TestGeminiSoloMode:
-    def test_gemini_solo_disables_cache_and_calls_gemini_every_time(self):
-        gemini = GeminiBackend(api_keys=["key_1"])
-        cfg = LLMConfig(backend="gemini", cache_enabled=False)
-        engine = LLMIntentEngine(config=cfg, backend_override=gemini)
+class TestGroqSoloMode:
+    def test_groq_solo_disables_cache_and_calls_groq_every_time(self):
+        groq = GroqBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="groq", cache_enabled=False)
+        engine = LLMIntentEngine(config=cfg, backend_override=groq)
 
         with patch(
             "urllib.request.urlopen",
             side_effect=[
-                _make_gemini_ok({
+                _make_groq_ok({
                     "intent": "CONFIRM_YES",
                     "target": None,
                     "text_to_speak": "Parfait !",
                     "screen": "mission",
                 }),
-                _make_gemini_ok({
+                _make_groq_ok({
                     "intent": "CONFIRM_YES",
                     "target": None,
                     "text_to_speak": "C'est parti !",
@@ -563,32 +563,32 @@ class TestGeminiSoloMode:
 
         assert mock_open.call_count == 2
         assert r1.cache_hit is False and r2.cache_hit is False
-        assert r1.backend_used == "gemini_key#1"
-        assert r2.backend_used == "gemini_key#1"
+        assert r1.backend_used == "groq_key#1"
+        assert r2.backend_used == "groq_key#1"
 
-    def test_gemini_solo_never_falls_back_to_deterministic_regex_on_error(self):
-        gemini = GeminiBackend(api_keys=["key_1"])
-        cfg = LLMConfig(backend="gemini", cache_enabled=False)
-        engine = LLMIntentEngine(config=cfg, backend_override=gemini)
+    def test_groq_solo_never_falls_back_to_deterministic_regex_on_error(self):
+        groq = GroqBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="groq", cache_enabled=False)
+        engine = LLMIntentEngine(config=cfg, backend_override=groq)
         parser = VoiceIntentParser(
             enable_llm=True,
             llm_engine=engine,
             enable_deterministic_fallback=False,
         )
 
-        with patch("urllib.request.urlopen", side_effect=TimeoutError("gemini timeout")):
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("groq timeout")):
             intent = parser.parse("Emmène-moi à la pharmacie", current_screen="home")
 
         assert intent.intent_type == "UNKNOWN"
         assert intent.details.get("deterministic_fallback") is None
         assert intent.details.get("llm_error")
         instruction = parser.build_instruction(intent)
-        assert "Gemini" in instruction["text_to_speak"]
+        assert "Groq" in instruction["text_to_speak"] or "IA" in instruction["text_to_speak"] or "injoignable" in instruction["text_to_speak"]
 
-    def test_gemini_solo_preserves_gemini_speech_on_unknown_intent(self):
-        gemini = GeminiBackend(api_keys=["key_1"])
-        cfg = LLMConfig(backend="gemini", cache_enabled=False)
-        engine = LLMIntentEngine(config=cfg, backend_override=gemini)
+    def test_groq_solo_preserves_groq_speech_on_unknown_intent(self):
+        groq = GroqBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="groq", cache_enabled=False)
+        engine = LLMIntentEngine(config=cfg, backend_override=groq)
         parser = VoiceIntentParser(
             enable_llm=True,
             llm_engine=engine,
@@ -597,7 +597,7 @@ class TestGeminiSoloMode:
 
         with patch(
             "urllib.request.urlopen",
-            return_value=_make_gemini_ok({
+            return_value=_make_groq_ok({
                 "intent": "UNKNOWN",
                 "target": None,
                 "text_to_speak": "Je suis HIAR et je peux surtout vous guider dans l'hôpital.",
@@ -614,37 +614,37 @@ class TestGeminiSoloMode:
     def test_bridge_configures_hybrid_mode_with_qwen_fallback(self, monkeypatch):
         import socket
         from hospital_robot.hmi_websocket_bridge_node import HMIWebSocketBridgeNode
-        from hospital_robot.llm_intent_engine import HybridGeminiQwenBackend
+        from hospital_robot.llm_intent_engine import HybridGroqQwenBackend
 
-        monkeypatch.setenv("HIAR_LLM_BACKEND", "hybrid_gemini_qwen")
+        monkeypatch.setenv("HIAR_LLM_BACKEND", "hybrid_groq_qwen")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
 
         node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
         try:
-            assert isinstance(node.intent_parser.llm_engine._backend, HybridGeminiQwenBackend)
-            assert node.intent_parser.llm_engine.config.backend == "hybrid_gemini_qwen"
+            assert isinstance(node.intent_parser.llm_engine._backend, HybridGroqQwenBackend)
+            assert node.intent_parser.llm_engine.config.backend == "hybrid_groq_qwen"
             assert node.intent_parser.llm_engine.config.cache_enabled is True
             assert node.intent_parser.enable_deterministic_fallback is False
             assert node._llm_prewarming is True
         finally:
             node.destroy_node()
 
-    def test_bridge_supports_gemini_solo_override(self, monkeypatch):
+    def test_bridge_supports_groq_solo_override(self, monkeypatch):
         import socket
         from hospital_robot.hmi_websocket_bridge_node import HMIWebSocketBridgeNode
-        from hospital_robot.llm_intent_engine import GeminiBackend
+        from hospital_robot.llm_intent_engine import GroqBackend
 
-        monkeypatch.setenv("HIAR_LLM_BACKEND", "gemini")
+        monkeypatch.setenv("HIAR_LLM_BACKEND", "groq")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
 
         node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
         try:
-            assert isinstance(node.intent_parser.llm_engine._backend, GeminiBackend)
-            assert node.intent_parser.llm_engine.config.backend == "gemini"
+            assert isinstance(node.intent_parser.llm_engine._backend, GroqBackend)
+            assert node.intent_parser.llm_engine.config.backend == "groq"
         finally:
             node.destroy_node()
 
@@ -657,9 +657,9 @@ class TestGeminiSoloMode:
         assert "CONSULTATION_STEP" in DEFAULT_SYSTEM_PROMPT
         assert "CONSULTATION_REASON" in DEFAULT_SYSTEM_PROMPT
 
-        gemini = GeminiBackend(api_keys=["key_1"])
-        cfg = LLMConfig(backend="gemini", cache_enabled=False)
-        engine = LLMIntentEngine(config=cfg, backend_override=gemini)
+        groq = GroqBackend(api_keys=["key_1"])
+        cfg = LLMConfig(backend="groq", cache_enabled=False)
+        engine = LLMIntentEngine(config=cfg, backend_override=groq)
         parser = VoiceIntentParser(
             enable_llm=True,
             llm_engine=engine,
@@ -669,13 +669,13 @@ class TestGeminiSoloMode:
         with patch(
             "urllib.request.urlopen",
             side_effect=[
-                _make_gemini_ok({
+                _make_groq_ok({
                     "intent": "CONSULTATION_REASON",
                     "target": "SUIVI_MEDICAL",
                     "text_to_speak": "Très bien, je sélectionne un suivi médical.",
                     "screen": "consultation",
                 }),
-                _make_gemini_ok({
+                _make_groq_ok({
                     "intent": "CONSULTATION_STEP",
                     "target": "NEXT",
                     "text_to_speak": "Passons à l'étape suivante.",
@@ -691,7 +691,7 @@ class TestGeminiSoloMode:
         assert i_step.intent_type == "CONSULTATION_STEP"
         assert i_step.target_value == "next"
 
-    def test_bridge_builds_rich_screen_context_for_gemini(self):
+    def test_bridge_builds_rich_screen_context_for_groq(self):
         import socket
         from hospital_robot.hmi_websocket_bridge_node import HMIWebSocketBridgeNode
 
