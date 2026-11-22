@@ -173,3 +173,24 @@ def test_invalid_time_is_rejected(database):
             "2027-01-15",
             "25:90",
         )
+
+
+def test_db_file_and_dir_permissions_are_restricted(database):
+    import stat
+    import os
+    db_stat = os.stat(database)
+    parent_stat = os.stat(database.parent)
+    # File must be 0600 (read/write only by owner)
+    assert stat.S_IMODE(db_stat.st_mode) == 0o600
+    # Directory must be 0700 (read/write/exec only by owner)
+    assert stat.S_IMODE(parent_stat.st_mode) == 0o700
+
+
+def test_rgpd_crypto_encryption_and_decryption():
+    from rgpd_crypto import encrypt_sensitive_data, decrypt_sensitive_data
+    plain = "Dr. Martin - Donnée médicale sensible"
+    cipher = encrypt_sensitive_data(plain)
+    assert cipher.startswith("ENC:")
+    assert cipher != plain
+    decrypted = decrypt_sensitive_data(cipher)
+    assert decrypted == plain

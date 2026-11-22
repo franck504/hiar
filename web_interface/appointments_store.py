@@ -80,13 +80,42 @@ def get_db_path():
 
 
 def get_connection():
-    """Ouvre une connexion SQLite."""
+    """Ouvre une connexion SQLite avec permissions strictes et support SQLCipher (RGPD Art. 9)."""
     db_path = get_db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(db_path.parent, 0o700)
+    except Exception:
+        pass
 
-    connection = sqlite3.connect(str(db_path), timeout=10)
+    encryption_key = os.environ.get("HIAR_DB_ENCRYPTION_KEY")
+    connection = None
+
+    # Tentative d'utilisation de SQLCipher si disponible et clé fournie
+    try:
+        import sqlcipher3  # type: ignore
+        connection = sqlcipher3.connect(str(db_path), timeout=10)
+        if encryption_key:
+            connection.execute(f"PRAGMA key = '{encryption_key}'")
+    except ImportError:
+        try:
+            from pysqlcipher3 import dbapi2 as sqlcipher3  # type: ignore
+            connection = sqlcipher3.connect(str(db_path), timeout=10)
+            if encryption_key:
+                connection.execute(f"PRAGMA key = '{encryption_key}'")
+        except ImportError:
+            connection = sqlite3.connect(str(db_path), timeout=10)
+
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+
+    # Verrouillage des droits de lecture/écriture (0600) au niveau OS
+    if db_path.exists():
+        try:
+            os.chmod(db_path, 0o600)
+        except Exception:
+            pass
+
     return connection
 
 
