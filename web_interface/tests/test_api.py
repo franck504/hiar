@@ -336,3 +336,28 @@ def test_http_security_headers_present():
     assert "Strict-Transport-Security" in https_resp.headers
 
 
+def test_cors_origin_restriction(monkeypatch):
+    """Vérifie la restriction CORS aux réseaux locaux ou liste blanche."""
+    client = app.test_client()
+
+    # 1. Origine locale/privée autorisée
+    local_resp = client.get("/patients", headers={"Origin": "http://192.168.43.52:5001"})
+    assert local_resp.headers.get("Access-Control-Allow-Origin") == "http://192.168.43.52:5001"
+
+    loopback_resp = client.get("/patients", headers={"Origin": "http://localhost:3000"})
+    assert loopback_resp.headers.get("Access-Control-Allow-Origin") == "http://localhost:3000"
+
+    # 2. Origine publique non autorisée rejetée
+    evil_resp = client.get("/patients", headers={"Origin": "http://malicious-site.com"})
+    assert "Access-Control-Allow-Origin" not in evil_resp.headers
+
+    # 3. Liste blanche explicite dans HIAR_ALLOWED_ORIGINS
+    monkeypatch.setenv("HIAR_ALLOWED_ORIGINS", "https://hospital.chu,http://custom-lan:8080")
+    custom_resp = client.get("/patients", headers={"Origin": "https://hospital.chu"})
+    assert custom_resp.headers.get("Access-Control-Allow-Origin") == "https://hospital.chu"
+
+    blocked_resp = client.get("/patients", headers={"Origin": "http://other-site.com"})
+    assert "Access-Control-Allow-Origin" not in blocked_resp.headers
+
+
+

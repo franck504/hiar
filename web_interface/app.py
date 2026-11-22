@@ -1,9 +1,11 @@
 import hmac
+import ipaddress
 import json
 import os
 from pathlib import Path
 import secrets
 import time
+from urllib.parse import urlparse
 from datetime import datetime
 
 from flask import Flask, jsonify, redirect, render_template, request, session
@@ -1117,11 +1119,39 @@ def api_navigation_cancel():
     return jsonify(response), 200
 
 
+def _is_allowed_origin(origin):
+    """Vérifie si l'origine CORS est autorisée (réseau local ou whitelist)."""
+    if not origin:
+        return False
+    allowed_env = os.environ.get("HIAR_ALLOWED_ORIGINS", "").strip()
+    if allowed_env == "*":
+        return True
+    if allowed_env:
+        allowed_list = [o.strip() for o in allowed_env.split(",") if o.strip()]
+        return origin in allowed_list
+
+    # Par défaut : restriction stricte au réseau local (RFC 1918) et loopback
+    try:
+        parsed = urlparse(origin)
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        if hostname in {"localhost", "127.0.0.1", "::1"}:
+            return True
+        ip = ipaddress.ip_address(hostname)
+        return ip.is_private or ip.is_loopback
+    except (ValueError, Exception):
+        return False
+
+
 @app.after_request
 def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Staff-Token, X-Doctor-Token"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, OPTIONS"
+    origin = request.headers.get("Origin")
+    if origin and _is_allowed_origin(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Staff-Token, X-Doctor-Token"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, OPTIONS"
 
     # En-têtes de sécurité HTTP (Item 13)
     response.headers["X-Frame-Options"] = "DENY"
@@ -1143,9 +1173,12 @@ def add_cors_headers(response):
 def handle_options_preflight():
     if request.method == "OPTIONS":
         res = app.make_default_options_response()
-        res.headers["Access-Control-Allow-Origin"] = "*"
-        res.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Staff-Token, X-Doctor-Token"
-        res.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, OPTIONS"
+        origin = request.headers.get("Origin")
+        if origin and _is_allowed_origin(origin):
+            res.headers["Access-Control-Allow-Origin"] = origin
+            res.headers["Vary"] = "Origin"
+            res.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Staff-Token, X-Doctor-Token"
+            res.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, OPTIONS"
         return res
 
 
