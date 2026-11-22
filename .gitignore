@@ -17,6 +17,7 @@ web_interface/instance/
 
 # Secrets locaux des comptes médecins HIAR
 web_interface/.doctor-secrets
+web_interface/.flask_secret
 
 # Jeton permanent du personnel HIAR (secret local)
 .env

@@ -278,3 +278,19 @@ def test_staff_update_rejects_invalid_status_and_unknown_id(
         headers=headers,
     )
     assert missing.status_code == 404
+
+
+def test_flask_secret_key_security(monkeypatch, tmp_path):
+    """Vérifie le remplacement et la génération d'un secret Flask cryptographique."""
+    from app import _resolve_flask_secret_key
+
+    # 1. Rejet du fallback statique faible
+    monkeypatch.setenv("FLASK_SECRET_KEY", "hiar_hospital_robot_secret_key_session_2026")
+    key = _resolve_flask_secret_key()
+    assert key != "hiar_hospital_robot_secret_key_session_2026"
+    assert len(key) >= 32
+
+    # 2. Clé valide personnalisée acceptée
+    valid_key = "my_custom_secure_secret_key_abcdef_123456"
+    monkeypatch.setenv("FLASK_SECRET_KEY", valid_key)
+    assert _resolve_flask_secret_key() == valid_key

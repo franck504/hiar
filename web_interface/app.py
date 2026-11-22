@@ -1,6 +1,8 @@
 import hmac
 import json
 import os
+from pathlib import Path
+import secrets
 import time
 from datetime import datetime
 
@@ -41,8 +43,36 @@ BOOKING_ERROR_STATUS = {
     "slot_taken": 409,
 }
 
+def _resolve_flask_secret_key() -> str:
+    """Résout ou génère une clé de session Flask cryptographiquement sécurisée."""
+    configured_key = os.environ.get("FLASK_SECRET_KEY", "").strip()
+    insecure_fallbacks = {
+        "hiar_hospital_robot_secret_key_session_2026",
+        "secret",
+        "changeme",
+        "flask_secret_key",
+    }
+    if configured_key and configured_key not in insecure_fallbacks:
+        return configured_key
+
+    secret_file = Path(__file__).resolve().parent / ".flask_secret"
+    try:
+        if secret_file.exists():
+            content = secret_file.read_text(encoding="utf-8").strip()
+            if content and len(content) >= 32 and content not in insecure_fallbacks:
+                return content
+        generated_key = secrets.token_hex(32)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        mode = 0o600
+        with os.fdopen(os.open(str(secret_file), flags, mode), "w", encoding="utf-8") as f:
+            f.write(generated_key)
+        return generated_key
+    except Exception:
+        return secrets.token_hex(32)
+
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "hiar_hospital_robot_secret_key_session_2026")
+app.secret_key = _resolve_flask_secret_key()
 bridge = RosBridge()
 
 
