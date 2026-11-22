@@ -365,3 +365,20 @@ def test_vitals_voice_requires_consultation_step_4(bridge_node):
             assert len(node.vitals_request_pub.published) == 1
 
     asyncio.run(_run())
+
+
+def test_websocket_tls_configuration(monkeypatch, tmp_path):
+    """Vérifie la configuration SSL/TLS (WSS) sur le bridge WebSocket."""
+    node = HMIWebSocketBridgeNode(host="127.0.0.1", port=get_free_port())
+
+    # 1. Sans certificats -> Pas de contexte SSL (ws://)
+    monkeypatch.delenv("HIAR_WS_SSL_CERT", raising=False)
+    monkeypatch.delenv("HIAR_WS_SSL_KEY", raising=False)
+    assert node._get_ssl_context() is None
+
+    # 2. Avec certificats inexistants -> None
+    monkeypatch.setenv("HIAR_WS_SSL_CERT", str(tmp_path / "non_existent.crt"))
+    monkeypatch.setenv("HIAR_WS_SSL_KEY", str(tmp_path / "non_existent.key"))
+    assert node._get_ssl_context() is None
+
+    node.destroy_node()

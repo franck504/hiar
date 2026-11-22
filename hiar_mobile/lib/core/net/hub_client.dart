@@ -33,6 +33,7 @@ class HubClient {
 
   String serverIp = "192.168.43.52";
   int serverPort = 5000;
+  bool useTls = const bool.fromEnvironment('HIAR_USE_TLS', defaultValue: false);
   bool _isConnected = false;
   int _seq = 0;
 
@@ -203,7 +204,8 @@ class HubClient {
     } catch (_) {}
     _channel = null;
 
-    final wsUrl = Uri.parse("ws://$serverIp:$serverPort/ws");
+    final scheme = useTls ? "wss" : "ws";
+    final wsUrl = Uri.parse("$scheme://$serverIp:$serverPort/ws");
     debugPrint("HubClient: Tentative de connexion à $wsUrl");
 
     try {

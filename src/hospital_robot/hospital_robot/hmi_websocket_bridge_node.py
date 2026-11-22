@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import socket
+import ssl
 import subprocess
 import threading
 import time
@@ -322,6 +323,21 @@ class HMIWebSocketBridgeNode(Node):
     # GESTION DU CYCLE DE VIE SERVEUR
     # ========================================================
 
+    def _get_ssl_context(self) -> Optional[ssl.SSLContext]:
+        """Configure le contexte SSL/TLS si des certificats sont fournis pour WSS."""
+        cert_file = os.environ.get("HIAR_WS_SSL_CERT")
+        key_file = os.environ.get("HIAR_WS_SSL_KEY")
+        if cert_file and key_file and os.path.exists(cert_file) and os.path.exists(key_file):
+            try:
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
+                self.get_logger().info(f"🔒 [TLS/WSS] WebSocket sécurisé activé avec {cert_file}")
+                return ctx
+            except Exception as e:
+                self.get_logger().error(f"❌ Erreur configuration SSL WebSocket: {e}")
+                return None
+        return None
+
     def start_websocket_server(self):
         """Démarre le serveur WebSocket dans un thread asyncio dédié."""
         if self._server_thread is not None and self._server_thread.is_alive():
@@ -335,15 +351,23 @@ class HMIWebSocketBridgeNode(Node):
             asyncio.set_event_loop(self.loop)
 
             async def _start():
+                ssl_context = self._get_ssl_context()
+                serve_kwargs = {
+                    "ping_interval": 15,
+                    "ping_timeout": 10,
+                }
+                if ssl_context is not None:
+                    serve_kwargs["ssl"] = ssl_context
+
                 self.server = await websockets.serve(
                     self._handle_client,
                     self.host,
                     self.port,
-                    ping_interval=15,
-                    ping_timeout=10,
+                    **serve_kwargs,
                 )
+                proto = "wss" if ssl_context else "ws"
                 self.get_logger().info(
-                    f"WebSocket server listening on ws://{self.host}:{self.port}/ws"
+                    f"WebSocket server listening on {proto}://{self.host}:{self.port}/ws"
                 )
                 self.loop.create_task(self._diagnostics_broadcast_loop())
                 ready_event.set()
