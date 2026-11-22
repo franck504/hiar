@@ -382,3 +382,44 @@ def test_websocket_tls_configuration(monkeypatch, tmp_path):
     assert node._get_ssl_context() is None
 
     node.destroy_node()
+
+
+def test_websocket_token_authentication(monkeypatch):
+    """Vérifie l'authentification obligatoire par token sur le bridge WebSocket."""
+    monkeypatch.setenv("HIAR_WS_AUTH_REQUIRED", "1")
+    monkeypatch.setenv("HIAR_WS_AUTH_TOKEN", "super_robot_token_42")
+
+    port = get_free_port()
+    node = HMIWebSocketBridgeNode(host="127.0.0.1", port=port)
+    node.start_websocket_server()
+
+    async def _run():
+        uri = f"ws://127.0.0.1:{port}/ws"
+
+        # 1. Client avec mauvais token -> Rejeté
+        async with websockets.connect(uri) as ws:
+            welcome = json.loads(await ws.recv())
+            assert welcome["payload"]["auth_required"] is True
+
+            await ws.send(json.dumps({
+                "v": 1, "type": "hello", "device_id": "attacker_device", "token": "wrong_token"
+            }))
+            resp = json.loads(await ws.recv())
+            assert resp["type"] == "error"
+            assert resp["payload"]["code"] == "unauthorized"
+
+        # 2. Client avec bon token -> Authentifié
+        async with websockets.connect(uri) as ws:
+            await ws.recv()  # welcome
+            await ws.send(json.dumps({
+                "v": 1, "type": "hello", "device_id": "legit_device", "token": "super_robot_token_42"
+            }))
+            resp2 = json.loads(await ws.recv())
+            assert resp2["type"] == "welcome"
+            assert resp2["payload"]["authenticated"] is True
+
+    try:
+        asyncio.run(_run())
+    finally:
+        node.stop_websocket_server()
+        node.destroy_node()

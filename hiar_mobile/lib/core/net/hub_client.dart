@@ -34,6 +34,7 @@ class HubClient {
   String serverIp = "192.168.43.52";
   int serverPort = 5000;
   bool useTls = const bool.fromEnvironment('HIAR_USE_TLS', defaultValue: false);
+  String? authToken;
   bool _isConnected = false;
   int _seq = 0;
 
@@ -138,6 +139,15 @@ class HubClient {
           ? sourceIp
           : (advertisedIp ?? "");
       final discoveredPort = (parsed["ws_port"] is int)
+          ? parsed["ws_port"] as int
+          : int.tryParse(parsed["ws_port"]?.toString() ?? "5000") ?? 5000;
+
+      if (parsed["auth_token"] is String) {
+        final token = (parsed["auth_token"] as String).trim();
+        if (token.isNotEmpty) {
+          authToken = token;
+        }
+      }
           ? parsed["ws_port"] as int
           : int.tryParse("${parsed["ws_port"] ?? 5000}") ?? 5000;
 
@@ -264,7 +274,7 @@ class HubClient {
       deviceId: "mobile_client_1",
       role: "kiosk",
       appVersion: "1.0.0",
-      token: "kiosk_token",
+      token: authToken ?? const String.fromEnvironment('HIAR_WS_AUTH_TOKEN', defaultValue: "kiosk_token"),
     );
     _send(hello);
   }

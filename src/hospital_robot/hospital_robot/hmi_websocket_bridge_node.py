@@ -275,8 +275,14 @@ class HMIWebSocketBridgeNode(Node):
 
         # Clients WebSocket connectés
         self.ws_clients: Set[WSConnection] = set()
+        self._authenticated_clients: Set[WSConnection] = set()
         self._diagnostics_subscribers: Set[WSConnection] = set()
         self._ws_clients_lock = threading.Lock()
+        self._ws_auth_token = os.environ.get("HIAR_WS_AUTH_TOKEN", "").strip()
+        self._auth_required = bool(
+            os.environ.get("HIAR_WS_AUTH_REQUIRED", "0") in ("1", "true", "True")
+            or self._ws_auth_token
+        )
 
         # Gestion Asyncio & Serveur
         self.loop: Optional[asyncio.AbstractEventLoop] = None
@@ -454,6 +460,8 @@ class HMIWebSocketBridgeNode(Node):
             "ws_port": self.port,
             "web_port": 5001,
         }
+        if self._ws_auth_token:
+            payload["auth_token"] = self._ws_auth_token
         return json.dumps(payload).encode("utf-8")
 
     def _start_discovery_beacon(self):
@@ -545,6 +553,8 @@ class HMIWebSocketBridgeNode(Node):
         """Gère une connexion client mobile active."""
         with self._ws_clients_lock:
             self.ws_clients.add(websocket)
+            if not self._auth_required:
+                self._authenticated_clients.add(websocket)
         self.get_logger().info(f"[MOBILE] Client connecté: {websocket.remote_address}")
 
         try:
@@ -555,6 +565,7 @@ class HMIWebSocketBridgeNode(Node):
                     "server": "HIAR Central ROS2 Bridge",
                     "version": "1.0.0",
                     "status": "ready",
+                    "auth_required": self._auth_required,
                 },
                 msg_type="welcome",
             )
@@ -570,6 +581,7 @@ class HMIWebSocketBridgeNode(Node):
         finally:
             with self._ws_clients_lock:
                 self.ws_clients.discard(websocket)
+                self._authenticated_clients.discard(websocket)
                 self._diagnostics_subscribers.discard(websocket)
             self.get_logger().info(f"[MOBILE] Client déconnecté: {websocket.remote_address}")
 
@@ -593,15 +605,56 @@ class HMIWebSocketBridgeNode(Node):
             return
 
         if msg_type == "hello":
+            token = str(data.get("token") or data.get("auth_token") or "").strip()
+            device_id = data.get("device_id", "mobile")
+            role = data.get("role", "kiosk")
+
+            if self._auth_required:
+                if token and token == self._ws_auth_token:
+                    with self._ws_clients_lock:
+                        self._authenticated_clients.add(websocket)
+                    self.get_logger().info(
+                        f"[MOBILE] Authentification réussie (device={device_id})"
+                    )
+                    welcome = make_envelope(
+                        "connection/welcome",
+                        {"server": "HIAR Central ROS2 Bridge", "status": "ready", "authenticated": True},
+                        msg_type="welcome",
+                    )
+                    await websocket.send(welcome)
+                else:
+                    self.get_logger().warning(
+                        f"[MOBILE] ⚠️ Échec authentification WebSocket pour device={device_id}"
+                    )
+                    err_env = make_envelope(
+                        "connection/error",
+                        {"code": "unauthorized", "message": "Token WebSocket invalide ou manquant"},
+                        msg_type="error",
+                    )
+                    await websocket.send(err_env)
+                    await websocket.close(code=4401, reason="Unauthorized")
+                return
+
             self.get_logger().info(
-                f"[MOBILE] Handshake hello: device={data.get('device_id', 'mobile')} role={data.get('role', 'kiosk')}"
+                f"[MOBILE] Handshake hello: device={device_id} role={role}"
             )
             welcome = make_envelope(
                 "connection/welcome",
-                {"server": "HIAR Central ROS2 Bridge", "status": "ready"},
+                {"server": "HIAR Central ROS2 Bridge", "status": "ready", "authenticated": True},
                 msg_type="welcome",
             )
             await websocket.send(welcome)
+            return
+
+        # Contrôle d'autorisation pour les actions et commandes
+        if self._auth_required and websocket not in self._authenticated_clients:
+            self.get_logger().warning("[MOBILE] ⚠️ Message rejeté: client non authentifié.")
+            unauth_env = make_envelope(
+                "connection/error",
+                {"code": "unauthorized", "message": "Action non autorisée sans authentification."},
+                msg_type="error",
+            )
+            await websocket.send(unauth_env)
             return
 
         if msg_type == "sub":
