@@ -108,6 +108,9 @@ def test_both_pages_share_navigation_links(client):
 
 def test_pin_authentication_success_and_failure(client):
     """Vérifie la validation du code PIN à 4 chiffres configuré dans .env"""
+    from app import _reset_pin_rate_limiter
+    _reset_pin_rate_limiter()
+
     # 1. Échec avec un mauvais PIN
     fail_res = client.post("/api/auth/pin", json={"pin": "9999"})
     assert fail_res.status_code == 401
@@ -142,3 +145,25 @@ def test_pin_logout_clears_session(client):
     logout_res = client.post("/api/auth/logout", json={})
     assert logout_res.status_code == 200
     assert logout_res.get_json()["ok"] is True
+
+
+def test_pin_rate_limiter_and_lockout(client):
+    """Vérifie le blocage et verrouillage anti-bruteforce après 5 échecs consécutifs."""
+    from app import _reset_pin_rate_limiter
+    _reset_pin_rate_limiter()
+
+    # 4 échecs consécutifs (401)
+    for i in range(4):
+        res = client.post("/api/auth/pin", json={"pin": f"000{i}"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
+        assert res.status_code == 401
+        assert res.get_json()["attempts_left"] == 4 - i
+
+    # 5ème échec consécutif -> Verrouillé (429)
+    res_lock = client.post("/api/auth/pin", json={"pin": "0005"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
+    assert res_lock.status_code == 429
+    assert res_lock.get_json()["locked"] is True
+
+    # 6ème tentative (même avec bon PIN) -> Reste bloquée (429)
+    res_blocked = client.post("/api/auth/pin", json={"pin": "4321"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
+    assert res_blocked.status_code == 429
+    assert res_blocked.get_json()["locked"] is True

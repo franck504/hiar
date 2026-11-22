@@ -121,16 +121,62 @@ def staff_page():
     return render_template("staff.html")
 
 
+_PIN_ATTEMPTS = {}
+_MAX_PIN_ATTEMPTS = 5
+_LOCKOUT_DURATION_SEC = 300
+
+
+def _reset_pin_rate_limiter():
+    """Réinitialise le limiteur de tentatives PIN (tests/admin)."""
+    _PIN_ATTEMPTS.clear()
+
+
 @app.route("/api/auth/pin", methods=["POST"])
 def api_auth_pin():
-    """Authentification sécurisée par code PIN à 4 chiffres (sans récupération de mot de passe)."""
+    """Authentification sécurisée par code PIN avec protection anti brute-force et verrouillage."""
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1").split(",")[0].strip()
+    now = time.time()
+    record = _PIN_ATTEMPTS.get(ip, {"count": 0, "locked_until": 0.0})
+
+    if record["locked_until"] > now:
+        remaining = int(record["locked_until"] - now)
+        app.logger.warning(f"🔒 [ANTI-BRUTE-FORCE] Tentative PIN bloquée depuis {ip} (verrouillé pour {remaining}s)")
+        return jsonify({
+            "ok": False,
+            "error": f"Trop de tentatives échouées. Accès temporairement verrouillé pour encore {remaining} secondes.",
+            "locked": True,
+            "retry_after": remaining,
+        }), 429
+
     data = request.get_json(silent=True) or request.form or {}
     supplied = str(data.get("pin", "")).strip()
     expected = get_web_pin()
+
     if len(supplied) == 4 and hmac.compare_digest(expected, supplied):
+        _PIN_ATTEMPTS.pop(ip, None)
         session["authenticated"] = True
         return jsonify({"ok": True, "pin": supplied, "redirect": "/patients"}), 200
-    return jsonify({"ok": False, "error": "Code PIN incorrect."}), 401
+
+    record["count"] += 1
+    if record["count"] >= _MAX_PIN_ATTEMPTS:
+        record["locked_until"] = now + _LOCKOUT_DURATION_SEC
+        _PIN_ATTEMPTS[ip] = record
+        app.logger.warning(f"🚨 [ANTI-BRUTE-FORCE] IP {ip} verrouillée après {_MAX_PIN_ATTEMPTS} échecs PIN consécutifs.")
+        return jsonify({
+            "ok": False,
+            "error": "Code PIN incorrect. 5 échecs consécutifs atteints : accès bloqué pendant 5 minutes.",
+            "locked": True,
+            "retry_after": _LOCKOUT_DURATION_SEC,
+        }), 429
+
+    _PIN_ATTEMPTS[ip] = record
+    remaining_attempts = _MAX_PIN_ATTEMPTS - record["count"]
+    app.logger.warning(f"⚠️ [AUTH] Échec code PIN depuis {ip} ({record['count']}/{_MAX_PIN_ATTEMPTS})")
+    return jsonify({
+        "ok": False,
+        "error": f"Code PIN incorrect. Il vous reste {remaining_attempts} tentative(s).",
+        "attempts_left": remaining_attempts,
+    }), 401
 
 
 @app.route("/api/auth/logout", methods=["POST", "GET"])
