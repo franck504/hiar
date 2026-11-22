@@ -360,4 +360,41 @@ def test_cors_origin_restriction(monkeypatch):
     assert "Access-Control-Allow-Origin" not in blocked_resp.headers
 
 
+def test_rest_endpoint_injection_rejection():
+    """Vérifie le rejet immédiat des requêtes REST contenant des injections (Item 18)."""
+    client = app.test_client()
+    # 1. Injection SQL dans le numéro de téléphone
+    bad_phone = client.post(
+        "/api/appointments",
+        json={
+            "patient_name": "Test Patient",
+            "contact": "0340000000; DROP TABLE appointments;--",
+            "reason": "Test",
+            "requested_date": "2027-01-15",
+            "requested_time": "09:00",
+        },
+    )
+    assert bad_phone.status_code == 400
+    assert bad_phone.get_json()["code"] == "invalid_phone"
+
+    # 2. XSS / Injection dans le nom du patient
+    bad_name = client.post(
+        "/api/appointments",
+        json={
+            "patient_name": "<script>alert('XSS')</script>",
+            "contact": "0340000000",
+            "reason": "Test",
+            "requested_date": "2027-01-15",
+            "requested_time": "09:00",
+        },
+    )
+    assert bad_name.status_code == 400
+    assert "caractères interdits" in bad_name.get_json()["error"]
+
+    # 3. Date malformée dans la requête GET
+    bad_date = client.get("/api/consultation/sessions?date=2026-99-99'OR'1'='1")
+    assert bad_date.status_code == 400
+
+
+
 

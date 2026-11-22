@@ -37,6 +37,16 @@ from consultation_sessions_store import (
     set_doctor_session,
     update_session_appointment_status,
 )
+from input_validators import (
+    validate_date,
+    validate_doctor_code,
+    validate_period,
+    validate_phone,
+    validate_pin,
+    validate_reason_code,
+    validate_safe_text,
+    validate_time,
+)
 
 BOOKING_ERROR_STATUS = {
     "invalid_phone": 400,
@@ -244,6 +254,38 @@ def api_appointments():
                 "error": f"Le champ « {field} » dépasse la longueur autorisée.",
             }), 400
 
+    # Validation stricte anti-injections (Item 18)
+    if not validate_safe_text(data["patient_name"], max_len=120):
+        return jsonify({
+            "ok": False,
+            "error": "Nom du patient invalide ou contenant des caractères interdits.",
+        }), 400
+
+    if not validate_phone(data["contact"]):
+        return jsonify({
+            "ok": False,
+            "code": "invalid_phone",
+            "error": "Numéro de téléphone invalide.",
+        }), 400
+
+    if not validate_date(data["requested_date"]):
+        return jsonify({
+            "ok": False,
+            "error": "Format de date invalide. Format attendu : AAAA-MM-JJ.",
+        }), 400
+
+    if not validate_time(data["requested_time"]):
+        return jsonify({
+            "ok": False,
+            "error": "Format d'heure invalide. Format attendu : HH:MM.",
+        }), 400
+
+    if not validate_safe_text(data["reason"], max_len=500):
+        return jsonify({
+            "ok": False,
+            "error": "Motif de consultation invalide ou contenant des caractères interdits.",
+        }), 400
+
     slot_id = data.get("slot_id")
     if slot_id is not None and (
         not isinstance(slot_id, int) or isinstance(slot_id, bool)
@@ -366,6 +408,20 @@ def api_create_session_appointment():
     if len(data["contact"].strip()) > 40:
         return jsonify({"ok": False, "error": "Coordonnées trop longues."}), 400
 
+    # Validation stricte anti-injections (Item 18)
+    if not validate_safe_text(data["patient_name"], max_len=120):
+        return jsonify({"ok": False, "error": "Nom trop long ou caractères interdits."}), 400
+    if not validate_phone(data["contact"]):
+        return jsonify({"ok": False, "code": "invalid_phone", "error": "Numéro de téléphone invalide."}), 400
+    if not validate_date(data["requested_date"]):
+        return jsonify({"ok": False, "error": "Format de date invalide (AAAA-MM-JJ attendu)."}), 400
+    if not validate_doctor_code(data["doctor_code"]):
+        return jsonify({"ok": False, "error": "Code médecin invalide."}), 400
+    if not validate_period(data["period"]):
+        return jsonify({"ok": False, "error": "Période invalide (MAT ou APM attendu)."}), 400
+    if not validate_reason_code(data["reason_code"]):
+        return jsonify({"ok": False, "error": "Code motif invalide."}), 400
+
     vital_limits = {
         "temperature_c": (25.0, 45.0),
         "heart_rate_bpm": (40, 200),
@@ -429,7 +485,9 @@ def api_create_session_appointment():
 @app.route("/api/consultation/sessions", methods=["GET"])
 def api_public_consultation_sessions():
     """Expose uniquement les sessions ouvertes aux inscriptions."""
-    requested_date = request.args.get("date", "")
+    requested_date = request.args.get("date", "").strip()
+    if requested_date and not validate_date(requested_date):
+        return jsonify({"ok": False, "error": "Format de date invalide (AAAA-MM-JJ attendu)."}), 400
 
     try:
         init_sessions_db()
@@ -549,12 +607,14 @@ def api_doctor_sessions():
     if auth_error:
         return doctor_auth_error(auth_error)
 
-    requested_date = request.args.get("date", "")
+    requested_date = request.args.get("date", "").strip()
     if not requested_date:
         return jsonify({
             "ok": False,
             "error": "Le paramètre date est obligatoire.",
         }), 400
+    if not validate_date(requested_date):
+        return jsonify({"ok": False, "error": "Format de date invalide (AAAA-MM-JJ attendu)."}), 400
 
     try:
         init_sessions_db()
@@ -593,6 +653,12 @@ def api_doctor_update_session():
     period = data.get("period")
     is_open = data.get("is_open")
 
+    # Validation stricte anti-injections (Item 18)
+    if not validate_date(requested_date):
+        return jsonify({"ok": False, "error": "Format de date invalide (AAAA-MM-JJ attendu)."}), 400
+    if not validate_period(period):
+        return jsonify({"ok": False, "error": "Période invalide (MAT ou APM attendu)."}), 400
+
     try:
         init_sessions_db()
         set_doctor_session(
@@ -627,12 +693,14 @@ def api_doctor_appointments():
     if auth_error:
         return doctor_auth_error(auth_error)
 
-    requested_date = request.args.get("date", "")
+    requested_date = request.args.get("date", "").strip()
     if not requested_date:
         return jsonify({
             "ok": False,
             "error": "Le paramètre date est obligatoire.",
         }), 400
+    if not validate_date(requested_date):
+        return jsonify({"ok": False, "error": "Format de date invalide (AAAA-MM-JJ attendu)."}), 400
 
     period = request.args.get("period") or None
     status = request.args.get("status") or None
@@ -718,12 +786,14 @@ def api_staff_consultations():
     if not staff_authorized():
         return staff_auth_error()
 
-    requested_date = request.args.get("date", "")
+    requested_date = request.args.get("date", "").strip()
     if not requested_date:
         return jsonify({
             "ok": False,
             "error": "Le paramètre date est obligatoire.",
         }), 400
+    if not validate_date(requested_date):
+        return jsonify({"ok": False, "error": "Format de date invalide (AAAA-MM-JJ attendu)."}), 400
 
     doctor_code = request.args.get("doctor") or None
     period = request.args.get("period") or None
