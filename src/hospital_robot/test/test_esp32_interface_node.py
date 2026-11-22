@@ -12,6 +12,9 @@ def make_esp32_node(invert_steering=True):
     node.serial_connection.write = MagicMock()
     node.get_logger = MagicMock()
     node.invert_steering = invert_steering
+    node.active_vitals_request_id = None
+    node.vitals_started_at = None
+    node.compute_auth_response = lambda nonce: ESP32Interface.compute_auth_response(node, nonce)
     return node
 
 
@@ -54,3 +57,74 @@ def test_command_callback_does_not_invert_when_disabled():
 
     ESP32Interface.command_callback(node, make_command_msg("RIGHT"))
     node.serial_connection.write.assert_called_with(b"RIGHT\n")
+
+
+def test_auth_challenge_generation_and_verification():
+    node = make_esp32_node()
+    node.auth_key = "test_esp32_key_123"
+    node.require_auth = True
+    node.authenticated = False
+
+    ESP32Interface.send_auth_challenge(node)
+    nonce = node.current_challenge_nonce
+    assert nonce is not None
+    assert len(nonce) == 16
+    node.serial_connection.write.assert_called_once_with(f"AUTH_CHALLENGE,nonce={nonce}\n".encode("utf-8"))
+
+    # Vérification HMAC valide
+    valid_hmac = ESP32Interface.compute_auth_response(node, nonce)
+    assert len(valid_hmac) == 64
+
+
+def test_unauthenticated_esp32_blocks_commands_when_auth_required():
+    node = make_esp32_node()
+    node.require_auth = True
+    node.authenticated = False
+
+    ESP32Interface.command_callback(node, make_command_msg("FORWARD"))
+    node.serial_connection.write.assert_not_called()
+    node.get_logger().error.assert_called_with(
+        "Refusing motor command: ESP32 firmware authenticity not verified!"
+    )
+
+
+def test_read_serial_authenticates_on_valid_hmac():
+    node = make_esp32_node()
+    node.auth_key = "secret_key"
+    node.require_auth = True
+    node.authenticated = False
+    node.current_challenge_nonce = "abcdef0123456789"
+    node.status_publisher = MagicMock()
+
+    valid_hmac = ESP32Interface.compute_auth_response(node, node.current_challenge_nonce)
+    fake_line = f"AUTH_RESPONSE,hmac={valid_hmac}\n".encode("utf-8")
+
+    node.serial_connection.in_waiting = 1
+    # Premier appel renvoie la trame, 2e appel renvoie b""
+    node.serial_connection.readline.side_effect = [fake_line, b""]
+
+    ESP32Interface.read_serial(node)
+
+    assert node.authenticated is True
+    node.get_logger().info.assert_any_call("ESP32 integrity handshake verified: AUTH_OK")
+
+
+def test_read_serial_rejects_on_invalid_hmac():
+    node = make_esp32_node()
+    node.auth_key = "secret_key"
+    node.require_auth = True
+    node.authenticated = False
+    node.current_challenge_nonce = "abcdef0123456789"
+    node.status_publisher = MagicMock()
+    node.close_serial_connection = MagicMock()
+
+    fake_line = b"AUTH_RESPONSE,hmac=invalid_signature_hex_00000000000000000000000000000000\n"
+
+    node.serial_connection.in_waiting = 1
+    node.serial_connection.readline.side_effect = [fake_line, b""]
+
+    ESP32Interface.read_serial(node)
+
+    assert node.authenticated is False
+    node.close_serial_connection.assert_called_once()
+

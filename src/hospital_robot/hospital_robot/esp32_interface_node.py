@@ -1,5 +1,9 @@
 import glob
+import hashlib
+import hmac
 import json
+import os
+import secrets
 import time
 
 import serial
@@ -88,6 +92,12 @@ class ESP32Interface(Node):
         self.declare_parameter('invert_steering', True)
         self.invert_steering = self.get_parameter('invert_steering').value
 
+        # Authentification et intégrité firmware ESP32 (Item 16)
+        self.require_auth = os.environ.get("HIAR_ESP32_REQUIRE_AUTH", "0") == "1"
+        self.auth_key = os.environ.get("HIAR_ESP32_AUTH_KEY", "hiar_esp32_secret_key_2026")
+        self.authenticated = not self.require_auth
+        self.current_challenge_nonce = None
+
         self._try_connect_serial(initial=True)
 
         self.command_subscription = self.create_subscription(
@@ -154,6 +164,8 @@ class ESP32Interface(Node):
                 self.port = candidate
                 self.get_logger().info(f'Connected to ESP32 on {self.port}')
                 self.last_rx_at = time.monotonic()
+                # Authentification / intégrité (Item 16)
+                self.send_auth_challenge()
                 # Demander immédiatement l'état matériel après connexion
                 self._send_health_probe()
                 return True
@@ -166,6 +178,29 @@ class ESP32Interface(Node):
             self.get_logger().error(f'Unable to connect to ESP32: {last_error}')
             self._last_connect_err_logged_at = now
         return False
+
+    def compute_auth_response(self, nonce: str) -> str:
+        """Calcule la signature HMAC-SHA256 attendue pour un challenge donné."""
+        if not nonce or not self.auth_key:
+            return ""
+        return hmac.new(
+            self.auth_key.encode("utf-8"),
+            nonce.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+    def send_auth_challenge(self):
+        """Envoie un challenge cryptographique HMAC pour vérifier l'intégrité de l'ESP32."""
+        if self.serial_connection is None:
+            return
+        nonce = secrets.token_hex(8)
+        self.current_challenge_nonce = nonce
+        try:
+            challenge_frame = f"AUTH_CHALLENGE,nonce={nonce}\n"
+            self.serial_connection.write(challenge_frame.encode("utf-8"))
+            self.get_logger().info(f"Sent ESP32 auth challenge: {nonce}")
+        except (serial.SerialException, OSError) as error:
+            self.get_logger().error(f"Failed to send auth challenge: {error}")
 
     def _send_health_probe(self):
         if self.serial_connection is None or self.active_vitals_request_id is not None:
@@ -280,6 +315,7 @@ class ESP32Interface(Node):
                 'status': esp_status,
                 'port': self.port,
                 'detail': esp_detail,
+                'authenticated': self.authenticated,
             },
             'sensors': {
                 'ultrasonic': us_info,
@@ -321,6 +357,11 @@ class ESP32Interface(Node):
             self.get_logger().warning('Vitals request without request_id.')
             return
 
+        if getattr(self, 'require_auth', False) and not getattr(self, 'authenticated', True):
+            self.publish_vitals_result(request_id, 'ERROR,UNAUTHENTICATED_ESP32')
+            self.get_logger().error('Refusing vitals: ESP32 firmware authenticity not verified!')
+            return
+
         if self.active_vitals_request_id is not None:
             self.publish_vitals_result(request_id, 'ERROR,BUSY')
             return
@@ -351,6 +392,10 @@ class ESP32Interface(Node):
 
         if self.serial_connection is None:
             self.get_logger().error('ESP32 is not connected.')
+            return
+
+        if getattr(self, 'require_auth', False) and not getattr(self, 'authenticated', True):
+            self.get_logger().error('Refusing motor command: ESP32 firmware authenticity not verified!')
             return
 
         # Inversion de direction gauche/droite pour compenser le câblage moteur
@@ -469,6 +514,27 @@ class ESP32Interface(Node):
 
                 if response == 'PONG':
                     self.last_pong_at = now
+                    continue
+
+                if response.startswith('AUTH_RESPONSE,'):
+                    kv = parse_kv_frame(response, 'AUTH_RESPONSE')
+                    if kv and getattr(self, 'current_challenge_nonce', None):
+                        received_hmac = kv.get('hmac', '').strip().lower()
+                        expected_hmac = self.compute_auth_response(self.current_challenge_nonce).lower()
+                        if hmac.compare_digest(received_hmac, expected_hmac):
+                            self.authenticated = True
+                            self.get_logger().info('ESP32 integrity handshake verified: AUTH_OK')
+                            status_message = String()
+                            status_message.data = 'ACK,AUTH_OK'
+                            self.status_publisher.publish(status_message)
+                        else:
+                            self.authenticated = False
+                            self.get_logger().error('ESP32 integrity handshake FAILED: Invalid HMAC signature!')
+                            status_message = String()
+                            status_message.data = 'REJECTED,AUTH_FAILED'
+                            self.status_publisher.publish(status_message)
+                            if getattr(self, 'require_auth', False):
+                                self.close_serial_connection()
                     continue
 
                 if response.startswith('HEALTH,'):
