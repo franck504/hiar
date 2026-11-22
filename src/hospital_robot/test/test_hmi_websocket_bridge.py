@@ -423,3 +423,27 @@ def test_websocket_token_authentication(monkeypatch):
     finally:
         node.stop_websocket_server()
         node.destroy_node()
+
+
+def test_udp_discovery_beacon_signature(monkeypatch):
+    """Vérifie la signature cryptographique HMAC-SHA256 du beacon de découverte UDP."""
+    import hashlib
+    import hmac
+
+    monkeypatch.setenv("HIAR_DISCOVERY_SECRET", "custom_secret_key_123")
+    node = HMIWebSocketBridgeNode(host="127.0.0.1", port=get_free_port())
+
+    raw_bytes = node._build_discovery_payload()
+    data = json.loads(raw_bytes.decode("utf-8"))
+
+    assert data["service"] == "hiar_robot"
+    assert "sig" in data
+    sig = data["sig"]
+
+    copy_data = dict(data)
+    copy_data.pop("sig")
+    canonical = json.dumps(copy_data, sort_keys=True).encode("utf-8")
+    expected_sig = hmac.new(b"custom_secret_key_123", canonical, hashlib.sha256).hexdigest()
+
+    assert sig == expected_sig
+    node.destroy_node()

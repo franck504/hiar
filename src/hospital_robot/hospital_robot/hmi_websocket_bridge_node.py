@@ -7,6 +7,8 @@ Ce nœud héberge le serveur WebSocket central (port 5000) et fait la passerelle
 """
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -459,9 +461,18 @@ class HMIWebSocketBridgeNode(Node):
             "ips": all_ips,
             "ws_port": self.port,
             "web_port": 5001,
+            "ts": int(time.time()),
         }
         if self._ws_auth_token:
             payload["auth_token"] = self._ws_auth_token
+
+        # Signature cryptographique HMAC-SHA256 pour authentifier la balise UDP
+        secret = os.environ.get(
+            "HIAR_DISCOVERY_SECRET", "hiar_discovery_shared_token_2026"
+        ).encode("utf-8")
+        canonical_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
+        sig = hmac.new(secret, canonical_bytes, hashlib.sha256).hexdigest()
+        payload["sig"] = sig
         return json.dumps(payload).encode("utf-8")
 
     def _start_discovery_beacon(self):

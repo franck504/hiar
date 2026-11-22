@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../bus/envelope.dart';
@@ -125,6 +126,26 @@ class HubClient {
     }
   }
 
+  bool _verifyDiscoverySignature(Map<String, dynamic> parsed) {
+    final sig = parsed["sig"];
+    if (sig is! String || sig.isEmpty) {
+      const strict = bool.fromEnvironment('HIAR_REQUIRE_BEACON_SIG', defaultValue: false);
+      return !strict;
+    }
+    try {
+      const secretStr = String.fromEnvironment('HIAR_DISCOVERY_SECRET', defaultValue: 'hiar_discovery_shared_token_2026');
+      final secretBytes = utf8.encode(secretStr);
+      final copy = Map<String, dynamic>.from(parsed)..remove("sig");
+      final keys = copy.keys.toList()..sort();
+      final sortedMap = {for (var k in keys) k: copy[k]};
+      final canonicalJson = json.encode(sortedMap);
+      final expectedSig = Hmac(sha256, secretBytes).convert(utf8.encode(canonicalJson)).toString();
+      return expectedSig == sig;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _handleDiscoveryDatagram(Datagram datagram) {
     try {
       final raw = utf8.decode(datagram.data, allowMalformed: true).trim();
@@ -132,6 +153,11 @@ class HubClient {
       final parsed = json.decode(raw);
       if (parsed is! Map<String, dynamic>) return;
       if (parsed["service"] != "hiar_robot") return;
+
+      if (!_verifyDiscoverySignature(parsed)) {
+        debugPrint("HubClient: ⚠️ Balise UDP ignorée : signature invalide (usurpation potentielle)");
+        return;
+      }
 
       final sourceIp = datagram.address.address;
       final advertisedIp = (parsed["ip"] as String?)?.trim();
@@ -148,8 +174,6 @@ class HubClient {
           authToken = token;
         }
       }
-          ? parsed["ws_port"] as int
-          : int.tryParse("${parsed["ws_port"] ?? 5000}") ?? 5000;
 
       if (discoveredIp.isEmpty) return;
 
