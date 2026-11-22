@@ -1328,8 +1328,13 @@ class HMIWebSocketBridgeNode(Node):
                 spo2_percent=spo2_pct,
                 bypass_cutoff=True,
             )
+            from hospital_robot.rgpd_masking import mask_patient_name, mask_phone_number
             self._last_ticket_label = res.get("ticket_label")
-            self.get_logger().info(f"💾 [BASE DE DONNÉES] Rendez-vous créé : {res.get('ticket_label')} (ID: {res.get('appointment_id')})")
+            self.get_logger().info(
+                f"💾 [BASE DE DONNÉES] Rendez-vous créé : {res.get('ticket_label')} "
+                f"(ID: {res.get('appointment_id')}, Patient: {mask_patient_name(patient_name)}, "
+                f"Contact: {mask_phone_number(contact)})"
+            )
             return {"ok": True, **res}
         except BookingError as be:
             self.get_logger().warn(f"Règle de consultation : {be}")
