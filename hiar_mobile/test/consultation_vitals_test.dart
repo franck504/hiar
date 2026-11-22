@@ -88,4 +88,59 @@ void main() {
     // Clean unmount
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('ConsultationScreen allows progressing from Step 4 to Step 5 and confirming without vitals', (tester) async {
+    Map<String, dynamic>? submittedPayload;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConsultationScreen(
+          initialStep: 4,
+          dynamicFields: const {
+            'selected_reason': 'consultation_generale',
+            'selected_doctor': 'A',
+            'selected_period': 'MAT',
+            'patient_name': 'Jean Dupont',
+            'patient_phone': '0601020304',
+          },
+          onConfirmAppointment: (payload) {
+            submittedPayload = payload;
+          },
+          onCancel: () {},
+          onFinish: () {},
+        ),
+      ),
+    );
+
+    // Initialement à l'étape 4 sans constantes
+    expect(find.text('Étape 4 sur 5'), findsOneWidget);
+    expect(find.text('La prise de constantes est facultative pour la consultation.'), findsOneWidget);
+
+    // Bouton continuer vers étape 5
+    final continueBtn = find.widgetWithText(ElevatedButton, 'Continuer (🎤 « Suivant »)');
+    expect(continueBtn, findsOneWidget);
+    await tester.tap(continueBtn);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Doit être arrivé à l'étape 5
+    expect(find.text('Étape 5 sur 5'), findsOneWidget);
+    expect(find.text('Récapitulatif de votre rendez-vous'), findsOneWidget);
+    expect(find.text('Non mesurées'), findsOneWidget);
+
+    // Bouton de confirmation finale
+    final confirmBtn = find.widgetWithText(ElevatedButton, 'Confirmer (🎤 « Confirmer »)');
+    expect(confirmBtn, findsOneWidget);
+    await tester.tap(confirmBtn);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Vérifie que le payload a bien été envoyé avec des constantes nulles
+    expect(submittedPayload, isNotNull);
+    expect(submittedPayload!['patient_name'], 'Jean Dupont');
+    expect(submittedPayload!['contact'], '0601020304');
+    expect(submittedPayload!['temperature_c'], isNull);
+    expect(submittedPayload!['heart_rate_bpm'], isNull);
+    expect(submittedPayload!['spo2_percent'], isNull);
+
+    await tester.pumpWidget(const SizedBox());
+  });
 }

@@ -206,9 +206,19 @@
     const stFilter = $("filter-status")?.value || "";
     const searchFilter = ($("filter-search")?.value || "").toLowerCase().trim();
 
+    const STATUS_GROUP_MAP = {
+      CONFIRMED: ["CONFIRMED", "WAITING", "en attente"],
+      IN_CONSULTATION: ["IN_CONSULTATION", "appelé"],
+      DONE: ["DONE", "COMPLETED", "terminé"],
+      CANCELLED: ["CANCELLED", "annulé", "non reçu"],
+    };
+
     const filtered = cachedAppointments.filter((a) => {
       if (docFilter && (a.doctor || "") !== docFilter) return false;
-      if (stFilter && (a.status || "") !== stFilter) return false;
+      if (stFilter) {
+        const allowed = STATUS_GROUP_MAP[stFilter] || [stFilter];
+        if (!allowed.includes(a.status)) return false;
+      }
       if (searchFilter) {
         const haystack = `${a.patient_name || ""} ${a.contact || ""} ${a.ticket_label || ""} ${a.reason_code || ""}`.toLowerCase();
         if (!haystack.includes(searchFilter)) return false;
@@ -224,10 +234,29 @@
     const STATUS_LABELS = {
       CONFIRMED: "En attente",
       WAITING: "En attente",
+      "en attente": "En attente",
       IN_CONSULTATION: "En consultation",
+      "appelé": "En consultation",
       DONE: "Terminé",
       COMPLETED: "Terminé",
+      "terminé": "Terminé",
       CANCELLED: "Annulé",
+      "annulé": "Annulé",
+      "non reçu": "Non reçu",
+    };
+
+    const ST_CLASS_MAP = {
+      CONFIRMED: "status-waiting",
+      WAITING: "status-waiting",
+      "en attente": "status-waiting",
+      IN_CONSULTATION: "status-in_consultation",
+      "appelé": "status-in_consultation",
+      DONE: "status-done",
+      COMPLETED: "status-done",
+      "terminé": "status-done",
+      CANCELLED: "status-cancelled",
+      "annulé": "status-cancelled",
+      "non reçu": "status-cancelled",
     };
 
     const rows = filtered.map((a) => {
@@ -258,9 +287,9 @@
         }
       }
 
-      const st = a.status || "CONFIRMED";
+      const st = a.status || "en attente";
       const stLabel = STATUS_LABELS[st] || st;
-      const stClass = "status-" + st.toLowerCase();
+      const stClass = ST_CLASS_MAP[st] || ("status-" + String(st).toLowerCase().replace(/\s+/g, "_"));
 
       const dateStr = a.requested_date ? (a.requested_time ? `${a.requested_date} ${a.requested_time}` : a.requested_date) : "—";
       const doctorStr = a.doctor ? `Dr. ${a.doctor} (${a.period || 'MAT'})` : "—";

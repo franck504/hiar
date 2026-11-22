@@ -41,6 +41,17 @@ def test_valid_pharmacy_request_is_accepted(receiver):
     assert statuses == ["VALIDATED:ORIENTATION:PHARMACY"]
 
 
+def test_valid_radiology_request_is_accepted(receiver):
+    node, statuses = receiver
+
+    send_request(
+        node,
+        '{"category": "ORIENTATION", "destination": "RADIOLOGY"}',
+    )
+
+    assert statuses == ["VALIDATED:ORIENTATION:RADIOLOGY"]
+
+
 def test_unknown_destination_is_rejected(receiver):
     node, statuses = receiver
 

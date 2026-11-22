@@ -972,10 +972,10 @@ def api_admin_dashboard():
             appts.append(item)
 
         total = len(appts)
-        confirmed = sum(1 for a in appts if a.get("status") in ("CONFIRMED", "WAITING"))
-        in_consult = sum(1 for a in appts if a.get("status") == "IN_CONSULTATION")
-        done = sum(1 for a in appts if a.get("status") in ("DONE", "COMPLETED"))
-        cancelled = sum(1 for a in appts if a.get("status") == "CANCELLED")
+        confirmed = sum(1 for a in appts if a.get("status") in ("CONFIRMED", "WAITING", "en attente"))
+        in_consult = sum(1 for a in appts if a.get("status") in ("IN_CONSULTATION", "appelé"))
+        done = sum(1 for a in appts if a.get("status") in ("DONE", "COMPLETED", "terminé"))
+        cancelled = sum(1 for a in appts if a.get("status") in ("CANCELLED", "annulé", "non reçu"))
 
         def _is_alert(a):
             t = a.get("temperature_c")

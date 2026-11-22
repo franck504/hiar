@@ -91,8 +91,8 @@ class ConsultationScreenState extends State<ConsultationScreen> {
       return _nameController.text.trim().isNotEmpty && _phoneController.text.trim().isNotEmpty;
     }
     if (step == 4) {
-      if (_vitalsRunning) return false;
-      return _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
+      // Les signes vitaux sont facultatifs : on bloque uniquement si une mesure est en cours
+      return !_vitalsRunning;
     }
     return true;
   }
@@ -109,7 +109,7 @@ class ConsultationScreenState extends State<ConsultationScreen> {
         if (_vitalsRunning) {
           return "Mesure des constantes en cours, veuillez patienter.";
         }
-        return "Veuillez mesurer vos constantes vitales avant de passer au récapitulatif.";
+        return "Veuillez patienter pendant la mesure.";
       default:
         return "Veuillez compléter cette étape avant de continuer.";
     }
@@ -212,6 +212,18 @@ class ConsultationScreenState extends State<ConsultationScreen> {
     }
     if (fields.containsKey('selected_reason') && fields['selected_reason'] != null) {
       _selectedReason = fields['selected_reason'].toString();
+    } else if (fields.containsKey('reason_code') && fields['reason_code'] != null) {
+      _selectedReason = fields['reason_code'].toString();
+    }
+    if (fields.containsKey('selected_doctor') && fields['selected_doctor'] != null) {
+      _selectedDoctor = fields['selected_doctor'].toString();
+    } else if (fields.containsKey('doctor') && fields['doctor'] != null) {
+      _selectedDoctor = fields['doctor'].toString();
+    }
+    if (fields.containsKey('selected_period') && fields['selected_period'] != null) {
+      _selectedPeriod = fields['selected_period'].toString();
+    } else if (fields.containsKey('period') && fields['period'] != null) {
+      _selectedPeriod = fields['period'].toString();
     }
     if (fields.containsKey('vitals_state')) {
       final state = fields['vitals_state'].toString();
@@ -331,15 +343,7 @@ class ConsultationScreenState extends State<ConsultationScreen> {
       return;
     }
 
-    final bool hasMeasured = _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
-    if (!hasMeasured) {
-      setState(() {
-        _currentStep = 4;
-        _formValidationError = "Veuillez mesurer vos constantes vitales avant de confirmer (Étape 4).";
-      });
-      VoiceService.instance.speak("Veuillez mesurer vos constantes vitales avant de confirmer.");
-      return;
-    }
+    // Les signes vitaux sont facultatifs : le rendez-vous peut être confirmé avec ou sans mesure.
 
     setState(() {
       _isSubmitting = true;

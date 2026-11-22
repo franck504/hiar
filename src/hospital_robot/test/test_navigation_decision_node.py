@@ -97,6 +97,29 @@ def test_valid_navigation_request_starts_mission_when_sensors_are_ready():
     )
 
 
+def test_valid_radiology_navigation_request_is_accepted():
+    import json
+    from std_msgs.msg import String
+
+    node = make_request_node()
+    node.sensors_ready.return_value = True
+    message = String()
+    message.data = json.dumps({
+        "category": "ORIENTATION",
+        "destination": "RADIOLOGY",
+    })
+
+    NavigationDecision.navigation_request_callback(node, message)
+
+    assert node.destination == "RADIOLOGY"
+    node.start_mission.assert_called_once_with()
+    node.change_state.assert_called_once_with("DECIDE")
+    node.publish_text.assert_any_call(
+        node.status_publisher,
+        "REQUEST_RECEIVED:RADIOLOGY",
+    )
+
+
 def test_invalid_navigation_destination_is_rejected():
     from std_msgs.msg import String
 

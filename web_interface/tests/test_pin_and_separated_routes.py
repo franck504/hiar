@@ -45,7 +45,26 @@ def test_admin_route_has_correct_title_and_no_queue_panel(client):
 
 
 def test_admin_dashboard_api(client):
-    """Vérifie l'API du tableau de bord d'administration et l'historique."""
+    """Vérifie l'API du tableau de bord d'administration et l'historique avec statuts français."""
+    from appointments_store import get_connection, init_db, init_sessions_db
+
+    init_db()
+    init_sessions_db()
+    with get_connection() as con:
+        con.execute(
+            """
+            INSERT INTO appointments (
+                patient_name, contact, reason, requested_date, requested_time, status, created_at
+            )
+            VALUES
+                ('Patient 1', '0601020304', 'consultation_generale', '2026-11-22', '08h00 - 08h30', 'en attente', '2026-11-22T08:00:00Z'),
+                ('Patient 2', '0601020305', 'suivi_medical', '2026-11-22', '08h30 - 09h00', 'appelé', '2026-11-22T08:30:00Z'),
+                ('Patient 3', '0601020306', 'consultation_generale', '2026-11-22', '09h00 - 09h30', 'terminé', '2026-11-22T09:00:00Z'),
+                ('Patient 4', '0601020307', 'autre_motif', '2026-11-22', '09h30 - 10h00', 'annulé', '2026-11-22T09:30:00Z')
+            """
+        )
+        con.commit()
+
     # 1. Non authentifié -> 401
     unauth = client.get("/api/admin/dashboard")
     assert unauth.status_code == 401
@@ -57,8 +76,11 @@ def test_admin_dashboard_api(client):
     assert data["ok"] is True
     assert "stats" in data
     assert "appointments" in data
-    assert "total" in data["stats"]
-    assert "confirmed" in data["stats"]
+    assert data["stats"]["total"] == 4
+    assert data["stats"]["confirmed"] == 1  # 'en attente'
+    assert data["stats"]["in_consultation"] == 1  # 'appelé'
+    assert data["stats"]["done"] == 1  # 'terminé'
+    assert data["stats"]["cancelled"] == 1  # 'annulé'
 
 
 def test_robot_stop_api(client, monkeypatch):

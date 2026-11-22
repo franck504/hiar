@@ -232,7 +232,7 @@ class NavigationDecision(Node):
             or set(request.keys()) != {'category', 'destination'}
             or request.get('category') != 'ORIENTATION'
             or request.get('destination') not in {
-                'PHARMACY', 'LABORATORY', 'RECEPTION'
+                'PHARMACY', 'LABORATORY', 'RADIOLOGY', 'RECEPTION'
             }
         ):
             self.get_logger().warning(
@@ -345,7 +345,7 @@ class NavigationDecision(Node):
             return False
 
         if self.destination not in {
-            'PHARMACY', 'LABORATORY', 'RECEPTION'
+            'PHARMACY', 'LABORATORY', 'RADIOLOGY', 'RECEPTION'
         }:
             self.publish_text(self.status_publisher, 'START_REJECTED:NO_DESTINATION')
             self.get_logger().warning(

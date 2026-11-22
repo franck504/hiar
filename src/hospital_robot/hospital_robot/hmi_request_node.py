@@ -10,7 +10,7 @@ from std_msgs.msg import String
 VALID_REQUESTS = {
     "ORIENTATION": {
         "field": "destination",
-        "items": {"PHARMACY", "LABORATORY", "RECEPTION"},
+        "items": {"PHARMACY", "LABORATORY", "RADIOLOGY", "RECEPTION"},
     },
     "CONSULTATION": {
         "field": "action",
@@ -18,7 +18,14 @@ VALID_REQUESTS = {
     },
     "INFORMATION": {
         "field": "topic",
-        "items": {"HIV", "MALARIA", "DIABETES", "HYPERTENSION"},
+        "items": {
+            "HIV",
+            "MALARIA",
+            "DIABETES",
+            "HYPERTENSION",
+            "TUBERCULOSIS",
+            "MENSTRUAL_HEALTH",
+        },
     },
 }
 
