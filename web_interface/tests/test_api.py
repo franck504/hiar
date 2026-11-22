@@ -294,3 +294,28 @@ def test_flask_secret_key_security(monkeypatch, tmp_path):
     valid_key = "my_custom_secure_secret_key_abcdef_123456"
     monkeypatch.setenv("FLASK_SECRET_KEY", valid_key)
     assert _resolve_flask_secret_key() == valid_key
+
+
+def test_web_ssl_context_resolution(monkeypatch, tmp_path):
+    """Vérifie la détection et configuration HTTPS pour Flask."""
+    from app import _get_web_ssl_context
+
+    # 1. Sans variables -> None
+    monkeypatch.delenv("HIAR_WEB_SSL_CERT", raising=False)
+    monkeypatch.delenv("HIAR_WEB_SSL_KEY", raising=False)
+    monkeypatch.delenv("HIAR_WEB_ENABLE_ADHOC_SSL", raising=False)
+    assert _get_web_ssl_context() is None
+
+    # 2. Avec fichiers valides -> (cert, key)
+    c_file = tmp_path / "server.crt"
+    k_file = tmp_path / "server.key"
+    c_file.write_text("cert", encoding="utf-8")
+    k_file.write_text("key", encoding="utf-8")
+    monkeypatch.setenv("HIAR_WEB_SSL_CERT", str(c_file))
+    monkeypatch.setenv("HIAR_WEB_SSL_KEY", str(k_file))
+    assert _get_web_ssl_context() == (str(c_file), str(k_file))
+
+    # 3. Mode adhoc
+    monkeypatch.delenv("HIAR_WEB_SSL_CERT", raising=False)
+    monkeypatch.setenv("HIAR_WEB_ENABLE_ADHOC_SSL", "1")
+    assert _get_web_ssl_context() == "adhoc"

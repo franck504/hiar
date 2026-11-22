@@ -71,8 +71,24 @@ def _resolve_flask_secret_key() -> str:
         return secrets.token_hex(32)
 
 
+def _get_web_ssl_context():
+    """Résout le contexte SSL/TLS pour l'interface Web (HTTPS)."""
+    cert = os.environ.get("HIAR_WEB_SSL_CERT")
+    key = os.environ.get("HIAR_WEB_SSL_KEY")
+    if cert and key and os.path.exists(cert) and os.path.exists(key):
+        return (cert, key)
+    if os.environ.get("HIAR_WEB_ENABLE_ADHOC_SSL", "0") in ("1", "true", "True"):
+        return "adhoc"
+    return None
+
+
 app = Flask(__name__)
 app.secret_key = _resolve_flask_secret_key()
+# Sécurisation des cookies de session
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+if _get_web_ssl_context() is not None:
+    app.config["SESSION_COOKIE_SECURE"] = True
 bridge = RosBridge()
 
 
@@ -1125,12 +1141,21 @@ if __name__ == "__main__":
     else:
         print("Pont ROS2 inactif : " + str(bridge.error))
     server_port = int(os.environ.get("HIAR_WEB_PORT", os.environ.get("PORT", "5000")))
+    ssl_context = _get_web_ssl_context()
+    run_kwargs = {"host": "0.0.0.0", "port": server_port}
+    if ssl_context:
+        run_kwargs["ssl_context"] = ssl_context
+        proto = "https"
+    else:
+        proto = "http"
+    print(f"Interface web HIAR prête sur {proto}://0.0.0.0:{server_port}")
     try:
-        app.run(host="0.0.0.0", port=server_port)
+        app.run(**run_kwargs)
     except OSError as e:
         if "Address already in use" in str(e) and server_port == 5000:
-            print("Port 5000 déjà utilisé (ex. hmi_websocket_bridge). Démarrage sur le port 5001...")
-            app.run(host="0.0.0.0", port=5001)
+            print(f"Port 5000 déjà utilisé. Démarrage sur {proto}://0.0.0.0:5001...")
+            run_kwargs["port"] = 5001
+            app.run(**run_kwargs)
         else:
             raise
     finally:
