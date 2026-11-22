@@ -1311,9 +1311,10 @@ class HMIWebSocketBridgeNode(Node):
             hr = args.get("heart_rate_bpm") if args.get("heart_rate_bpm") is not None else args.get("heart_rate")
             spo2 = args.get("spo2_percent") if args.get("spo2_percent") is not None else args.get("spo2")
 
-            temp_c = float(temp) if temp is not None else None
-            hr_bpm = int(hr) if hr is not None else None
-            spo2_pct = int(spo2) if spo2 is not None else None
+            from hospital_robot.vitals_data_parser import validate_vitals
+            temp_c, hr_bpm, spo2_pct, vitals_err = validate_vitals(temp, hr, spo2)
+            if vitals_err:
+                self.get_logger().warning(f"⚠️ [SAFETY VITALS] Constante hors plage ou invalide rejetée : {vitals_err}")
 
             res = create_session_appointment(
                 patient_name=patient_name,

@@ -203,6 +203,31 @@ def create_session_appointment(
     created_at = current.isoformat(timespec="seconds")
     reason = REASON_LABELS[reason_code]
 
+    # Validation de sécurité des plages physiologiques des constantes vitales
+    if temperature_c is not None:
+        try:
+            temperature_c = round(float(temperature_c), 1)
+            if not (25.0 <= temperature_c <= 45.0):
+                raise ValueError("Température corporelle hors de la plage physiologique valide (25°C - 45°C).")
+        except (ValueError, TypeError) as exc:
+            raise BookingError("invalid_vitals", str(exc)) from exc
+
+    if heart_rate_bpm is not None:
+        try:
+            heart_rate_bpm = int(round(float(heart_rate_bpm)))
+            if not (30 <= heart_rate_bpm <= 240):
+                raise ValueError("Fréquence cardiaque hors de la plage physiologique valide (30 - 240 bpm).")
+        except (ValueError, TypeError) as exc:
+            raise BookingError("invalid_vitals", str(exc)) from exc
+
+    if spo2_percent is not None:
+        try:
+            spo2_percent = int(round(float(spo2_percent)))
+            if not (50 <= spo2_percent <= 100):
+                raise ValueError("Saturation en oxygène (SpO2) hors de la plage physiologique valide (50% - 100%).")
+        except (ValueError, TypeError) as exc:
+            raise BookingError("invalid_vitals", str(exc)) from exc
+
     with get_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
 

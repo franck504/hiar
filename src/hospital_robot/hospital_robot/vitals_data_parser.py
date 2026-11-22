@@ -4,12 +4,57 @@ Convertit les trames série provenant d'esp32_interface_node via /vitals/result
 en instructions riches (champs formatés + synthèse vocale naturelle) pour le mobile.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 TEMP_RANGE = (25.0, 45.0)
 BPM_RANGE = (40.0, 220.0)
 SPO2_RANGE = (70.0, 100.0)
+
+
+def validate_vitals(
+    temp: Optional[Any],
+    hr: Optional[Any],
+    spo2: Optional[Any],
+) -> Tuple[Optional[float], Optional[int], Optional[int], Optional[str]]:
+    """Valide rigoureusement les plages physiologiques des constantes vitales côté serveur."""
+    parsed_temp = None
+    parsed_hr = None
+    parsed_spo2 = None
+    errors = []
+
+    if temp is not None:
+        try:
+            f = float(temp)
+            if TEMP_RANGE[0] <= f <= TEMP_RANGE[1]:
+                parsed_temp = round(f, 1)
+            else:
+                errors.append(f"température {f}°C hors plage {TEMP_RANGE}")
+        except (ValueError, TypeError):
+            errors.append(f"format température invalide ({temp})")
+
+    if hr is not None:
+        try:
+            i = int(round(float(hr)))
+            if BPM_RANGE[0] <= i <= BPM_RANGE[1]:
+                parsed_hr = i
+            else:
+                errors.append(f"pouls {i} bpm hors plage {BPM_RANGE}")
+        except (ValueError, TypeError):
+            errors.append(f"format pouls invalide ({hr})")
+
+    if spo2 is not None:
+        try:
+            i = int(round(float(spo2)))
+            if SPO2_RANGE[0] <= i <= SPO2_RANGE[1]:
+                parsed_spo2 = i
+            else:
+                errors.append(f"SpO2 {i}% hors plage {SPO2_RANGE}")
+        except (ValueError, TypeError):
+            errors.append(f"format SpO2 invalide ({spo2})")
+
+    err_msg = ", ".join(errors) if errors else None
+    return parsed_temp, parsed_hr, parsed_spo2, err_msg
 
 
 def parse_vitals_frame(line: str) -> Dict:

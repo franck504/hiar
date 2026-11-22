@@ -5,6 +5,7 @@ from hospital_robot.vitals_data_parser import (
     build_vitals_instruction,
     format_speech_fr,
     parse_vitals_frame,
+    validate_vitals,
 )
 
 
@@ -117,4 +118,27 @@ def test_build_vitals_instruction_no_valid_measure():
     assert instruction["value_to_show"]["value"] == "error"
     assert "fields" not in instruction
     assert "n'a pas pu aboutir" in instruction["text_to_speak"]
+
+
+def test_validate_vitals_standalone():
+    """Vérifie le validateur de sécurité des constantes vitales."""
+    # 1. Valeurs valides
+    t, hr, spo2, err = validate_vitals(37.2, 75, 98)
+    assert t == 37.2
+    assert hr == 75
+    assert spo2 == 98
+    assert err is None
+
+    # 2. Valeurs hors-plages rejetées
+    t_bad, hr_bad, spo2_bad, err_bad = validate_vitals(55.0, 290, 40)
+    assert t_bad is None
+    assert hr_bad is None
+    assert spo2_bad is None
+    assert "température" in err_bad
+    assert "pouls" in err_bad
+    assert "SpO2" in err_bad
+
+    # 3. Valeurs None acceptées (facultatives)
+    t_none, hr_none, spo2_none, err_none = validate_vitals(None, None, None)
+    assert t_none is None and hr_none is None and spo2_none is None and err_none is None
 
