@@ -319,3 +319,20 @@ def test_web_ssl_context_resolution(monkeypatch, tmp_path):
     monkeypatch.delenv("HIAR_WEB_SSL_CERT", raising=False)
     monkeypatch.setenv("HIAR_WEB_ENABLE_ADHOC_SSL", "1")
     assert _get_web_ssl_context() == "adhoc"
+
+
+def test_http_security_headers_present():
+    """Vérifie la présence systématique des en-têtes HTTP de sécurité."""
+    client = app.test_client()
+    resp = client.get("/patients")
+    assert resp.status_code == 200
+    assert resp.headers.get("X-Frame-Options") == "DENY"
+    assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+    assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+    assert "default-src 'self'" in resp.headers.get("Content-Security-Policy", "")
+
+    # Avec HTTPS simulé
+    https_resp = client.get("/patients", base_url="https://localhost")
+    assert "Strict-Transport-Security" in https_resp.headers
+
+
