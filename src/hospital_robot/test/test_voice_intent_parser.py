@@ -310,7 +310,11 @@ def test_consultation_reason_intent(parser, phrase, expected_reason):
     assert intent.target_value == expected_reason
     instruction = parser.build_instruction(intent)
     assert instruction["fields"]["selected_reason"] == expected_reason
-    assert "Motif sélectionné" in instruction["text_to_speak"]
+    # La réponse enchaîne sur l'étape suivante : elle nomme les médecins à choisir
+    assert "Motif noté" in instruction["text_to_speak"]
+    for name in ("Raissa", "Bell", "Pierrot", "Alice"):
+        assert name in instruction["text_to_speak"]
+    assert instruction["instruction_ui"]["step"] == 2
 
 
 @pytest.mark.parametrize("phrase,expected_action", [
@@ -428,3 +432,65 @@ def test_menu_speech_ignores_llm_lead_that_asks_a_question(parser):
     assert "Ce lieu n'est pas disponible." in parser.orientation_menu_speech("Ce lieu n'est pas disponible.")
     # Une question du LLM ferait doublon avec « Où souhaitez-vous aller ? »
     assert parser.orientation_menu_speech("Où voulez-vous aller ?").count("?") == 1
+
+
+# ============================================================
+# CONSULTATION : MÉDECINS (prénoms), PÉRIODE, MOTIF « AUTRE »
+# ============================================================
+
+CONSULT = "consultation (étape 2/6: choix médecin et créneau)"
+
+
+@pytest.mark.parametrize("phrase,code", [
+    ("Raissa", "A"), ("Je voudrais le docteur Bell", "B"), ("Pierrot s'il vous plaît", "C"),
+    ("avec Alice", "D"), ("Médecin B", "B"), ("docteur A", "A"),
+])
+def test_doctor_by_first_name_on_consultation_screen(parser, phrase, code):
+    intent = parser.parse(phrase, current_screen=CONSULT)
+    assert intent.intent_type == "CONSULTATION_DOCTOR"
+    assert intent.target_value == code
+    # « Médecin B » ne doit plus être pris pour « ouvrir la consultation » (qui ramenait à l'étape 1)
+    assert intent.ros_request is None
+
+
+def test_doctor_first_name_alone_is_ignored_outside_consultation(parser):
+    assert parser.parse("Alice", current_screen="home").intent_type != "CONSULTATION_DOCTOR"
+    assert parser.parse("je veux le docteur Alice", current_screen="home").intent_type == "CONSULTATION_DOCTOR"
+
+
+def test_two_doctors_in_one_sentence_are_flagged_ambiguous(parser):
+    intent = parser.parse("Bell ou Alice", current_screen=CONSULT)
+    assert intent.intent_type == "CONSULTATION_DOCTOR"
+    assert intent.target_value is None
+    assert intent.details["ambiguous"] == ["B", "D"]
+    assert "pas reconnu" in parser.build_instruction(intent)["text_to_speak"]
+
+
+def test_doctor_instruction_sets_period_and_goes_to_identity(parser):
+    inst = parser.build_instruction(parser.parse("docteur Bell", current_screen=CONSULT))
+    assert inst["fields"] == {"selected_doctor": "B", "selected_period": "AM"}
+    assert inst["instruction_ui"]["step"] == 3
+    assert "docteur Bell" in inst["text_to_speak"] and "l'après-midi" in inst["text_to_speak"]
+
+
+@pytest.mark.parametrize("phrase,period", [("plutôt le matin", "MAT"), ("l'après-midi", "AM")])
+def test_period_lists_the_doctors_of_that_period(parser, phrase, period):
+    intent = parser.parse(phrase, current_screen=CONSULT)
+    assert intent.intent_type == "CONSULTATION_PERIOD"
+    assert intent.target_value == period
+    speech = parser.build_instruction(intent)["text_to_speak"]
+    expected = ("Raissa", "Pierrot") if period == "MAT" else ("Bell", "Alice")
+    assert all(n in speech for n in expected) and speech.endswith("?")
+
+
+def test_other_reason_is_recorded_as_other_not_as_general(parser):
+    intent = parser.parse("autre motif", current_screen="consultation (étape 1/6: choix du motif)")
+    assert intent.intent_type == "CONSULTATION_REASON"
+    assert intent.target_value == "autre_motif"
+    # mais « autre » seul ne déclenche rien hors consultation
+    assert parser.parse("autre chose", current_screen="home").intent_type == "UNKNOWN"
+
+
+def test_skip_vitals_is_a_next_step(parser):
+    intent = parser.parse("passer")
+    assert intent.intent_type == "CONSULTATION_STEP" and intent.target_value == "next"

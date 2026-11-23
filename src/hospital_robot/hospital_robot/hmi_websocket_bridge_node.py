@@ -73,6 +73,8 @@ except ImportError:
 try:
     from hospital_robot.voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from hospital_robot.vitals_data_parser import build_vitals_instruction, parse_vitals_frame
+    from hospital_robot import consultation_catalog, consultation_voice
+    from hospital_robot.consultation_voice import ConsultationVoiceMixin
     from hospital_robot.llm_intent_engine import (
         GroqBackend,
         HybridGroqQwenBackend,
@@ -83,6 +85,9 @@ try:
 except ImportError:
     from voice_intent_parser import ParsedIntent, VoiceIntentParser, normalize_text
     from vitals_data_parser import build_vitals_instruction, parse_vitals_frame
+    import consultation_catalog
+    import consultation_voice
+    from consultation_voice import ConsultationVoiceMixin
     try:
         from llm_intent_engine import (
             GroqBackend,
@@ -171,7 +176,12 @@ def make_envelope(topic: str, payload: dict, msg_type: str = "pub") -> str:
     })
 
 
-class HMIWebSocketBridgeNode(Node):
+# Une demande de guidage non confirmée expire : sans cela, un « oui » dit par quelqu'un d'autre
+# plusieurs minutes plus tard déclencherait le déplacement du robot.
+PENDING_ORIENTATION_TTL_S = 45.0
+
+
+class HMIWebSocketBridgeNode(ConsultationVoiceMixin, Node):
     """Nœud ROS 2 et serveur WebSocket unifié pour le pilotage HMI."""
 
     def __init__(
@@ -320,6 +330,8 @@ class HMIWebSocketBridgeNode(Node):
         self._current_screen: str = "home"
         self._current_step: int = 1
         self._current_consultation_data: Dict[str, Any] = {}
+        self._vitals_started_at: Optional[float] = None
+        self._init_consultation_dialog()
         self._last_ticket_label: Optional[str] = None
         self._last_stt_text = ""
         self._last_stt_time = 0.0
@@ -752,6 +764,9 @@ class HMIWebSocketBridgeNode(Node):
             screen = payload.get("screen")
             step = payload.get("step")
             if screen:
+                if str(screen) != "consultation" and self._current_screen == "consultation":
+                    # Le patient a quitté la consultation : aucune donnée ne doit passer au suivant
+                    self._reset_consultation_dialog(clear_data=True)
                 self._current_screen = str(screen)
             if step is not None:
                 try:
@@ -759,12 +774,22 @@ class HMIWebSocketBridgeNode(Node):
                 except (ValueError, TypeError):
                     pass
             if isinstance(payload.get("consultation_data"), dict):
-                self._current_consultation_data.update(payload["consultation_data"])
+                self._merge_mobile_form(payload["consultation_data"])
             self.get_logger().info(f"[MOBILE] Écran actif: screen={self._current_screen} step={self._current_step}")
 
     # ========================================================
     # LOGIQUE VOCALE & INTENTS
     # ========================================================
+
+    def _expire_pending_orientation(self) -> None:
+        pending = self._pending_orientation
+        started = pending.get("at") if isinstance(pending, dict) else None
+        if started is not None and time.monotonic() - started > PENDING_ORIENTATION_TTL_S:
+            self.get_logger().info(
+                f"⌛ [ORIENTATION EXPIRÉE] Confirmation vers {pending.get('label')} non reçue en "
+                f"{PENDING_ORIENTATION_TTL_S:.0f} s : demande abandonnée, le robot ne bouge pas."
+            )
+            self._pending_orientation = None
 
     def _build_screen_context(self) -> str:
         """Construit un contexte d'écran précis (écran + étape / attente) pour Gemini."""
@@ -775,8 +800,8 @@ class HMIWebSocketBridgeNode(Node):
         if self._current_screen == "consultation":
             step_labels = {
                 1: "étape 1/6: choix du motif",
-                2: "étape 2/6: choix médecin et créneau",
-                3: "étape 3/6: identité patient",
+                2: "étape 2/6: choix du médecin (Raissa, Pierrot le matin ; Bell, Alice l'après-midi)",
+                3: "étape 3/6: identité patient (nom et téléphone recueillis par le système)",
                 4: "étape 4/6: mesure des constantes vitales",
                 5: "étape 5/6: récapitulatif et confirmation RDV",
                 6: "étape 6/6: ticket de passage",
@@ -806,6 +831,13 @@ class HMIWebSocketBridgeNode(Node):
             return
         self._last_stt_text = norm_incoming
         self._last_stt_time = now
+
+        self._expire_pending_orientation()
+
+        # Étape 3 de la consultation : nom et téléphone recueillis localement (ni journal, ni LLM cloud)
+        if await self._consult_identity_voice(text):
+            return
+
         self.get_logger().info(f"[MOBILE] 🎤 Voix STT: \"{text}\" (conf={confidence:.2f})")
 
         # Analyse et classification d'intention (avec contexte détaillé écran + étape)
@@ -839,12 +871,21 @@ class HMIWebSocketBridgeNode(Node):
             engine_str = f"🧠 LLM {model} ({backend_used or 'local'} | Latence: {latency_ms:.0f}ms)"
         elif intent.intent_type == "STOP":
             engine_str = "🛑 Réflexe Sécurité Local (STOP prioritaire | Latence: <1ms)"
+        elif intent.details.get("degraded_mode"):
+            engine_str = "🛟 Mode dégradé local (LLM injoignable : commandes simples de la consultation | <1ms)"
         elif intent.details.get("deterministic_fallback"):
             engine_str = "⚙️ Filet Déterministe (Regex local | Latence: <1ms)"
         elif intent.intent_type != "UNKNOWN":
             engine_str = "⚙️ Filet Déterministe (Regex local | Latence: <1ms)"
         else:
             engine_str = f"❓ Non reconnu / Hors périmètre (Latence: {latency_ms:.0f}ms)"
+
+        # 0. Consultation : dialogue guidé (motif, médecin, identité, constantes, confirmation)
+        if await self._consult_dispatch(intent, text):
+            self.get_logger().info(
+                f"[CONSULTATION] {intent.intent_type} traité (étape {self._current_step}) — {engine_str}"
+            )
+            return
 
         # 1. Action ROS 2 Navigation Command (ex: STOP, RESUME, HOME)
         if intent.ros_command:
@@ -859,6 +900,7 @@ class HMIWebSocketBridgeNode(Node):
                 "destination": dest_key,
                 "label": dest_label,
                 "ros_request": intent.ros_request or {"category": "ORIENTATION", "destination": dest_key},
+                "at": time.monotonic(),
             }
             self.get_logger().info(f"⏸️ [ORIENTATION EN ATTENTE] Destination : {dest_label} ({dest_key}). En attente de confirmation vocale (Oui/Non).")
 
@@ -872,13 +914,6 @@ class HMIWebSocketBridgeNode(Node):
                 if req:
                     self._publish_hmi_request(req)
                 intent.label = confirmed_dest_label
-            elif self._current_screen == "consultation" and self._current_step == 5:
-                self.get_logger().info("✅ [CONSULTATION CONFIRMÉE] Confirmation vocale à l'étape 5, réservation en base !")
-                await self._handle_ui_action({
-                    "action_id": "consult.confirm",
-                    "args": self._current_consultation_data,
-                })
-                return
             else:
                 # Rien à confirmer : ne surtout pas basculer sur l'écran « mission » (le robot
                 # ne bougerait pas), on redemande simplement ce que souhaite le visiteur.
@@ -891,19 +926,6 @@ class HMIWebSocketBridgeNode(Node):
                 cancelled_label = self._pending_orientation.get("label", "")
                 self.get_logger().info(f"🚫 [ORIENTATION ANNULÉE] Guidage vers {cancelled_label} annulé par l'utilisateur.")
                 self._pending_orientation = None
-            elif self._current_screen == "consultation":
-                self.get_logger().info("🚫 [CONSULTATION ANNULÉE] Annulation vocale par l'utilisateur.")
-                await self._handle_ui_action({"action_id": "consult.cancel", "args": {}})
-                cancel_instruction = {
-                    "origin": "voice",
-                    "text_to_speak": "Consultation annulée. Retour à l'accueil.",
-                    "speech_priority": "normal",
-                    "instruction_ui": {"screen": "home", "require_confirmation": False},
-                    "robot_status": {"face_expression": "neutral", "status_label": "Robot prêt"},
-                }
-                await self.broadcast("server/instruction", cancel_instruction)
-                await self.broadcast("voice/tts/request", {"text": cancel_instruction["text_to_speak"], "priority": "normal", "screen": "home"})
-                return
             else:
                 self.get_logger().info("ℹ️ Annulation reçue sans action en attente.")
 
@@ -914,14 +936,6 @@ class HMIWebSocketBridgeNode(Node):
             self._current_screen = "orientation"
             self.get_logger().info("🧭 [ORIENTATION] Aucun lieu précis : affichage des lieux disponibles.")
 
-        elif self._current_screen == "consultation" and self._current_step == 5 and intent.intent_type == "CONSULTATION_STEP" and (intent.target_value or "next") == "next":
-            self.get_logger().info("✅ [CONSULTATION ÉTAPE 5] Suivant/Valider reçu vocalement, réservation en base !")
-            await self._handle_ui_action({
-                "action_id": "consult.confirm",
-                "args": self._current_consultation_data,
-            })
-            return
-
         # 2b. RÈGLE MÉTIER : la prise de mesure (VITALS) par vocal est INTERDITE hors étape 4 de Consultation.
         # L'utilisateur est redirigé vers la consultation d'abord.
         vitals_blocked_redirect = False
@@ -929,6 +943,8 @@ class HMIWebSocketBridgeNode(Node):
             self._current_screen == "consultation" and self._current_step == 4
         ):
             vitals_blocked_redirect = True
+            if self._current_screen != "consultation":
+                self._consult_begin()
             target_step = (
                 self._current_step
                 if (self._current_screen == "consultation" and 1 <= self._current_step <= 3)
@@ -967,10 +983,6 @@ class HMIWebSocketBridgeNode(Node):
                 {"text": redirect_speech, "priority": "normal", "screen": "consultation"},
             )
             return
-
-        if intent.intent_type == "CONSULTATION":
-            self._current_screen = "consultation"
-            self._current_step = 1
 
         if intent.ros_request and intent.intent_type != "ORIENTATION":
             self._publish_hmi_request(intent.ros_request)
@@ -1080,6 +1092,7 @@ class HMIWebSocketBridgeNode(Node):
                 "destination": dest_key,
                 "label": dest_label,
                 "ros_request": {"category": "ORIENTATION", "destination": dest_key},
+                "at": time.monotonic(),
             }
             self.get_logger().info(
                 f"⏸️ [ORIENTATION TACTILE EN ATTENTE] Destination : {dest_label} ({dest_key}). Attente confirmation."
@@ -1231,7 +1244,15 @@ class HMIWebSocketBridgeNode(Node):
                     "ticket_label": ticket_label,
                 })
 
-                speech = f"Votre rendez-vous a bien été enregistré. Votre numéro de passage est {ticket_label}."
+                when = consultation_catalog.PERIODS.get(period, {}).get("spoken")
+                with_doctor = (
+                    f"avec {consultation_catalog.doctor_spoken(doctor)}" + (f", {when}," if when else "")
+                    if doctor in consultation_catalog.DOCTORS else ""
+                )
+                speech = (
+                    f"Votre rendez-vous {with_doctor} est enregistré. ".replace("  ", " ")
+                    + f"Votre numéro de passage est {ticket_label}."
+                )
                 instruction = {
                     "origin": "server",
                     "text_to_speak": speech,
@@ -1246,6 +1267,8 @@ class HMIWebSocketBridgeNode(Node):
                         "appointment_id": appt_id,
                         "doctor": doctor,
                         "period": period,
+                        "selected_doctor": doctor,
+                        "selected_period": period,
                         "patient_name": patient_name,
                     },
                     "robot_status": {
@@ -1254,38 +1277,22 @@ class HMIWebSocketBridgeNode(Node):
                     },
                     "voice_hints": ["Terminer", "Accueil"],
                 }
-                self._current_consultation_data.clear()
+                self._reset_consultation_dialog(clear_data=True)
+                self._current_step = 6
                 await self.broadcast("server/instruction", instruction)
                 await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal", "screen": "consultation"})
             else:
-                err_msg = res.get("error", "Impossible d'enregistrer le rendez-vous.")
-                speech = f"Attention : {err_msg}"
-                instruction = {
-                    "origin": "server",
-                    "text_to_speak": speech,
-                    "speech_priority": "normal",
-                    "instruction_ui": {
-                        "screen": "consultation",
-                        "step": 5,
-                        "require_confirmation": False,
-                    },
-                    "fields": {
-                        "booking_error": err_msg,
-                    },
-                    "robot_status": {
-                        "face_expression": "thinking",
-                        "status_label": "Erreur d'inscription",
-                    },
-                    "voice_hints": ["Réessayer", "Annuler"],
-                }
-                self._current_consultation_data.clear()
-                await self.broadcast("server/instruction", instruction)
-                await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal", "screen": "consultation"})
+                # Les données saisies sont CONSERVÉES : le patient corrige l'étape fautive sans tout ressaisir
+                await self._consult_booking_failed(res)
 
         elif action_id == "consult.start":
-            self._current_screen = "consultation"
-            self._current_step = 1
-            self._current_consultation_data.clear()
+            self._consult_begin()
+            # Parcours tactile : l'invite vocale du motif guide aussi les patients qui préfèrent parler
+            await self._consult_say(
+                self._entry_speech(1, self._consult_form()),
+                hints=self._hints_for_step(1),
+                status="Étape 1 sur 5",
+            )
 
         elif action_id == "consult.step_changed":
             step = args.get("step")
@@ -1296,39 +1303,30 @@ class HMIWebSocketBridgeNode(Node):
                     pass
             self._current_screen = "consultation"
             if "fields" in args and isinstance(args["fields"], dict):
-                self._current_consultation_data.update(args["fields"])
+                self._merge_mobile_form(args["fields"])
 
-            if self._current_step == 4:
-                vitals_guide_speech = (
-                    "Prise des signes vitaux. Veuillez tenir la sonde de température dans votre main et poser votre index sur le capteur d'oxymétrie, puis appuyez sur Démarrer la mesure ou dites Mesurer."
+            driven = self._driven_step
+            self._driven_step = None
+            announced = (
+                driven is not None
+                and driven[0] == self._current_step
+                and time.monotonic() - driven[1] <= consultation_voice.DRIVEN_STEP_WINDOW_S
+            )
+            if not announced and 2 <= self._current_step <= 5:
+                # Étape atteinte au toucher (ou corrigée par le mobile) : on annonce ce qui est attendu.
+                step_now = self._current_step
+                await self._consult_say(
+                    self._entry_speech(step_now, self._consult_form()),
+                    step=step_now if step_now == 4 else None,
+                    hints=self._hints_for_step(step_now),
+                    status="Prise de constantes" if step_now == 4 else f"Étape {step_now} sur 5",
                 )
-                instruction = {
-                    "origin": "server",
-                    "text_to_speak": vitals_guide_speech,
-                    "speech_priority": "normal",
-                    "instruction_ui": {
-                        "screen": "consultation",
-                        "step": 4,
-                        "require_confirmation": False,
-                    },
-                    "voice_hints": ["Mesurer", "Suivant", "Passer"],
-                    "robot_status": {
-                        "face_expression": "speaking",
-                        "status_label": "Prise de constantes",
-                    },
-                }
-                await self.broadcast("server/instruction", instruction)
-                await self.broadcast("voice/tts/request", {"text": vitals_guide_speech, "priority": "normal", "screen": "consultation"})
+                self._driven_step = None
 
-        elif action_id == "consult.cancel":
+        elif action_id in {"consult.cancel", "consult.finish"}:
+            self._reset_consultation_dialog(clear_data=True)
             self._current_screen = "home"
             self._current_step = 1
-            self._current_consultation_data.clear()
-
-        elif action_id == "consult.finish":
-            self._current_screen = "home"
-            self._current_step = 1
-            self._current_consultation_data.clear()
 
     def _book_appointment(self, args: Dict) -> Dict:
         """Enregistre un rendez-vous dans la base SQLite du serveur."""
@@ -1494,6 +1492,7 @@ class HMIWebSocketBridgeNode(Node):
             self.broadcast_threadsafe("server/instruction", timeout_instruction)
 
     def _on_vitals_result(self, msg):
+        self._vitals_started_at = None
         """Reçoit /vitals/result (format JSON contenant line: RESULT,... ou ERROR,...)."""
         try:
             payload = json.loads(msg.data)
@@ -1739,6 +1738,7 @@ class HMIWebSocketBridgeNode(Node):
             self.get_logger().info(f"Published to /robot/motor_command: {msg.data}")
 
     def _publish_vitals_request(self, request_id: str):
+        self._vitals_started_at = time.monotonic()
         msg = String()
         msg.data = json.dumps({"request_id": request_id})
         self.vitals_request_pub.publish(msg)

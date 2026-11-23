@@ -13,6 +13,11 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger("hospital_robot.voice_intent_parser")
 
 try:
+    from hospital_robot import consultation_catalog as catalog
+except ImportError:
+    import consultation_catalog as catalog  # type: ignore
+
+try:
     from hospital_robot.llm_intent_engine import LLMConfig, LLMIntentEngine, LLMResponse
 except ImportError:
     try:
@@ -126,7 +131,9 @@ class VoiceIntentParser:
 
     CONSULT_REASON_SUIVI = r"\b(suivi medical|suivi|controle)\b"
     CONSULT_REASON_GENERALE = r"\b(consultation generale|generale|standard)\b"
-    CONSULT_STEP_NEXT = r"\b(etape suivante|suivant|suivante|continuer|valider|confirmer)\b"
+    # « autre » est un mot courant : reconnu seulement sur l'écran de consultation
+    CONSULT_REASON_AUTRE = r"\b(autre motif|autres? motifs?|autre|autres|certificat|avis specifique)\b"
+    CONSULT_STEP_NEXT = r"\b(etape suivante|suivant|suivante|continuer|valider|confirmer|passer|sans mesure|pas de mesure)\b"
     CONSULT_STEP_PREV = r"\b(etape precedente|precedent|precedente|reculer)\b"
     CONSULT_TICKET = r"\b(ticket|mon ticket|voir le ticket|billet)\b"
 
@@ -247,7 +254,7 @@ class VoiceIntentParser:
 
         # 5. FILET DE SÉCURITÉ DÉTERMINISTE (uniquement si activé)
         if self.enable_deterministic_fallback:
-            det_intent = self._parse_deterministic(norm, confidence)
+            det_intent = self._parse_deterministic(norm, confidence, current_screen)
             if det_intent is not None:
                 if llm_attempted:
                     det_intent.details["deterministic_fallback"] = True
@@ -255,6 +262,21 @@ class VoiceIntentParser:
                     det_intent.details["latency_ms"] = llm_latency_ms
                     det_intent.details["backend_used"] = llm_backend_used
                 return det_intent
+
+        # 5b. MODE DÉGRADÉ : LLM injoignable (point d'accès Wi-Fi du robot sans Internet, quota…).
+        #     Seules les commandes fermées de la consultation et le oui/non d'un guidage en attente sont
+        #     comprises localement ; tout le reste attend le retour du LLM (priorité LLM inchangée).
+        if llm_attempted and llm_error and not self.enable_deterministic_fallback:
+            degraded = self._parse_degraded(norm, confidence, current_screen)
+            if degraded is not None:
+                degraded.details.update({
+                    "degraded_mode": True,
+                    "llm_attempted": True,
+                    "llm_error": llm_error,
+                    "backend_used": llm_backend_used,
+                    "latency_ms": llm_latency_ms,
+                })
+                return degraded
 
         # 6. INCONNU / NON ACTIONNABLE DÉFINITIF
         details: Dict[str, Any] = {"original_text": raw_text}
@@ -279,7 +301,30 @@ class VoiceIntentParser:
             details=details,
         )
 
-    def _parse_deterministic(self, norm: str, confidence: float) -> Optional[ParsedIntent]:
+    # Intentions comprises sans LLM : navigation de la consultation et confirmations
+    DEGRADED_INTENTS = frozenset({
+        "CONSULTATION_DOCTOR", "CONSULTATION_PERIOD", "CONSULTATION_REASON", "CONSULTATION_STEP",
+        "CONFIRM_YES", "CONFIRM_NO",
+    })
+    DEGRADED_MAX_WORDS = 6
+
+    def _parse_degraded(self, norm: str, confidence: float, screen: str) -> Optional[ParsedIntent]:
+        """Commande fermée comprise localement quand le LLM est hors service (sinon None)."""
+        context = (screen or "").lower()
+        in_consultation = context.startswith("consultation")
+        awaiting_guidance = "attente confirmation" in context
+        if not (in_consultation or awaiting_guidance) or len(norm.split()) > self.DEGRADED_MAX_WORDS:
+            return None
+        intent = self._parse_deterministic(norm, confidence, screen)
+        if intent is None or intent.intent_type not in self.DEGRADED_INTENTS:
+            return None
+        if awaiting_guidance and intent.intent_type not in ("CONFIRM_YES", "CONFIRM_NO"):
+            return None
+        return intent
+
+    def _parse_deterministic(
+        self, norm: str, confidence: float, screen: str = ""
+    ) -> Optional[ParsedIntent]:
         """Parseur déterministe par mots-clés (filet de sécurité final / mode hors LLM)."""
         # REPRENDRE LE GUIDAGE
         if re.search(self.RESUME_REGEX, norm):
@@ -409,6 +454,42 @@ class VoiceIntentParser:
                 confidence=confidence,
                 label="Ticket",
             )
+
+        # CHOIX DU MÉDECIN / DE LA PÉRIODE (écran de consultation, ou « docteur Bell » de n'importe où)
+        in_consultation = (screen or "").lower().startswith("consultation")
+        doctors = catalog.find_doctors_in_text(norm, name_only_ok=in_consultation)
+        if len(doctors) == 1:
+            code = doctors[0]
+            return ParsedIntent(
+                intent_type="CONSULTATION_DOCTOR",
+                confidence=confidence,
+                target_value=code,
+                label=catalog.doctor_label(code),
+            )
+        if len(doctors) > 1:
+            return ParsedIntent(
+                intent_type="CONSULTATION_DOCTOR",
+                confidence=confidence,
+                target_value=None,
+                label="Médecin",
+                details={"ambiguous": doctors},
+            )
+        if in_consultation:
+            period = catalog.find_period_in_text(norm)
+            if period:
+                return ParsedIntent(
+                    intent_type="CONSULTATION_PERIOD",
+                    confidence=confidence,
+                    target_value=period,
+                    label=catalog.PERIODS[period]["label"],
+                )
+            if re.search(self.CONSULT_REASON_AUTRE, norm):
+                return ParsedIntent(
+                    intent_type="CONSULTATION_REASON",
+                    confidence=confidence,
+                    target_value="autre_motif",
+                    label="Autre motif",
+                )
 
         # SAISIE VOCALE DU MOTIF DE CONSULTATION
         if re.search(self.CONSULT_REASON_SUIVI, norm):
@@ -630,12 +711,32 @@ class VoiceIntentParser:
             )
 
         if intent_type == "CONSULTATION_REASON":
-            is_suivi = (target or "").upper() in ("SUIVI_MEDICAL", "SUIVI")
+            reason = catalog.resolve_reason(target)
             return ParsedIntent(
                 intent_type="CONSULTATION_REASON",
                 confidence=confidence,
-                target_value="suivi_medical" if is_suivi else "consultation_generale",
-                label="Suivi médical" if is_suivi else "Consultation générale",
+                target_value=reason,  # None = motif non compris : le dialogue redemande
+                label=catalog.REASONS[reason]["label"] if reason else "Motif",
+                details=_make_details("consultation"),
+            )
+
+        if intent_type == "CONSULTATION_DOCTOR":
+            code = catalog.resolve_doctor(target)
+            return ParsedIntent(
+                intent_type="CONSULTATION_DOCTOR",
+                confidence=confidence,
+                target_value=code,  # None = médecin non reconnu : le dialogue redemande
+                label=catalog.doctor_label(code),
+                details=_make_details("consultation"),
+            )
+
+        if intent_type == "CONSULTATION_PERIOD":
+            period = catalog.resolve_period(target)
+            return ParsedIntent(
+                intent_type="CONSULTATION_PERIOD",
+                confidence=confidence,
+                target_value=period,
+                label=catalog.PERIODS[period]["label"] if period else "Période",
                 details=_make_details("consultation"),
             )
 
@@ -960,23 +1061,75 @@ class VoiceIntentParser:
 
         if intent.intent_type == "CONSULTATION_REASON":
             reason_label = intent.label or "Consultation"
-            speech = intent.details.get("llm_text_to_speak") or f"Motif sélectionné : {reason_label}."
+            speech = f"Motif noté : {reason_label}. " + catalog.doctors_choice_speech()
             return {
                 "origin": "voice",
                 "text_to_speak": speech,
                 "speech_priority": "normal",
                 "instruction_ui": {
                     "screen": "consultation",
-                    "step": 1,
+                    "step": 2,
                     "require_confirmation": False,
                 },
                 "fields": {
                     "selected_reason": intent.target_value,
                 },
-                "voice_hints": ["Suivant", "Médecin A", "Médecin B"],
+                "voice_hints": [catalog.doctor_name(c) for c in catalog.DOCTORS],
                 "robot_status": {
                     "face_expression": "speaking",
                     "status_label": reason_label,
+                },
+            }
+
+        if intent.intent_type == "CONSULTATION_DOCTOR":
+            code = intent.target_value
+            if code in catalog.DOCTORS:
+                period = catalog.doctor_period(code)
+                speech = f"Très bien, {catalog.doctor_spoken(code)}, {catalog.PERIODS[period]['spoken']}."
+                fields = {"selected_doctor": code, "selected_period": period}
+                step = 3
+            else:
+                speech = "Je n'ai pas reconnu le médecin. " + catalog.doctors_choice_speech()
+                fields = {}
+                step = 2
+            return {
+                "origin": "voice",
+                "text_to_speak": speech,
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "consultation",
+                    "step": step,
+                    "require_confirmation": False,
+                },
+                "fields": fields,
+                "voice_hints": [catalog.doctor_name(c) for c in catalog.DOCTORS],
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": catalog.doctor_label(code),
+                },
+            }
+
+        if intent.intent_type == "CONSULTATION_PERIOD":
+            period = intent.target_value
+            speech = (
+                catalog.doctors_of_period_speech(period) + " Lequel préférez-vous ?"
+                if period in catalog.PERIODS
+                else catalog.doctors_choice_speech()
+            )
+            return {
+                "origin": "voice",
+                "text_to_speak": speech,
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "consultation",
+                    "step": 2,
+                    "require_confirmation": False,
+                },
+                "voice_hints": [catalog.doctor_name(c) for c in catalog.doctors_for_period(period)]
+                or [catalog.doctor_name(c) for c in catalog.DOCTORS],
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": "Choix du médecin",
                 },
             }
 
