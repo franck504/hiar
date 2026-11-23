@@ -69,10 +69,9 @@
           <label for="doctor-filter" class="sr-only">Filtrer par médecin</label>
           <select id="doctor-filter">
             <option value="">Tous les médecins</option>
-            <option value="A">Médecin A</option>
-            <option value="B">Médecin B</option>
-            <option value="C">Médecin C</option>
-            <option value="D">Médecin D</option>
+            {% for d in doctors %}
+            <option value="{{ d.code }}">Dr {{ d.name }}</option>
+            {% endfor %}
           </select>
 
           <label for="period-filter" class="sr-only">Filtrer par période</label>

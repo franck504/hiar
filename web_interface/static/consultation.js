@@ -80,8 +80,8 @@
     return PERIODS[period] || period;
   }
 
-  function doctorLabel(code) {
-    return "Médecin " + code;
+  function doctorLabel(session) {
+    return session.doctor_name ? "Dr " + session.doctor_name : "Médecin " + session.doctor_code;
   }
 
   function goStep(n) {
@@ -143,7 +143,7 @@
 
       const title = document.createElement("span");
       title.className = "slot-time";
-      title.textContent = doctorLabel(session.doctor_code);
+      title.textContent = doctorLabel(session);
 
       const period = document.createElement("span");
       period.className = "slot-doctor";
@@ -352,7 +352,7 @@
     fillList(byId("recap"), [
       ["Motif", REASONS[state.reasonCode] || "Non précisé"],
       ["Date", formatDate(state.date)],
-      ["Médecin", doctorLabel(state.session.doctor_code)],
+      ["Médecin", doctorLabel(state.session)],
       ["Période", periodLabel(state.session.period)],
       ["Nom", info.name],
       ["Téléphone", info.contact],
@@ -439,7 +439,7 @@
     fillList(byId("success-recap"), [
       ["Référence", String(data.appointment_id || "-")],
       ["Date", formatDate(state.date)],
-      ["Médecin", doctorLabel(state.session.doctor_code)],
+      ["Médecin", doctorLabel(state.session)],
       ["Période", periodLabel(state.session.period)],
     ]);
 

@@ -27,6 +27,8 @@ from appointments_store import (
 
 from consultation_sessions_store import (
     DOCTORS,
+    doctor_choices,
+    doctor_name,
     PERIODS,
     SESSION_STATUSES,
     TZ,
@@ -117,6 +119,12 @@ def is_authenticated() -> bool:
     if supplied_pin and len(supplied_pin) == 6 and hmac.compare_digest(get_web_pin(), supplied_pin):
         return True
     return False
+
+
+@app.context_processor
+def inject_doctors():
+    """Médecins (code + prénom) disponibles pour tous les gabarits."""
+    return {"doctors": doctor_choices()}
 
 
 @app.route("/favicon.ico")
@@ -509,6 +517,7 @@ def api_public_consultation_sessions():
         available = [
             {
                 "doctor_code": session["doctor_code"],
+                "doctor_name": session["doctor_name"],
                 "period": session["period"],
                 "waiting_count": session["waiting_count"],
             }
@@ -1157,6 +1166,7 @@ def api_admin_dashboard():
         appts = []
         for r in rows:
             item = dict(r)
+            item["doctor_name"] = doctor_name(item.get("doctor")) if item.get("doctor") else ""
             if item.get("ticket_number"):
                 item["ticket_label"] = f"{item.get('doctor') or 'A'}-{item.get('period') or 'MAT'}-{item['ticket_number']}"
             else:

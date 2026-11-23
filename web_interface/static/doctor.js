@@ -25,6 +25,13 @@
     return new Date().toLocaleDateString("sv-SE", { timeZone: "Indian/Antananarivo" });
   }
 
+  // Libellé d'un médecin : « Dr Bell » (lu sur les boutons générés par le serveur)
+  function doctorLabel(code) {
+    if (code === "ALL") return "Tous les médecins";
+    const btn = document.querySelector('.quick-doc-btn[data-doc="' + code + '"]');
+    return (btn && btn.dataset.name) || ("Médecin " + code);
+  }
+
   function say(id, message) {
     const el = $(id);
     if (!el) return;
@@ -101,7 +108,7 @@
     if (currentDoctor === "ALL") {
       const hint = document.createElement("span");
       hint.className = "muted";
-      hint.textContent = "Tous les médecins : choisissez un médecin ci-dessus pour ouvrir ou fermer ses consultations.";
+      hint.textContent = "Vue de tous les médecins : choisissez un médecin ci-dessus pour ouvrir ou fermer ses consultations.";
       box.append(hint);
       return;
     }
@@ -144,7 +151,7 @@
     if (!items.length) {
       const tr = document.createElement("tr");
       const td = cell(tr, "Aucun patient inscrit aujourd'hui.");
-      td.colSpan = 8;
+      td.colSpan = 9;
       td.className = "empty";
       body.append(tr);
       return;
@@ -152,6 +159,7 @@
     items.forEach((item) => {
       const tr = document.createElement("tr");
       cell(tr, item.doctor + "-" + item.period + "-" + item.ticket_number);
+      cell(tr, item.doctor_name ? "Dr " + item.doctor_name : doctorLabel(item.doctor));
       cell(tr, PERIODS[item.period] || item.period);
       cell(tr, item.patient_name);
       cell(tr, item.contact || "-");
@@ -196,7 +204,7 @@
       const title = $("queue-title");
       if (title) {
         const who = queue.doctor || currentDoctor;
-        title.textContent = "Rendez-vous des patients - " + (who === "ALL" ? "Tous les médecins" : "Médecin " + who);
+        title.textContent = "Rendez-vous des patients - " + doctorLabel(who);
       }
       const dateEl = $("queue-date");
       if (dateEl) {

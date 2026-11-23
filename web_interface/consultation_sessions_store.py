@@ -12,6 +12,9 @@ from appointments_store import (
 TZ = ZoneInfo("Indian/Antananarivo")
 
 DOCTORS = ("A", "B", "C", "D")
+# Prénoms affichés (et dits par le robot). Les codes A-D restent les clés stables de la base et des
+# tickets (« B-AM-3 ») ; un test vérifie l'accord avec l'application mobile et le dialogue vocal.
+DOCTOR_NAMES = {"A": "Raissa", "B": "Bell", "C": "Pierrot", "D": "Alice"}
 PERIODS = {
     "MAT": {"start": "08:00", "end": "12:00"},
     "AM": {"start": "13:00", "end": "18:00"},
@@ -27,6 +30,16 @@ REASON_LABELS = {
 SESSION_STATUSES = {
     "en attente", "appelé", "terminé", "annulé", "non reçu"
 }
+
+
+def doctor_name(code):
+    """Prénom du médecin (« Bell ») ; le code lui-même s'il est inconnu."""
+    return DOCTOR_NAMES.get(code, code or "")
+
+
+def doctor_choices():
+    """Liste ordonnée pour les gabarits : [{'code': 'A', 'name': 'Raissa'}, …]."""
+    return [{"code": code, "name": DOCTOR_NAMES[code]} for code in DOCTORS]
 
 
 def _now(value=None):
@@ -115,6 +128,7 @@ def list_doctor_sessions(requested_date, now=None):
     result = []
     for row in rows:
         item = dict(row)
+        item["doctor_name"] = doctor_name(item["doctor_code"])
         item["registration_open"] = bool(
             item["is_open"] and (
                 item["manual_open"]
@@ -313,6 +327,7 @@ def create_session_appointment(
             "ticket_number": ticket_number,
             "ticket_label": f"{doctor_code}-{period}-{ticket_number}",
             "doctor": doctor_code,
+            "doctor_name": doctor_name(doctor_code),
             "period": period,
             "requested_date": requested_date,
             "status": "en attente",
@@ -359,7 +374,12 @@ def list_session_appointments(
     with get_connection() as connection:
         rows = connection.execute(query, params).fetchall()
 
-    return [dict(row) for row in rows]
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["doctor_name"] = doctor_name(item.get("doctor"))
+        result.append(item)
+    return result
 
 
 def update_session_appointment_status(

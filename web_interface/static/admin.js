@@ -293,7 +293,7 @@
 
       const timePart = a.created_at ? a.created_at.substring(11, 16) : (a.requested_time || "");
       const dateStr = a.requested_date ? (timePart ? `${a.requested_date} ${timePart}` : a.requested_date) : "-";
-      const doctorStr = a.doctor ? `Dr. ${a.doctor} (${a.period || 'MAT'})` : "-";
+      const doctorStr = a.doctor ? `Dr ${a.doctor_name || a.doctor} (${a.period || 'MAT'})` : "-";
 
       tr.innerHTML = `
         <td><strong>${escapeHtml(dateStr)}</strong></td>

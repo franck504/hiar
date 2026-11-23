@@ -81,7 +81,7 @@
       cell(tr, `${item.doctor}-${item.period}-${item.ticket_number}`);
       cell(tr, item.requested_date);
       cell(tr, formatTime(item.requested_time));
-      cell(tr, item.doctor);
+      cell(tr, item.doctor_name ? "Dr " + item.doctor_name : item.doctor);
       cell(tr, item.patient_name);
       cell(tr, item.contact);
       cell(tr, item.reason);
@@ -224,7 +224,7 @@
       item.period === "MAT" ? "Matin (08 h – 12 h)" :
       item.period === "AM" ? "Après-midi (13 h – 18 h)" : item.period
     );
-    addDetailLine(content, "Médecin", item.doctor);
+    addDetailLine(content, "Médecin", item.doctor_name ? "Dr " + item.doctor_name + " (" + item.doctor + ")" : item.doctor);
     addDetailLine(content, "Motif", item.reason);
     addDetailLine(content, "Statut", item.status);
     addDetailLine(content, "Température", item.temperature_c, " °C");

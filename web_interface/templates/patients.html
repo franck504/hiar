@@ -92,11 +92,10 @@
         </div>
         <div class="doctor-quick-select" style="margin-left: auto;">
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button type="button" class="btn btn-outline btn-small quick-doc-btn btn-primary" data-doc="ALL">Tous</button>
-            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="A">Médecin A</button>
-            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="B">Médecin B</button>
-            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="C">Médecin C</button>
-            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="D">Médecin D</button>
+            <button type="button" class="btn btn-outline btn-small quick-doc-btn btn-primary" data-doc="ALL" data-name="Tous les médecins">Tous</button>
+            {% for d in doctors %}
+            <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="{{ d.code }}" data-name="Dr {{ d.name }}">Dr {{ d.name }}</button>
+            {% endfor %}
           </div>
         </div>
       </div>
@@ -108,7 +107,7 @@
         <table>
           <thead>
             <tr>
-              <th>Ticket</th><th>Période</th><th>Patient</th>
+              <th>Ticket</th><th>Médecin</th><th>Période</th><th>Patient</th>
               <th>Téléphone</th><th>Motif</th><th>Constantes (HIAR)</th>
               <th>Statut</th><th>Actions</th>
             </tr>
@@ -119,6 +118,6 @@
     </section>
   </main>
 
-  <script src="{{ url_for('static', filename='doctor.js') }}?v=7all" defer></script>
+  <script src="{{ url_for('static', filename='doctor.js') }}?v=8names" defer></script>
 </body>
 </html>

@@ -155,8 +155,9 @@
         <label for="filter-doctor">Médecin :
           <select id="filter-doctor">
             <option value="">Tous les médecins</option>
-            <option value="A">Médecin A</option>
-            <option value="B">Médecin B</option>
+            {% for d in doctors %}
+            <option value="{{ d.code }}">Dr {{ d.name }}</option>
+            {% endfor %}
           </select>
         </label>
         <label for="filter-status">Statut :
