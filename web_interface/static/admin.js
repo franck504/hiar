@@ -262,7 +262,7 @@
     const rows = filtered.map((a) => {
       const tr = document.createElement("tr");
 
-      let vitalsHtml = "—";
+      let vitalsHtml = "-";
       const parts = [];
       let hasAlert = false;
       if (a.temperature_c != null) {

@@ -4,6 +4,7 @@ Convertit les trames série provenant d'esp32_interface_node via /vitals/result
 en instructions riches (champs formatés + synthèse vocale naturelle) pour le mobile.
 """
 
+import re
 from typing import Any, Dict, Optional, Tuple
 
 
@@ -25,7 +26,11 @@ def validate_vitals(
 
     if temp is not None:
         try:
-            f = float(temp)
+            if isinstance(temp, str):
+                cleaned_temp = re.sub(r"[^\d.,]", "", temp).replace(",", ".")
+            else:
+                cleaned_temp = temp
+            f = float(cleaned_temp)
             if TEMP_RANGE[0] <= f <= TEMP_RANGE[1]:
                 parsed_temp = round(f, 1)
             else:
@@ -35,7 +40,11 @@ def validate_vitals(
 
     if hr is not None:
         try:
-            i = int(round(float(hr)))
+            if isinstance(hr, str):
+                cleaned_hr = re.sub(r"[^\d.]", "", hr)
+            else:
+                cleaned_hr = hr
+            i = int(round(float(cleaned_hr)))
             if BPM_RANGE[0] <= i <= BPM_RANGE[1]:
                 parsed_hr = i
             else:
@@ -45,7 +54,11 @@ def validate_vitals(
 
     if spo2 is not None:
         try:
-            i = int(round(float(spo2)))
+            if isinstance(spo2, str):
+                cleaned_spo2 = re.sub(r"[^\d.]", "", spo2)
+            else:
+                cleaned_spo2 = spo2
+            i = int(round(float(cleaned_spo2)))
             if SPO2_RANGE[0] <= i <= SPO2_RANGE[1]:
                 parsed_spo2 = i
             else:

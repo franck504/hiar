@@ -108,6 +108,57 @@ except ImportError:
         WSConnection = object  # type: ignore
 
 
+def _ensure_web_interface_in_sys_path() -> bool:
+    """Trouve et ajoute web_interface au sys.path de manière infaillible."""
+    import sys
+    from pathlib import Path
+
+    candidates = []
+    # 1. Variable d'environnement explicite
+    hiar_root = os.environ.get("HIAR_ROOT")
+    if hiar_root:
+        candidates.append(Path(hiar_root) / "web_interface")
+
+    # 2. Recherche ascendante à partir de ce fichier
+    cur = Path(__file__).resolve()
+    for parent in [cur, *cur.parents]:
+        cand = parent / "web_interface"
+        if cand.is_dir() and (cand / "consultation_sessions_store.py").exists():
+            candidates.append(cand)
+            break
+        if parent.name == "install":
+            cand = parent.parent / "web_interface"
+            if cand.is_dir() and (cand / "consultation_sessions_store.py").exists():
+                candidates.append(cand)
+                break
+
+    # 3. Répertoire de travail courant
+    candidates.append(Path.cwd() / "web_interface")
+
+    # 4. Chemins utilisateurs standards
+    candidates.extend([
+        Path.home() / "hiar" / "web_interface",
+        Path.home() / "hiar-main" / "web_interface",
+        Path.home() / "hospital_assistant_robot" / "web_interface",
+        Path("/home/cecilia/hiar/web_interface"),
+        Path("/home/cecilia/hiar-main/web_interface"),
+        Path("/home/pi/hiar/web_interface"),
+    ])
+
+    for cand in candidates:
+        if cand.is_dir() and (cand / "consultation_sessions_store.py").exists():
+            cand_str = str(cand.resolve())
+            if cand_str not in sys.path:
+                sys.path.insert(0, cand_str)
+            if "HIAR_APPOINTMENTS_DB" not in os.environ:
+                db_file = cand.resolve() / "instance" / "appointments.sqlite3"
+                os.environ["HIAR_APPOINTMENTS_DB"] = str(db_file)
+            return True
+    return False
+
+_ensure_web_interface_in_sys_path()
+
+
 def make_envelope(topic: str, payload: dict, msg_type: str = "pub") -> str:
     """Emballe un message selon le standard Envelope Protocol v4."""
     return json.dumps({
@@ -1135,7 +1186,9 @@ class HMIWebSocketBridgeNode(Node):
 
         elif action_id in {"consult.confirm", "consult.book", "consult.create"}:
             if args:
-                self._current_consultation_data.update(args)
+                for k, v in args.items():
+                    if v is not None or k not in self._current_consultation_data:
+                        self._current_consultation_data[k] = v
             data_to_book = dict(self._current_consultation_data) if self._current_consultation_data else dict(args)
             res = await asyncio.to_thread(self._book_appointment, data_to_book)
             if res.get("ok"):
@@ -1251,6 +1304,7 @@ class HMIWebSocketBridgeNode(Node):
     def _book_appointment(self, args: Dict) -> Dict:
         """Enregistre un rendez-vous dans la base SQLite du serveur."""
         try:
+            _ensure_web_interface_in_sys_path()
             try:
                 from consultation_sessions_store import (
                     create_session_appointment,
@@ -1265,10 +1319,13 @@ class HMIWebSocketBridgeNode(Node):
                 from pathlib import Path
                 for cand in [
                     Path(__file__).resolve().parents[3] / "web_interface",
+                    Path.home() / "hiar" / "web_interface",
                     Path.home() / "hiar-main" / "web_interface",
+                    Path("/home/cecilia/hiar/web_interface"),
                     Path("/home/cecilia/hiar-main/web_interface"),
+                    Path("/home/pi/hiar/web_interface"),
                 ]:
-                    if cand.exists() and str(cand) not in sys.path:
+                    if cand.is_dir() and str(cand) not in sys.path:
                         sys.path.insert(0, str(cand))
                 from consultation_sessions_store import (
                     create_session_appointment,
@@ -1416,6 +1473,23 @@ class HMIWebSocketBridgeNode(Node):
             line = msg.data
 
         parsed = parse_vitals_frame(line)
+        if parsed.get("ok"):
+            temp = parsed.get("temperature")
+            hr = parsed.get("heart_rate")
+            spo2 = parsed.get("spo2")
+            if temp is not None:
+                self._current_consultation_data["temperature"] = temp
+                self._current_consultation_data["temperature_c"] = temp
+            if hr is not None:
+                self._current_consultation_data["heart_rate"] = hr
+                self._current_consultation_data["heart_rate_bpm"] = hr
+            if spo2 is not None:
+                self._current_consultation_data["spo2"] = spo2
+                self._current_consultation_data["spo2_percent"] = spo2
+            self.get_logger().info(
+                f"🩺 [VITALS ACQUIS] Temp={temp}°C, HR={hr}bpm, SpO2={spo2}% mémorisés pour la consultation."
+            )
+
         instruction = build_vitals_instruction(parsed)
         self.broadcast_threadsafe("server/instruction", instruction)
 

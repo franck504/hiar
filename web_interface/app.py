@@ -119,6 +119,16 @@ def is_authenticated() -> bool:
     return False
 
 
+@app.route("/favicon.ico")
+def favicon():
+    """Fournit le favicon officiel avec le logo robot HIAR pour les onglets de navigateur."""
+    from flask import send_from_directory
+    static_dir = os.path.join(app.root_path, "static")
+    if os.path.exists(os.path.join(static_dir, "favicon.ico")):
+        return send_from_directory(static_dir, "favicon.ico", mimetype="image/x-icon")
+    return send_from_directory(static_dir, "favicon.png", mimetype="image/png")
+
+
 @app.route("/")
 def home():
     """Page d'accueil du web : Portail [ /patients : Rendez-vous ]."""
@@ -1132,7 +1142,7 @@ def api_admin_dashboard():
             if item.get("ticket_number"):
                 item["ticket_label"] = f"{item.get('doctor') or 'A'}-{item.get('period') or 'MAT'}-{item['ticket_number']}"
             else:
-                item["ticket_label"] = item.get("requested_time") or "—"
+                item["ticket_label"] = item.get("requested_time") or "-"
             appts.append(item)
 
         total = len(appts)

@@ -1227,7 +1227,19 @@ class _HiarAppState extends State<HiarApp> {
                 onStepChanged: (newStep) {
                   _consultationStep = newStep;
                   _hub.publishAction('consult.step_changed', {'step': newStep});
-                  _hub.publishUiState('consultation', ['step_$newStep'], step: newStep);
+                  _hub.publishUiState(
+                    'consultation',
+                    ['step_$newStep'],
+                    step: newStep,
+                    consultationData: {
+                      if (_dynamicFields.containsKey('temperature_c')) 'temperature_c': _dynamicFields['temperature_c'],
+                      if (_dynamicFields.containsKey('temperature')) 'temperature': _dynamicFields['temperature'],
+                      if (_dynamicFields.containsKey('heart_rate_bpm')) 'heart_rate_bpm': _dynamicFields['heart_rate_bpm'],
+                      if (_dynamicFields.containsKey('heart_rate')) 'heart_rate': _dynamicFields['heart_rate'],
+                      if (_dynamicFields.containsKey('spo2_percent')) 'spo2_percent': _dynamicFields['spo2_percent'],
+                      if (_dynamicFields.containsKey('spo2')) 'spo2': _dynamicFields['spo2'],
+                    },
+                  );
                   if (!_isRobotConnected && newStep == 4) {
                     VoiceService.instance.speak(
                       "Prise des signes vitaux. Veuillez tenir la sonde de température dans votre main et poser votre index sur le capteur d'oxymétrie, puis appuyez sur Démarrer la mesure ou dites Mesurer.",

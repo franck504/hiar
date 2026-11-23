@@ -446,10 +446,21 @@ class HubClient {
   }
 
   /// PUBLICATION UI STATE : Notifie le Pi de l'écran affiché
-  void publishUiState(String screenName, List<String> activeActions, {int? step}) {
+  void publishUiState(String screenName, List<String> activeActions, {int? step, Map<String, dynamic>? consultationData}) {
     if (!_isConnected) return;
     _seq++;
     final nowTs = DateTime.now().millisecondsSinceEpoch;
+
+    final payload = <String, dynamic>{
+      "screen": screenName,
+      "step": step,
+      "epoch": nowTs,
+      "actions": activeActions,
+      "mission_active": screenName == 'mission',
+    };
+    if (consultationData != null && consultationData.isNotEmpty) {
+      payload["consultation_data"] = consultationData;
+    }
 
     final pub = HiarEnvelope(
       type: "pub",
@@ -458,13 +469,7 @@ class HubClient {
       ts: nowTs,
       seq: _seq,
       qos: 0,
-      payload: {
-        "screen": screenName,
-        "step": step,
-        "epoch": nowTs,
-        "actions": activeActions,
-        "mission_active": screenName == 'mission',
-      },
+      payload: payload,
     );
 
     _send(pub);

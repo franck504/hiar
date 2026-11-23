@@ -149,39 +149,39 @@ class ConsultationScreenState extends State<ConsultationScreen> {
 
   void _syncFields() {
     final fields = widget.dynamicFields;
-    if (fields.containsKey('temperature')) {
-      final val = fields['temperature'];
+    if (fields.containsKey('temperature') || fields.containsKey('temperature_c')) {
+      final val = fields['temperature_c'] ?? fields['temperature'];
       if (val == null) {
         _temperatureC = null;
       } else {
-        final raw = val.toString().split(' ').first.trim();
-        if (raw == '--' || raw == '—' || raw.toUpperCase() == 'NA') {
+        final raw = val.toString().replaceAll('°C', '').replaceAll('C', '').trim().split(' ').first.trim();
+        if (raw == '--' || raw == '—' || raw == '-' || raw.toUpperCase() == 'NA') {
           _temperatureC = null;
         } else {
-          _temperatureC = double.tryParse(raw) ?? _temperatureC;
+          _temperatureC = double.tryParse(raw.replaceAll(',', '.')) ?? _temperatureC;
         }
       }
     }
-    if (fields.containsKey('heart_rate')) {
-      final val = fields['heart_rate'];
+    if (fields.containsKey('heart_rate') || fields.containsKey('heart_rate_bpm')) {
+      final val = fields['heart_rate_bpm'] ?? fields['heart_rate'];
       if (val == null) {
         _heartRateBpm = null;
       } else {
-        final raw = val.toString().split(' ').first.trim();
-        if (raw == '--' || raw == '—' || raw.toUpperCase() == 'NA') {
+        final raw = val.toString().replaceAll('bpm', '').replaceAll('BPM', '').trim().split(' ').first.trim();
+        if (raw == '--' || raw == '—' || raw == '-' || raw.toUpperCase() == 'NA') {
           _heartRateBpm = null;
         } else {
           _heartRateBpm = int.tryParse(raw) ?? _heartRateBpm;
         }
       }
     }
-    if (fields.containsKey('spo2')) {
-      final val = fields['spo2'];
+    if (fields.containsKey('spo2') || fields.containsKey('spo2_percent')) {
+      final val = fields['spo2_percent'] ?? fields['spo2'];
       if (val == null) {
         _spo2Percent = null;
       } else {
-        final raw = val.toString().split(' ').first.trim();
-        if (raw == '--' || raw == '—' || raw.toUpperCase() == 'NA') {
+        final raw = val.toString().replaceAll('%', '').trim().split(' ').first.trim();
+        if (raw == '--' || raw == '—' || raw == '-' || raw.toUpperCase() == 'NA') {
           _spo2Percent = null;
         } else {
           _spo2Percent = int.tryParse(raw) ?? _spo2Percent;
@@ -363,12 +363,19 @@ class ConsultationScreenState extends State<ConsultationScreen> {
     final payload = {
       'patient_name': patientName,
       'contact': patientPhone,
+      'patient_phone': patientPhone,
       'reason_code': _selectedReason!,
+      'selected_reason': _selectedReason!,
       'doctor_code': _selectedDoctor!,
+      'selected_doctor': _selectedDoctor!,
       'period': _selectedPeriod!,
+      'selected_period': _selectedPeriod!,
       'temperature_c': _temperatureC,
+      'temperature': _temperatureC,
       'heart_rate_bpm': _heartRateBpm,
+      'heart_rate': _heartRateBpm,
       'spo2_percent': _spo2Percent,
+      'spo2': _spo2Percent,
     };
 
     if (widget.onConfirmAppointment != null) {

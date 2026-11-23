@@ -2,6 +2,9 @@
 set -o pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export HIAR_ROOT="$PROJECT_ROOT"
+export HIAR_APPOINTMENTS_DB="${HIAR_APPOINTMENTS_DB:-$PROJECT_ROOT/web_interface/instance/appointments.sqlite3}"
+export PYTHONPATH="$PROJECT_ROOT/web_interface:$PROJECT_ROOT/src/hospital_robot:${PYTHONPATH:-}"
 LOG_DIR="$HOME/hiar_logs"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_FILE="$LOG_DIR/launch_${STAMP}.log"

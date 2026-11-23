@@ -242,10 +242,13 @@ def test_bridge_lifecycle_and_messages(bridge_node):
             from pathlib import Path
             for cand in [
                 Path(__file__).resolve().parents[3] / "web_interface",
+                Path.home() / "hiar" / "web_interface",
                 Path.home() / "hiar-main" / "web_interface",
+                Path("/home/cecilia/hiar/web_interface"),
                 Path("/home/cecilia/hiar-main/web_interface"),
+                Path("/home/pi/hiar/web_interface"),
             ]:
-                if cand.exists() and str(cand) not in sys.path:
+                if cand.is_dir() and str(cand) not in sys.path:
                     sys.path.insert(0, str(cand))
 
             from consultation_sessions_store import set_doctor_session, TZ
