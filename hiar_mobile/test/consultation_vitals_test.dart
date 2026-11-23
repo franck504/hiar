@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hiar_mobile/features/consultation/consultation_screen.dart';
+import 'package:hiar_mobile/ui/components/hiar_kit.dart';
 
 void main() {
   testWidgets('ConsultationScreen Step 4 displays "—" when no vitals measured', (tester) async {
@@ -77,8 +78,10 @@ void main() {
       ),
     );
 
-    final measureBtn = find.widgetWithText(ElevatedButton, 'Démarrer la mesure des constantes (🎤 « Mesurer »)');
+    final measureBtn = find.widgetWithText(HiarButton, 'Démarrer la mesure');
     expect(measureBtn, findsOneWidget);
+    await tester.ensureVisible(measureBtn); // écran de test 800x600 : le contenu défile
+    await tester.pump();
     await tester.tap(measureBtn);
     await tester.pump();
 
@@ -117,7 +120,7 @@ void main() {
     expect(find.text('La prise de constantes est facultative pour la consultation.'), findsOneWidget);
 
     // Bouton continuer vers étape 5
-    final continueBtn = find.widgetWithText(ElevatedButton, 'Continuer (🎤 « Suivant »)');
+    final continueBtn = find.widgetWithText(HiarButton, 'Continuer');
     expect(continueBtn, findsOneWidget);
     await tester.tap(continueBtn);
     await tester.pump(const Duration(milliseconds: 300));
@@ -128,7 +131,7 @@ void main() {
     expect(find.text('Non mesurées'), findsOneWidget);
 
     // Bouton de confirmation finale
-    final confirmBtn = find.widgetWithText(ElevatedButton, 'Confirmer (🎤 « Confirmer »)');
+    final confirmBtn = find.widgetWithText(HiarButton, 'Confirmer');
     expect(confirmBtn, findsOneWidget);
     await tester.tap(confirmBtn);
     await tester.pump(const Duration(milliseconds: 300));

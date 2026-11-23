@@ -90,7 +90,7 @@ void main() {
     expect(find.textContaining('Je vous accompagne vers'), findsNothing);
 
     // « Reprendre » rouvre bien la mission
-    await tester.tap(find.textContaining('Reprendre ('));
+    await tester.tap(find.text('Reprendre'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('Je vous accompagne vers'), findsOneWidget);
     expect(find.text('REPRISE DU GUIDAGE !'), findsOneWidget);

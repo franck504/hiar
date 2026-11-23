@@ -245,7 +245,41 @@ class VoiceRail extends StatelessWidget {
                         ),
                       ),
                     ] else ...[
-                      const Spacer(),
+                      // État vide : inviter à parler plutôt qu'afficher un grand cadre blanc
+                      Expanded(
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: HiarColors.emeraldPastel,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: HiarColors.emerald.withOpacity(0.18)),
+                                ),
+                                child: Icon(
+                                  isListening ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
+                                  color: HiarColors.emerald,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                isListening ? "Parlez naturellement,\nje vous écoute." : "Touchez le micro\npour me parler.",
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w600,
+                                  color: HiarColors.text2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                     if (voiceTip != null) ...[
                       Divider(color: HiarColors.border.withOpacity(0.7), height: 10),

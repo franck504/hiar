@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/hiar_colors.dart';
+import '../theme/hiar_tokens.dart';
+import '../theme/hiar_typography.dart';
+import 'hiar_kit.dart';
 
 /// Bouton d'action standard HIAR — Tuile verre dégradé façon UI_style.jpeg
 /// avec badge de parité vocale en pilule pastel.
@@ -73,24 +76,41 @@ class ActionButton extends StatelessWidget {
       shadows = HiarShadows.card;
     }
 
+    final onDark = isPrimaryOrDestructive;
+    final titleStyle = HiarTypography.heading.copyWith(color: foregroundColor);
+    final subtitleStyle = HiarTypography.subtitle.copyWith(
+      color: onDark ? Colors.white70 : HiarColors.text2,
+    );
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: HiarRadius.lgAll,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          constraints: const BoxConstraints(minHeight: 54),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+          constraints: const BoxConstraints(minHeight: HiarSize.tileMinHeight),
+          padding: const EdgeInsets.symmetric(horizontal: HiarSpace.lg, vertical: HiarSpace.md),
           decoration: BoxDecoration(
             gradient: gradient,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: HiarRadius.lgAll,
             border: border,
             boxShadow: shadows,
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isCompact = constraints.maxWidth < 280;
+              final texts = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 3),
+                    Text(subtitle!, maxLines: 2, overflow: TextOverflow.ellipsis, style: subtitleStyle),
+                  ],
+                ],
+              );
 
               if (isCompact) {
                 return Column(
@@ -100,147 +120,37 @@ class ActionButton extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        if (icon != null)
-                          _buildIcon(isPrimaryOrDestructive, size: 32, iconSize: 18)
-                        else
-                          const SizedBox.shrink(),
-                        if (voiceHint != null)
-                          Flexible(child: _buildVoiceBadge(isPrimaryOrDestructive)),
+                        if (icon != null) HiarIconBox(icon!, size: 36, onDark: onDark) else const SizedBox.shrink(),
+                        if (voiceHint != null) Flexible(child: HiarVoiceChip(voiceHint!, onDark: onDark)),
                       ],
                     ),
-                    const SizedBox(height: 7),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: foregroundColor,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          height: 1.25,
-                          color: isPrimaryOrDestructive ? Colors.white70 : HiarColors.text2,
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: HiarSpace.sm),
+                    texts,
                   ],
                 );
               }
 
+              // Disposition unique : icône à gauche · textes · commande vocale à droite
               return Row(
                 children: [
                   if (icon != null) ...[
-                    _buildIcon(isPrimaryOrDestructive, size: 42, iconSize: 22),
-                    const SizedBox(width: 12),
+                    HiarIconBox(icon!, onDark: onDark),
+                    const SizedBox(width: HiarSpace.md),
                   ],
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: foregroundColor,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            subtitle!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isPrimaryOrDestructive ? Colors.white70 : HiarColors.text2,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                  Expanded(child: texts),
+                  if (isSelected && !onDark) ...[
+                    const SizedBox(width: HiarSpace.sm),
+                    const Icon(Icons.check_circle_rounded, color: HiarColors.secondary, size: 22),
+                  ],
                   if (voiceHint != null) ...[
-                    const SizedBox(width: 10),
-                    _buildVoiceBadge(isPrimaryOrDestructive),
+                    const SizedBox(width: HiarSpace.sm),
+                    HiarVoiceChip(voiceHint!, onDark: onDark),
                   ],
                 ],
               );
             },
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildIcon(bool isPrimaryOrDestructive, {required double size, required double iconSize}) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: isPrimaryOrDestructive
-            ? Colors.white.withOpacity(0.18)
-            : Colors.white.withOpacity(0.88),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isPrimaryOrDestructive
-              ? Colors.white.withOpacity(0.24)
-              : HiarColors.azur.withOpacity(0.14),
-        ),
-      ),
-      child: Icon(
-        icon,
-        size: iconSize,
-        color: isPrimaryOrDestructive ? Colors.white : HiarColors.azur,
-      ),
-    );
-  }
-
-  Widget _buildVoiceBadge(bool isPrimaryOrDestructive) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: isPrimaryOrDestructive
-            ? Colors.white.withOpacity(0.18)
-            : HiarColors.emeraldPastel,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.mic,
-            size: 12,
-            color: isPrimaryOrDestructive ? Colors.white : HiarColors.emerald,
-          ),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              "« $voiceHint »",
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: isPrimaryOrDestructive ? Colors.white : HiarColors.azurDark,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

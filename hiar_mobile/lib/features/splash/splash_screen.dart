@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../../ui/components/animated_robot_face.dart';
 import '../../ui/components/hiar_surfaces.dart';
 import '../../ui/theme/hiar_colors.dart';
+import '../../ui/components/hiar_kit.dart';
+import '../../ui/theme/hiar_tokens.dart';
+import '../../ui/theme/hiar_typography.dart';
+
 
 class SplashScreen extends StatelessWidget {
   final VoidCallback onStart;
@@ -48,56 +52,18 @@ class SplashScreen extends StatelessWidget {
                       icon: Icons.medical_services_outlined,
                     ),
                     const SizedBox(height: 10),
-                    const Text(
-                      "Bonjour !",
-                      style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w800,
-                        color: HiarColors.marine,
-                        letterSpacing: -0.6,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
+                    const SizedBox(height: HiarSpace.sm),
+                    const Text("Bonjour !", style: HiarTypography.display),
+                    const SizedBox(height: HiarSpace.sm),
+                    Text(
                       "Touchez l’écran ou dites « Commencer »",
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w500,
-                        color: HiarColors.text2,
-                      ),
+                      style: HiarTypography.body.copyWith(color: HiarColors.text2),
                     ),
-                    const SizedBox(height: 18),
-                    // Bouton pilule Ardoise → Sarcelle
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [HiarColors.slateTealStart, HiarColors.slateTealEnd],
-                        ),
-                        borderRadius: BorderRadius.circular(999),
-                        boxShadow: [
-                          BoxShadow(
-                            color: HiarColors.slateTealStart.withOpacity(0.24),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.touch_app_rounded, color: Colors.white, size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            "Commencer",
-                            style: TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                    const SizedBox(height: HiarSpace.xl),
+                    HiarButton.primary(
+                      label: "Commencer",
+                      icon: Icons.touch_app_rounded,
+                      onPressed: onStart,
                     ),
                   ],
                 ),

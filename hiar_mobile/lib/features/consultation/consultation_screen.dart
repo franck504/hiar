@@ -7,6 +7,9 @@ import '../../ui/components/vitals_tutorial_player.dart';
 import '../../ui/rail/voice_rail.dart';
 import '../../ui/theme/hiar_colors.dart';
 import '../../voice/voice_service.dart';
+import '../../ui/components/hiar_kit.dart';
+import '../../ui/theme/hiar_tokens.dart';
+import '../../ui/theme/hiar_typography.dart';
 import 'doctors.dart';
 
 class ConsultationScreen extends StatefulWidget {
@@ -539,45 +542,21 @@ class ConsultationScreenState extends State<ConsultationScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Flexible(
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: HiarColors.border),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-              ),
+            child: HiarButton.secondary(
+              label: "Annuler",
+              icon: Icons.close_rounded,
+              voiceHint: "Annuler",
               onPressed: _handleCancel,
-              child: const Text(
-                "Annuler (🎤 « Annuler »)",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: HiarColors.text2, fontWeight: FontWeight.w600),
-              ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: HiarSpace.md),
           Flexible(
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: HiarColors.slateTealEnd,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                elevation: 2,
-              ),
+            child: HiarButton.primary(
+              label: _currentStep == 5 ? "Confirmer" : "Continuer",
+              icon: _currentStep == 5 ? Icons.check_rounded : Icons.arrow_forward_rounded,
+              voiceHint: _currentStep == 5 ? "Confirmer" : "Suivant",
+              loading: _isSubmitting,
               onPressed: _isSubmitting ? null : _nextStep,
-              child: _isSubmitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : Text(
-                      _currentStep == 5 ? "Confirmer (🎤 « Confirmer »)" : "Continuer (🎤 « Suivant »)",
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
-                    ),
             ),
           ),
         ],
@@ -606,18 +585,17 @@ class ConsultationScreenState extends State<ConsultationScreen> {
       default:
         content = const SizedBox.shrink();
     }
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
+    return HiarSceneBody(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_formValidationError != null) ...[
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: HiarSpace.lg, vertical: HiarSpace.md),
+              margin: const EdgeInsets.only(bottom: HiarSpace.md),
               decoration: BoxDecoration(
                 color: HiarColors.errBg,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: HiarRadius.mdAll,
                 border: Border.all(color: HiarColors.err.withOpacity(0.35)),
               ),
               child: Row(
@@ -649,13 +627,14 @@ class ConsultationScreenState extends State<ConsultationScreen> {
   Widget _buildReasonStep() {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
+        constraints: const BoxConstraints(maxWidth: HiarSize.contentNarrow),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             ActionButton(
               label: "Consultation générale",
               subtitle: "Premier avis ou consultation médicale courante",
+              icon: Icons.medical_services_outlined,
               voiceHint: "Générale",
               isSelected: _selectedReason == 'consultation_generale',
               onTap: () {
@@ -663,10 +642,11 @@ class ConsultationScreenState extends State<ConsultationScreen> {
                 _notifyFormChanged();
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: HiarSpace.md),
             ActionButton(
               label: "Suivi médical",
               subtitle: "Visite de contrôle ou renouvellement d'ordonnance",
+              icon: Icons.event_repeat_outlined,
               voiceHint: "Suivi",
               isSelected: _selectedReason == 'suivi_medical',
               onTap: () {
@@ -674,10 +654,11 @@ class ConsultationScreenState extends State<ConsultationScreen> {
                 _notifyFormChanged();
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: HiarSpace.md),
             ActionButton(
               label: "Autre motif",
               subtitle: "Certificat, avis spécifique ou orientation",
+              icon: Icons.more_horiz_rounded,
               voiceHint: "Autre",
               isSelected: _selectedReason == 'autre_motif',
               onTap: () {
@@ -711,18 +692,18 @@ class ConsultationScreenState extends State<ConsultationScreen> {
     final doctors = DoctorCatalog.doctors;
     final rows = <Widget>[];
     for (var i = 0; i < doctors.length; i += 2) {
-      if (i > 0) rows.add(const SizedBox(height: 12));
+      if (i > 0) rows.add(const SizedBox(height: HiarSpace.lg));
       rows.add(Row(
         children: [
           Expanded(child: tile(doctors[i])),
-          const SizedBox(width: 12),
+          const SizedBox(width: HiarSpace.lg),
           Expanded(child: i + 1 < doctors.length ? tile(doctors[i + 1]) : const SizedBox.shrink()),
         ],
       ));
     }
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
+        constraints: const BoxConstraints(maxWidth: HiarSize.contentMax - 120),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: rows,
@@ -854,25 +835,25 @@ class ConsultationScreenState extends State<ConsultationScreen> {
         Center(
           child: _vitalsRunning
               ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: HiarSpace.lg, vertical: HiarSpace.md),
                   decoration: BoxDecoration(
-                    color: HiarColors.azur.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: HiarColors.azur.withOpacity(0.3)),
+                    color: HiarColors.azur.withOpacity(0.08),
+                    borderRadius: HiarRadius.pillAll,
+                    border: Border.all(color: HiarColors.azur.withOpacity(0.25)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        width: 14,
-                        height: 14,
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2, color: HiarColors.azur),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: HiarSpace.sm),
                       Flexible(
                         child: Text(
                           "Mesure en cours (restez immobile)…",
-                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: HiarColors.azur),
+                          style: HiarTypography.caption.copyWith(color: HiarColors.azur),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -880,32 +861,16 @@ class ConsultationScreenState extends State<ConsultationScreen> {
                   ),
                 )
               : (!hasMeasured && _vitalsError == null)
-                  ? ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: HiarColors.azur,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      icon: const Icon(Icons.sensors, size: 18),
-                      label: const Text(
-                        "Démarrer la mesure des constantes (🎤 « Mesurer »)",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                      ),
+                  ? HiarButton.primary(
+                      label: "Démarrer la mesure",
+                      icon: Icons.sensors,
+                      voiceHint: "Mesurer",
                       onPressed: _startVitalsMeasurement,
                     )
-                  : OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      icon: const Icon(Icons.refresh, size: 17),
-                      label: Text(
-                        _vitalsError != null ? "Réessayer la mesure" : "Reprendre la mesure (🎤 « Mesurer »)",
-                        style: const TextStyle(fontSize: 12.5),
-                      ),
+                  : HiarButton.secondary(
+                      label: _vitalsError != null ? "Réessayer la mesure" : "Reprendre la mesure",
+                      icon: Icons.refresh_rounded,
+                      voiceHint: "Mesurer",
                       onPressed: _startVitalsMeasurement,
                     ),
         ),
@@ -1378,24 +1343,13 @@ class ConsultationScreenState extends State<ConsultationScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: HiarColors.slateTealEnd,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                      elevation: 3,
-                    ),
-                    onPressed: _handleFinish,
-                    icon: const Icon(Icons.check_rounded, size: 20),
-                    label: const Text(
-                      "Terminer (🎤 « Terminer »)",
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                    ),
-                  ),
+                const SizedBox(height: HiarSpace.lg),
+                HiarButton.primary(
+                  label: "Terminer",
+                  icon: Icons.check_rounded,
+                  voiceHint: "Terminer",
+                  expand: true,
+                  onPressed: _handleFinish,
                 ),
               ],
             ),

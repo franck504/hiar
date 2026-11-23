@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../ui/components/hiar_surfaces.dart';
 import '../../ui/components/landscape_scaffold.dart';
 import '../../ui/components/action_button.dart';
 import '../../ui/rail/voice_rail.dart';
-import '../../ui/theme/hiar_colors.dart';
+import '../../ui/components/hiar_kit.dart';
+import '../../ui/theme/hiar_tokens.dart';
+
 
 class OrientationScreen extends StatelessWidget {
   final Function(String destination, String label) onDestinationSelected;
@@ -76,39 +77,16 @@ class OrientationScreen extends StatelessWidget {
       onMicTap: onMicTap,
       onSettingsTap: onSettingsTap,
       isRobotConnected: isRobotConnected,
-      body: Center(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      HiarPastelBadge(
-                        label: "Guidage autonome",
-                        icon: Icons.navigation_outlined,
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          "Choisissez un service pour être accompagné par le robot",
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: HiarColors.text2,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      body: HiarSceneBody(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const HiarSceneIntro(
+              badge: "Guidage autonome",
+              icon: Icons.navigation_outlined,
+              text: "Choisissez un service pour être accompagné par le robot",
+            ),
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final twoCols = constraints.maxWidth >= 460;
@@ -141,7 +119,7 @@ class OrientationScreen extends StatelessWidget {
                                 onTap: () => onDestinationSelected(destinations[0].key, destinations[0].label),
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: HiarSpace.lg),
                             Expanded(
                               child: ActionButton(
                                 label: destinations[1].label,
@@ -153,7 +131,7 @@ class OrientationScreen extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: HiarSpace.lg),
                         Row(
                           children: [
                             Expanded(
@@ -165,7 +143,7 @@ class OrientationScreen extends StatelessWidget {
                                 onTap: () => onDestinationSelected(destinations[2].key, destinations[2].label),
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: HiarSpace.lg),
                             Expanded(
                               child: ActionButton(
                                 label: destinations[3].label,
@@ -181,9 +159,7 @@ class OrientationScreen extends StatelessWidget {
                     );
                   },
                 ),
-              ],
-            ),
-          ),
+          ],
         ),
       ),
     );

@@ -12,6 +12,7 @@ import 'features/orientation/orientation_screen.dart';
 import 'features/orientation/mission_screen.dart';
 import 'features/information/information_screen.dart';
 import 'features/consultation/consultation_screen.dart';
+import 'ui/components/hiar_kit.dart';
 import 'ui/components/hiar_toast.dart';
 import 'ui/rail/voice_rail.dart';
 import 'ui/theme/hiar_colors.dart';
@@ -649,15 +650,10 @@ class _HiarAppState extends State<HiarApp> {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: HiarColors.err,
-                        side: const BorderSide(color: HiarColors.err),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      icon: const Icon(Icons.close, size: 18),
-                      label: const Text("Non / Annuler"),
+                    child: HiarButton.secondary(
+                      label: "Non / Annuler",
+                      icon: Icons.close_rounded,
+                      expand: true,
                       onPressed: () {
                         Navigator.pop(ctx);
                         _hub.publishAction('orientation.cancel', {});
@@ -666,15 +662,10 @@ class _HiarAppState extends State<HiarApp> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: HiarColors.azur,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      icon: const Icon(Icons.check, size: 18),
-                      label: const Text("Oui / Confirmer"),
+                    child: HiarButton.primary(
+                      label: "Oui / Confirmer",
+                      icon: Icons.check_rounded,
+                      expand: true,
                       onPressed: () {
                         Navigator.pop(ctx);
                         _hub.publishAction('orientation.confirm', {'destination': targetKey});
