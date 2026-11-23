@@ -310,8 +310,33 @@
     tbody.replaceChildren(...rows);
   }
 
+  function resolveDigit(e) {
+    // 1. Pavé numérique / Numpad physique (fonctionne même si NumLock est désactivé)
+    if (e.code && /^Numpad[0-9]$/.test(e.code)) {
+      return e.code.replace("Numpad", "");
+    }
+    // 2. Chiffre direct standard
+    if (e.key && /^[0-9]$/.test(e.key)) {
+      return e.key;
+    }
+    // 3. Rangée supérieure physique Digit0 à Digit9 (ex. AZERTY sans Maj)
+    if (e.code && /^Digit[0-9]$/.test(e.code)) {
+      return e.code.replace("Digit", "");
+    }
+    // 4. Mappage AZERTY de secours
+    const azertyMap = {
+      "&": "1", "é": "2", "\"": "3", "'": "4", "(": "5",
+      "-": "6", "è": "7", "_": "8", "ç": "9", "à": "0"
+    };
+    if (e.key && azertyMap[e.key]) {
+      return azertyMap[e.key];
+    }
+    return null;
+  }
+
   function initPinAuth() {
     const form = $("login-form");
+    const loginPanel = $("login-panel");
     const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4"), $("pin-5"), $("pin-6") ];
     if (!form || !digits[0]) return;
 
@@ -321,53 +346,19 @@
 
     function clearDigits() {
       digits.forEach(d => { if (d) d.value = ""; });
-      if (digits[0]) digits[0].focus();
+      if (digits[0]) {
+        digits[0].focus();
+        digits[0].select();
+      }
     }
 
-    digits.forEach((d, i) => {
-      d.addEventListener("input", () => {
-        if (d.value.length >= 1) {
-          d.value = d.value.slice(-1);
-          if (i < 5 && digits[i + 1]) digits[i + 1].focus();
-          else if (getEnteredPin().length === 6) form.requestSubmit();
-        }
-      });
-      d.addEventListener("keydown", (e) => {
-        if (e.key === "Backspace" && !d.value && i > 0 && digits[i - 1]) {
-          digits[i - 1].focus();
-        }
-      });
-    });
-
-    document.querySelectorAll(".pin-key").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const val = btn.dataset.val;
-        if (val === "C") {
-          clearDigits();
-          say("login-feedback", "");
-          return;
-        }
-        if (val !== undefined && val !== "") {
-          for (let i = 0; i < 6; i++) {
-            if (digits[i] && !digits[i].value) {
-              digits[i].value = val;
-              if (i < 5 && digits[i + 1]) digits[i + 1].focus();
-              else if (getEnteredPin().length === 6) form.requestSubmit();
-              break;
-            }
-          }
-        }
-      });
-    });
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
+    async function submitPin() {
       const enteredPin = getEnteredPin();
       if (enteredPin.length !== 6) {
         say("login-feedback", "Veuillez saisir les 6 chiffres du code PIN.");
         return;
       }
-      say("login-feedback", "");
+      say("login-feedback", "Vérification du code PIN…");
       try {
         const res = await fetch("/api/auth/pin", {
           method: "POST",
@@ -384,10 +375,193 @@
       } catch (_) {
         say("login-feedback", "Erreur réseau. Veuillez réessayer.");
       }
+    }
+
+    // Gestion individuelle par case
+    digits.forEach((d, i) => {
+      d.addEventListener("keydown", (e) => {
+        const digit = resolveDigit(e);
+        if (digit !== null) {
+          e.preventDefault();
+          d.value = digit;
+          say("login-feedback", "");
+          if (i < 5 && digits[i + 1]) {
+            digits[i + 1].focus();
+            digits[i + 1].select();
+          }
+          if (getEnteredPin().length === 6) {
+            submitPin();
+          }
+          return;
+        }
+
+        if (e.key === "Backspace" || e.code === "Backspace") {
+          e.preventDefault();
+          if (d.value) {
+            d.value = "";
+          } else if (i > 0 && digits[i - 1]) {
+            digits[i - 1].value = "";
+            digits[i - 1].focus();
+            digits[i - 1].select();
+          }
+          return;
+        }
+
+        if (e.key === "Delete" || e.code === "Delete") {
+          e.preventDefault();
+          d.value = "";
+          return;
+        }
+
+        if (e.key === "ArrowLeft" && i > 0 && digits[i - 1]) {
+          e.preventDefault();
+          digits[i - 1].focus();
+          digits[i - 1].select();
+          return;
+        }
+
+        if (e.key === "ArrowRight" && i < 5 && digits[i + 1]) {
+          e.preventDefault();
+          digits[i + 1].focus();
+          digits[i + 1].select();
+          return;
+        }
+
+        if (e.key === "Enter" || e.code === "Enter" || e.code === "NumpadEnter") {
+          e.preventDefault();
+          submitPin();
+          return;
+        }
+      });
+
+      // Gestion de la saisie mobile / claviers virtuels
+      d.addEventListener("input", () => {
+        const clean = d.value.replace(/\D/g, "");
+        if (clean) {
+          d.value = clean.slice(-1);
+          say("login-feedback", "");
+          if (i < 5 && digits[i + 1]) {
+            digits[i + 1].focus();
+            digits[i + 1].select();
+          }
+          if (getEnteredPin().length === 6) {
+            submitPin();
+          }
+        } else {
+          d.value = "";
+        }
+      });
+
+      // Gestion du coller (Ctrl+V)
+      d.addEventListener("paste", (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData("text") || "";
+        const clean = text.replace(/\D/g, "").slice(0, 6);
+        if (!clean) return;
+        for (let j = 0; j < 6; j++) {
+          if (digits[j]) digits[j].value = clean[j] || "";
+        }
+        say("login-feedback", "");
+        if (clean.length === 6) {
+          digits[5].focus();
+          submitPin();
+        } else {
+          const nextIdx = Math.min(clean.length, 5);
+          if (digits[nextIdx]) digits[nextIdx].focus();
+        }
+      });
+
+      d.addEventListener("focus", () => {
+        d.select();
+      });
     });
-        say("login-feedback", "Erreur réseau. Veuillez réessayer.");
-      }
+
+    // Capture clavier global sur le panneau de connexion
+    if (loginPanel) {
+      loginPanel.addEventListener("keydown", (e) => {
+        if (digits.includes(document.activeElement)) return;
+        const digit = resolveDigit(e);
+        if (digit !== null) {
+          e.preventDefault();
+          let target = digits.find(d => !d.value) || digits[0];
+          target.value = digit;
+          say("login-feedback", "");
+          const nextIdx = digits.indexOf(target) + 1;
+          if (nextIdx < 6 && digits[nextIdx]) {
+            digits[nextIdx].focus();
+            digits[nextIdx].select();
+          } else {
+            target.focus();
+          }
+          if (getEnteredPin().length === 6) {
+            submitPin();
+          }
+        } else if (e.key === "Backspace" || e.code === "Backspace") {
+          e.preventDefault();
+          for (let j = 5; j >= 0; j--) {
+            if (digits[j] && digits[j].value) {
+              digits[j].value = "";
+              digits[j].focus();
+              digits[j].select();
+              break;
+            }
+          }
+        } else if (e.key === "Enter" || e.code === "Enter" || e.code === "NumpadEnter") {
+          e.preventDefault();
+          submitPin();
+        }
+      });
+
+      // Clic n'importe où sur le panneau -> donne le focus à la première case libre
+      loginPanel.addEventListener("click", (e) => {
+        if (!digits.includes(document.activeElement) && !e.target.closest("button")) {
+          const target = digits.find(d => !d.value) || digits[0];
+          if (target) target.focus();
+        }
+      });
+    }
+
+    // Pavé tactile / boutons écran
+    document.querySelectorAll(".pin-key").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const val = btn.dataset.val;
+        if (val === "C") {
+          clearDigits();
+          say("login-feedback", "");
+          return;
+        }
+        if (btn.id === "pin-submit-key") {
+          submitPin();
+          return;
+        }
+        if (val !== undefined && val !== "") {
+          for (let i = 0; i < 6; i++) {
+            if (digits[i] && !digits[i].value) {
+              digits[i].value = val;
+              say("login-feedback", "");
+              if (i < 5 && digits[i + 1]) {
+                digits[i + 1].focus();
+                digits[i + 1].select();
+              }
+              if (getEnteredPin().length === 6) {
+                submitPin();
+              }
+              break;
+            }
+          }
+        }
+      });
     });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitPin();
+    });
+
+    if (digits[0]) {
+      setTimeout(() => digits[0].focus(), 150);
+    }
 
     const logoutBtn = $("admin-logout-btn");
     if (logoutBtn) {
