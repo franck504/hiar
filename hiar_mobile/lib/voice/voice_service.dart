@@ -284,27 +284,44 @@ class VoiceService {
       _startListeningLoop();
     }
 
-    final res = await _tts.speak(cleanText);
-    debugPrint("VoiceService: Résultat _tts.speak: $res");
+    try {
+      final res = await _tts.speak(cleanText);
+      debugPrint("VoiceService: Résultat _tts.speak: $res");
 
-    // Si entre-temps l'écran a changé pendant le lancement du TTS, couper immédiatement
-    if (targetGen != _generation) {
-      await _tts.stop();
+      // Si entre-temps l'écran a changé pendant le lancement du TTS, couper immédiatement
+      if (targetGen != _generation) {
+        await _tts.stop();
+        _isSpeaking = false;
+      }
+    } catch (e) {
+      // Moteur TTS indisponible / redémarrage : ne jamais propager (appel non attendu côté UI)
+      debugPrint("VoiceService: erreur TTS speak: $e");
       _isSpeaking = false;
     }
   }
 
   /// Interrompt la parole (Silence immédiat) et invalide les messages vocaux de l'écran précédent
+  ///
+  /// Appelée sans `await` depuis l'UI (STOP, changement d'écran) : elle ne doit donc JAMAIS
+  /// lever d'exception, sinon une erreur asynchrone non gérée naît à chaque arrêt d'urgence.
   Future<void> stopSpeaking() async {
     _generation++;
     _lastSpokenPhrase = null;
-    await _tts.stop();
+    try {
+      await _tts.stop();
+    } catch (e) {
+      debugPrint("VoiceService: erreur TTS stop ignorée: $e");
+    }
     _isSpeaking = false;
     lastSpokenEndTime = DateTime.now();
     state = VoiceServiceState.listening;
-    onStateChanged?.call(state, "J'écoute en continu…");
-    if (_isListeningPermanently && !_speech.isListening) {
-      _startListeningLoop();
+    try {
+      onStateChanged?.call(state, "J'écoute en continu…");
+      if (_isListeningPermanently && !_speech.isListening) {
+        _startListeningLoop();
+      }
+    } catch (e) {
+      debugPrint("VoiceService: reprise d'écoute impossible après stop: $e");
     }
   }
 }

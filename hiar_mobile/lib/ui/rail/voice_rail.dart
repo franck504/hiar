@@ -296,12 +296,16 @@ class VoiceRail extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      isRobotConnected ? "Robot connecté" : "Robot hors ligne",
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        color: HiarColors.marine,
+                    Flexible(
+                      child: Text(
+                        isRobotConnected ? "Robot connecté" : "Robot hors ligne",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: HiarColors.marine,
+                        ),
                       ),
                     ),
                   ],

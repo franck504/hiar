@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,12 +12,19 @@ import 'features/orientation/orientation_screen.dart';
 import 'features/orientation/mission_screen.dart';
 import 'features/information/information_screen.dart';
 import 'features/consultation/consultation_screen.dart';
+import 'ui/components/hiar_toast.dart';
 import 'ui/rail/voice_rail.dart';
 import 'ui/theme/hiar_colors.dart';
 import 'voice/voice_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Une erreur asynchrone non gérée (plugin voix, réseau…) ne doit jamais interrompre le kiosque.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('HIAR: erreur non gérée interceptée: $error\n$stack');
+    return true;
+  };
 
   // Forcer le mode paysage horizontal
   await SystemChrome.setPreferredOrientations([
@@ -121,6 +129,26 @@ class _HiarAppState extends State<HiarApp> {
   }
 
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
+  final GlobalKey<ScaffoldMessengerState> _messengerKey = GlobalKey<ScaffoldMessengerState>();
+
+  /// Notification courte, étroite et en bas à gauche : ne masque aucun bouton d'action.
+  /// Passe par une clé globale (aucune recherche de contexte qui pourrait échouer).
+  void _toast(String message, {Color background = HiarColors.marine, Duration? duration}) {
+    if (!mounted) return;
+    try {
+      final navContext = _navKey.currentContext;
+      final width = navContext != null ? MediaQuery.sizeOf(navContext).width : 1280.0;
+      HiarToast.show(
+        messenger: _messengerKey.currentState,
+        screenWidth: width,
+        message: message,
+        background: background,
+        duration: duration ?? const Duration(milliseconds: 2500),
+      );
+    } catch (e) {
+      debugPrint('HIAR: notification impossible: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -174,6 +202,9 @@ class _HiarAppState extends State<HiarApp> {
     // 5. Statut de mission robot reçu depuis ROS 2 via le hub
     _hub.onMissionStatus = (missionState) {
       if (!mounted) return;
+      // Le Supervisor publie IDLE juste après un STOP : cela confirme l'arrêt, cela ne doit pas
+      // rouvrir la mission à l'écran. L'état « arrêté » ne s'efface que par Reprendre / Terminer.
+      if (_missionState == 'STOPPED' && missionState.toUpperCase() == 'IDLE') return;
       setState(() {
         _missionState = missionState;
       });
@@ -827,31 +858,21 @@ class _HiarAppState extends State<HiarApp> {
   }
 
   void _triggerStop() {
+    if (!mounted) return;
     setState(() {
       _missionState = 'STOPPED';
       _voiceStatus = "Robot arrêté";
     });
-    ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
-      const SnackBar(
-        content: Text("ARRÊT D'URGENCE DU ROBOT !"),
-        backgroundColor: HiarColors.err,
-        duration: Duration(seconds: 4),
-      ),
-    );
+    _toast("ARRÊT D'URGENCE DU ROBOT !", background: HiarColors.err);
   }
 
   void _triggerResume() {
+    if (!mounted) return;
     setState(() {
       _missionState = 'RUNNING';
       _voiceStatus = "Accompagnement en cours";
     });
-    ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
-      const SnackBar(
-        content: Text("REPRISE DU GUIDAGE !"),
-        backgroundColor: HiarColors.ok,
-        duration: Duration(seconds: 3),
-      ),
-    );
+    _toast("REPRISE DU GUIDAGE !", background: HiarColors.ok);
   }
 
   void _toggleMic() {
@@ -1032,14 +1053,7 @@ class _HiarAppState extends State<HiarApp> {
                       onPressed: () {
                         _hub.triggerAutoDiscovery();
                         Navigator.pop(ctx);
-                        if (mounted) {
-                          ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Recherche automatique du Raspberry Pi sur le Wi-Fi..."),
-                              duration: Duration(seconds: 3),
-                            ),
-                          );
-                        }
+                        _toast("Recherche automatique du Raspberry Pi sur le Wi-Fi...", duration: const Duration(seconds: 3));
                       },
                     ),
                     ActionChip(
@@ -1101,14 +1115,7 @@ class _HiarAppState extends State<HiarApp> {
                           _hub.disconnect();
                           _hub.connect(ip: newIp, port: newPort);
 
-                          if (mounted) {
-                            ScaffoldMessenger.of(_navKey.currentContext ?? context).showSnackBar(
-                              SnackBar(
-                                content: Text("Reconnexion en cours à ws://$newIp:$newPort/ws..."),
-                                duration: const Duration(seconds: 3),
-                              ),
-                            );
-                          }
+                          _toast("Reconnexion en cours à ws://$newIp:$newPort/ws...", duration: const Duration(seconds: 3));
                         }
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
@@ -1127,6 +1134,7 @@ class _HiarAppState extends State<HiarApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: _navKey,
+      scaffoldMessengerKey: _messengerKey,
       title: 'HIAR Mobile',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

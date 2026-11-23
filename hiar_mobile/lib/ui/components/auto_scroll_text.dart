@@ -24,6 +24,10 @@ class AutoScrollText extends StatefulWidget {
 class _AutoScrollTextState extends State<AutoScrollText> {
   final ScrollController _scrollController = ScrollController();
   bool _isScrolling = false;
+  // Identifiant de la boucle de défilement active : une boucle plus ancienne (texte remplacé
+  // en cours d'animation, ex. « Dites Stop » -> « Dites Reprendre ») s'arrête d'elle-même
+  // au lieu de tourner en parallèle de la nouvelle.
+  int _runId = 0;
   Timer? _pauseTimer;
   Completer<bool>? _delayCompleter;
 
@@ -38,10 +42,14 @@ class _AutoScrollTextState extends State<AutoScrollText> {
     super.didUpdateWidget(oldWidget);
     if (widget.text != oldWidget.text) {
       _stopScrolling();
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(0.0);
-      }
-      WidgetsBinding.instance.addPostFrameCallback((_) => _startScrollLoop());
+      // Remise à zéro APRÈS la phase de build (jumpTo notifie des listeners de défilement)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_scrollController.hasClients && _scrollController.position.hasContentDimensions) {
+          _scrollController.jumpTo(0.0);
+        }
+        _startScrollLoop();
+      });
     }
   }
 
@@ -57,6 +65,7 @@ class _AutoScrollTextState extends State<AutoScrollText> {
 
   void _stopScrolling() {
     _isScrolling = false;
+    _runId++;
     _pauseTimer?.cancel();
     _pauseTimer = null;
     if (_delayCompleter != null && !_delayCompleter!.isCompleted) {
@@ -70,11 +79,12 @@ class _AutoScrollTextState extends State<AutoScrollText> {
     if (maxScroll <= 0) return;
 
     _isScrolling = true;
+    final myRun = ++_runId;
 
-    while (mounted && _isScrolling && _scrollController.hasClients) {
+    while (mounted && _isScrolling && myRun == _runId && _scrollController.hasClients) {
       // Pause de confort au début
       final ok1 = await _cancellableDelay(widget.pauseDuration);
-      if (!ok1 || !mounted || !_isScrolling || !_scrollController.hasClients) break;
+      if (!ok1 || !mounted || !_isScrolling || myRun != _runId || !_scrollController.hasClients) break;
 
       final currentMax = _scrollController.position.maxScrollExtent;
       if (currentMax <= 0) break;
@@ -92,9 +102,9 @@ class _AutoScrollTextState extends State<AutoScrollText> {
         break;
       }
 
-      if (!mounted || !_isScrolling || !_scrollController.hasClients) break;
+      if (!mounted || !_isScrolling || myRun != _runId || !_scrollController.hasClients) break;
       final ok2 = await _cancellableDelay(widget.pauseDuration);
-      if (!ok2 || !mounted || !_isScrolling || !_scrollController.hasClients) break;
+      if (!ok2 || !mounted || !_isScrolling || myRun != _runId || !_scrollController.hasClients) break;
 
       // Retour fluide au point de départ
       try {
