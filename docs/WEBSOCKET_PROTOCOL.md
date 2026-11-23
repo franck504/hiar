@@ -340,6 +340,27 @@ Interrompt immédiatement la parole en cours et fige l'écran en alerte rouge d'
 
 ---
 
+### 6.9. Consultation vocale guidée (formulaire synchronisé)
+
+Le serveur conduit la prise de rendez-vous et garde la mémoire du formulaire ; le mobile l'applique et la lui renvoie.
+
+* **Serveur ➔ mobile** : `fields` porte les valeurs dictées, appliquées **une seule fois** par l'écran puis retirées
+  (sinon une valeur périmée écraserait un choix tactile ultérieur) :
+  `selected_reason` (`consultation_generale` | `suivi_medical` | `autre_motif`), `selected_doctor` (`A`–`D`),
+  `selected_period` (`MAT` | `AM`), `patient_name`, `patient_phone` (chaîne vide = effacer le champ).
+  `instruction_ui.step` fait changer d'étape ; sans `step` ni `action`, l'écran ne bouge pas (simple invite vocale).
+* **Mobile ➔ serveur** : `consult.step_changed` transporte `args.fields` (formulaire complet) ; une saisie tactile
+  envoie `ui/state` avec `consultation_data` après 350 ms de calme. Les valeurs vides sont ignorées par le serveur.
+  Si le mobile refuse un saut d'étape (donnée manquante), il renvoie `consult.step_changed` avec son étape réelle.
+* **Doubles annonces évitées** : une étape annoncée par le serveur n'est pas ré-annoncée quand le mobile la confirme
+  (fenêtre de 6 s).
+* **Codes médecin** : `A`=Raissa, `B`=Bell, `C`=Pierrot, `D`=Alice (matin : A, C ; après-midi : B, D). Les tickets
+  gardent le code (`B-AM-3`).
+* **Confidentialité** : `ui/state` hors consultation efface le dossier côté serveur ; le mobile efface aussi nom,
+  téléphone et constantes en quittant l'écran de consultation.
+
+---
+
 ## 7. Référentiel des Identifiants de Champs (`field_id`)
 
 | `field_id` | Type attendu | Unité automatique | Rôle sur l'interface |

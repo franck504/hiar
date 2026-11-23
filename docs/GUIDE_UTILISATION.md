@@ -196,18 +196,42 @@ La sécurité des personnes en milieu hospitalier est prioritaire :
 ---
 
 ### 5.6 Consultation Médicale & Prise de Constantes Vitales
-Parcours guidé en 6 étapes :
-1. **Accueil et présentation** : Explication de la démarche de pré-consultation.
-2. **Choix du motif** : Sélection tactile ou vocale (Suivi médical, Consultation générale).
-3. **Consignes et identification** : Saisie ou vérification du nom et du téléphone.
-4. **Acquisition des constantes biomédicales** (Capteurs physiques DS18B20 et MAX30102) :
-   * **État initial** : Aucune valeur fictive n'est affichée ; l'écran présente des tirets **`"—"`**.
-   * **Déclenchement** : Touchez le bouton *« Lancer une nouvelle mesure »* ou dites simplement à voix haute : « *Mesurer mes constantes* » ou « *Prendre ma température* ».
-   * **Pendant la mesure** : Le robot invite vocalement : *« Veuillez poser votre index sur le capteur de constantes et rester immobile. »* Un indicateur de chargement tourne pendant l'acquisition des données série (10-15s).
-   * **En cas de succès** : Les vraies valeurs s'affichent instantanément et le robot les annonce : *« Mesure des constantes terminée. Température : 36 virgule 8 degrés. Pouls : 72 battements par minute. Oxygénation : 98 pour cent. »*
-   * **Si aucun doigt n'est posé ou en cas d'erreur (`NA` ou timeout)** : Les tirets **`"—"`** restent en place (zéro valeur inventée) et le robot avertit vocalement : *« La mesure des constantes n'a pas pu aboutir. Veuillez repositionner votre doigt sur le capteur. »*
-5. **Récapitulatif visuel des mesures** : Synthèse complète du rendez-vous (patient, motif, médecin). Si les constantes n'ont pas été prises, la ligne indique explicitement : `Constantes : Non mesurées`.
-6. **Délivrance du ticket patient** : Affichage du numéro d'ordre (ex : `Ticket A-MAT-3`).
+Parcours guidé en 6 étapes, **entièrement faisable à la voix comme au toucher**. Le robot annonce chaque
+étape ; une donnée dictée fait avancer toute seule à la première étape incomplète.
+
+1. **Motif** : « *Consultation générale* », « *Suivi médical* » ou « *Autre motif* ».
+2. **Médecin** : dire son prénom. Quatre médecins, chacun sur un créneau fixe :
+
+   | Médecin | Créneau |
+   |---|---|
+   | **Dr Raissa** | Matin · 08 h – 12 h |
+   | **Dr Pierrot** | Matin · 08 h – 12 h |
+   | **Dr Bell** | Après-midi · 13 h – 18 h |
+   | **Dr Alice** | Après-midi · 13 h – 18 h |
+
+   Dire seulement « *le matin* » ou « *l'après-midi* » fait énumérer les médecins de ce créneau.
+   *(En interne et sur les tickets, ils gardent les codes A, B, C, D : Raissa = A, Bell = B, Pierrot = C, Alice = D.)*
+3. **Coordonnées** : le robot demande le nom, puis le numéro de téléphone. Dictez-les (« *Jean Dupont* », puis
+   « *zéro trois quatre, douze, trois cent quarante-cinq, soixante-sept* ») ou saisissez-les à l'écran. Le
+   robot relit le numéro chiffre par chiffre : « *oui* » valide, « *non* » permet de corriger le nom, le numéro
+   ou les deux. Le numéro peut être dicté en plusieurs fois. **Le nom et le téléphone ne sont jamais envoyés
+   au LLM (cloud) ni écrits en clair dans les journaux.**
+4. **Acquisition des constantes biomédicales** (capteurs DS18B20 et MAX30102), facultative :
+   * **État initial** : aucune valeur fictive ; l'écran présente des tirets **`"—"`**.
+   * **Déclenchement** : bouton *« Lancer une nouvelle mesure »* ou « *Mesurer* » ; « *Passer* » continue sans mesure.
+   * **En cas de succès** : les vraies valeurs s'affichent (le robot ne les lit pas à voix haute).
+   * **Si aucun doigt n'est posé ou en cas d'erreur (`NA` ou timeout)** : les tirets restent en place et le robot
+     invite à repositionner le doigt.
+5. **Récapitulatif** : médecin, créneau, motif (sans donnée personnelle dans la voix). « *Confirmer* » réserve ;
+   « *Précédent* » permet de modifier.
+6. **Ticket de passage** : numéro d'ordre (ex : `B-AM-3`). « *Terminer* » efface le dossier et revient à l'accueil.
+
+**Garde-fous du dialogue** : « *Suivant* » sans donnée obligatoire explique ce qui manque au lieu d'avancer ;
+« *Précédent* » à l'étape 1 ne quitte pas la consultation ; un simple « *non* » demande « *Voulez-vous annuler ?* »
+alors qu'« *Annuler* » quitte tout de suite ; « *bonjour* » en cours de saisie ne fait pas perdre le dossier ;
+en cas d'erreur de réservation (numéro déjà inscrit, créneau fermé…) les données saisies sont conservées et le
+robot ramène à l'étape à corriger. Quitter la consultation (par la voix ou autrement) efface nom, téléphone et
+constantes : le patient suivant repart d'un écran vierge.
 
 ---
 
@@ -226,8 +250,11 @@ Le robot comprend le langage naturel. Voici les principales phrases reconnues :
 | **Navigation** | « Accueil », « Menu », « Retour », « Revenir au début » | Ouvre l'écran d'accueil général |
 | **Renseignements** | « Fiches de santé », « Renseignements », « Paludisme », « Hygiène » | Ouvre la fiche d'information demandée |
 | **Consultation** | « Je veux voir un médecin », « Prendre rendez-vous », « Consultation » | Lance le parcours de consultation |
+| **Motif** (étape 1) | « Consultation générale », « Suivi médical », « Autre motif » | Enregistre le motif et passe à l'étape suivante |
+| **Médecin** (étape 2) | « Raissa », « Docteur Bell », « Pierrot », « Alice » ; « Le matin », « L'après-midi » | Choisit le médecin (et son créneau) ; un créneau seul liste ses médecins |
+| **Coordonnées** (étape 3) | « Jean Dupont », « Je m'appelle… », numéro dicté, « Le nom », « Le numéro » | Remplit les champs ; « Oui / Non » valide ou corrige la relecture |
 | **Constantes** | « Prendre ma température », « Mesurer mes constantes », « Pouls » | Déclenche l'acquisition des capteurs |
-| **Étapes** | « Suivant », « Continuer », « Étape suivante », « Précédent » | Navigue dans les étapes de consultation |
+| **Étapes** | « Suivant », « Continuer », « Passer », « Étape suivante », « Précédent », « Confirmer », « Annuler » | Navigue dans les étapes de consultation |
 
 ---
 
@@ -259,6 +286,13 @@ Pour garantir un confort d'écoute optimal et éviter les bugs classiques des as
 1. Vérifiez que la permission **Microphone** est accordée à l'application HIAR dans les paramètres Android.
 2. Assurez-vous que le volume multimédia du smartphone est monté au maximum.
 3. En cas de blocage d'Android Speech, touchez simplement l'icône microphone sur la gauche de l'écran pour relancer l'écoute.
+
+### Pas d'Internet sur le point d'accès Wi-Fi du robot : que comprend la voix ?
+Quand le LLM (Groq) est injoignable et que Qwen local n'est pas disponible, le robot continue de comprendre
+**localement** : l'arrêt d'urgence, les commandes simples de la consultation (motif, médecin, matin/après-midi,
+suivant, précédent, oui, non, annuler), la saisie du nom et du téléphone, et le oui/non d'un guidage en attente.
+Tout le reste répond « *le service est momentanément indisponible* ». Une confirmation de guidage non validée
+expire au bout de **45 secondes** : un « oui » tardif ne lance jamais le robot.
 
 ### Comment compiler une version Release finale (APK) ?
 Pour distribuer l'application à installer sur n'importe quel smartphone Android :
