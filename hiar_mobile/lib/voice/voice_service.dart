@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'tts_pronunciation.dart';
 
 enum VoiceServiceState {
   uninitialized,
@@ -273,9 +274,14 @@ class VoiceService {
     onStateChanged?.call(state, "HIAR parle…");
 
     debugPrint("VoiceService: Demande speak (gen $_generation): « $cleanText »");
+    // Texte réellement prononcé (noms malgaches réécrits phonétiquement). Le texte d'origine reste
+    // la référence d'affichage ; les deux formes alimentent l'anti-écho car le STT peut transcrire
+    // l'une ou l'autre quand le micro réentend le haut-parleur.
+    final spokenText = TtsPronunciation.apply(cleanText);
     lastSpokenText = cleanText;
     _recentSpokenTexts.add(cleanText);
-    if (_recentSpokenTexts.length > 5) {
+    if (spokenText != cleanText) _recentSpokenTexts.add(spokenText);
+    while (_recentSpokenTexts.length > 5) {
       _recentSpokenTexts.removeAt(0);
     }
 
@@ -285,7 +291,7 @@ class VoiceService {
     }
 
     try {
-      final res = await _tts.speak(cleanText);
+      final res = await _tts.speak(spokenText);
       debugPrint("VoiceService: Résultat _tts.speak: $res");
 
       // Si entre-temps l'écran a changé pendant le lancement du TTS, couper immédiatement
