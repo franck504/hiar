@@ -194,7 +194,8 @@ class ESP32Interface(Node):
         """Envoie un challenge cryptographique HMAC pour vérifier l'intégrité de l'ESP32."""
         if self.serial_connection is None:
             return
-        nonce = secrets.token_hex(4)
+        # Nonce numérique 8 chiffres : insensible à la casse et compact pour RX_MAX (32)
+        nonce = f"{secrets.randbelow(90000000) + 10000000}"
         self.current_challenge_nonce = nonce
         try:
             # Format court (< 32 octets) adapté au buffer série RX_MAX de l'ESP32

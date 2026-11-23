@@ -21,6 +21,10 @@
 #include <DallasTemperature.h>
 #include "MAX30105.h"
 #include "heartRate.h"
+#include "mbedtls/md.h"
+
+// Clé secrète partagée pour authentification UART (Item 16)
+const char* HIAR_AUTH_KEY = "hiar_esp32_secret_key_2026";
 
 // ============================================
 // ENUMS
@@ -1253,6 +1257,34 @@ void vitalsUpdate() {
 // COMMANDES SERIE
 // ============================================
 
+void handleAuthChallenge(const char* nonce) {
+  char cleanNonce[16];
+  size_t len = 0;
+  while (nonce[len] && nonce[len] != '\r' && nonce[len] != '\n' && nonce[len] != ' ' && len < 15) {
+    cleanNonce[len] = nonce[len];
+    len++;
+  }
+  cleanNonce[len] = '\0';
+
+  byte hmacResult[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 1);
+  mbedtls_md_hmac_starts(&ctx, (const unsigned char*)HIAR_AUTH_KEY, strlen(HIAR_AUTH_KEY));
+  mbedtls_md_hmac_update(&ctx, (const unsigned char*)cleanNonce, strlen(cleanNonce));
+  mbedtls_md_hmac_finish(&ctx, hmacResult);
+  mbedtls_md_free(&ctx);
+
+  Serial.print("AUTH,");
+  for (int i = 0; i < 32; i++) {
+    if (hmacResult[i] < 0x10) Serial.print("0");
+    Serial.print(hmacResult[i], HEX);
+  }
+  Serial.println();
+}
+
 void processCommand(const char* raw) {
 
   char buf[RX_MAX + 1];
@@ -1297,6 +1329,15 @@ void processCommand(const char* raw) {
   buf[end] = '\0';
 
   const char* cmd = buf + start;
+
+  // ----------------------------------------
+  // AUTH (Authentification UART HMAC-SHA256 - Item 16)
+  // ----------------------------------------
+
+  if (strncmp(cmd, "AUTH,", 5) == 0) {
+    handleAuthChallenge(cmd + 5);
+    return;
+  }
 
   // ----------------------------------------
   // STOP
