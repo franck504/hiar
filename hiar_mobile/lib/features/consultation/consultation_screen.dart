@@ -7,6 +7,7 @@ import '../../ui/components/vitals_tutorial_player.dart';
 import '../../ui/rail/voice_rail.dart';
 import '../../ui/theme/hiar_colors.dart';
 import '../../voice/voice_service.dart';
+import 'doctors.dart';
 
 class ConsultationScreen extends StatefulWidget {
   final int initialStep;
@@ -20,6 +21,8 @@ class ConsultationScreen extends StatefulWidget {
   final VoidCallback? onSettingsTap;
   final bool isRobotConnected;
   final ValueChanged<int>? onStepChanged;
+  /// Appelé (après 350 ms de calme) quand le patient modifie le formulaire au toucher ou au clavier.
+  final ValueChanged<Map<String, dynamic>>? onFormChanged;
   final VoidCallback? onRequestMeasure;
   final ValueChanged<Map<String, dynamic>>? onConfirmAppointment;
   final VoidCallback onCancel;
@@ -39,6 +42,7 @@ class ConsultationScreen extends StatefulWidget {
     this.onSettingsTap,
     this.isRobotConnected = true,
     this.onStepChanged,
+    this.onFormChanged,
     this.onRequestMeasure,
     this.onConfirmAppointment,
     required this.onCancel,
@@ -76,12 +80,38 @@ class ConsultationScreenState extends State<ConsultationScreen> {
   bool _isSubmitting = false;
   String? _submitError;
   Timer? _submitTimeoutTimer;
+  Timer? _formNotifyTimer;
+  bool _applyingServerFields = false;
 
   @override
   void initState() {
     super.initState();
     _currentStep = widget.initialStep;
+    _nameController.addListener(_notifyFormChanged);
+    _phoneController.addListener(_notifyFormChanged);
     _syncFields();
+  }
+
+  /// Formulaire tel qu'affiché : le serveur s'en sert pour valider les étapes et réserver à la voix.
+  /// Les deux familles de clés (`*_code` pour la base, `selected_*` pour l'écran) sont toujours égales.
+  Map<String, dynamic> formSnapshot() {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    return {
+      if (_selectedReason != null) ...{'reason_code': _selectedReason, 'selected_reason': _selectedReason},
+      if (_selectedDoctor != null) ...{'doctor_code': _selectedDoctor, 'selected_doctor': _selectedDoctor},
+      if (_selectedPeriod != null) ...{'period': _selectedPeriod, 'selected_period': _selectedPeriod},
+      if (name.isNotEmpty) 'patient_name': name,
+      if (phone.isNotEmpty) ...{'contact': phone, 'patient_phone': phone},
+    };
+  }
+
+  void _notifyFormChanged() {
+    if (_applyingServerFields || widget.onFormChanged == null) return;
+    _formNotifyTimer?.cancel();
+    _formNotifyTimer = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) widget.onFormChanged?.call(formSnapshot());
+    });
   }
 
   bool _canAdvanceFrom(int step) {
@@ -118,13 +148,18 @@ class ConsultationScreenState extends State<ConsultationScreen> {
   @override
   void didUpdateWidget(covariant ConsultationScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // 1. Valeurs dictées par le serveur d'abord : « motif choisi + passage à l'étape 2 » arrivent ensemble
+    //    et la validation de l'étape 1 doit voir le motif.
+    _syncFields();
+    // 2. Puis le changement d'étape demandé par le serveur
     if (widget.initialStep != oldWidget.initialStep && widget.initialStep != _currentStep) {
       if (widget.initialStep > _currentStep && !_canAdvanceFrom(_currentStep)) {
-        final err = _validationErrorMessageFor(_currentStep);
+        // Désaccord serveur/mobile : on garde l'étape affichée et on la signale au serveur,
+        // qui annonce alors ce qui est réellement attendu (plus de double message d'erreur).
         setState(() {
-          _formValidationError = err;
+          _formValidationError = _validationErrorMessageFor(_currentStep);
         });
-        VoiceService.instance.speak(err);
+        widget.onStepChanged?.call(_currentStep);
       } else {
         setState(() {
           _currentStep = widget.initialStep;
@@ -135,11 +170,13 @@ class ConsultationScreenState extends State<ConsultationScreen> {
         }
       }
     }
-    _syncFields();
   }
 
   @override
   void dispose() {
+    _formNotifyTimer?.cancel();
+    _nameController.removeListener(_notifyFormChanged);
+    _phoneController.removeListener(_notifyFormChanged);
     _submitTimeoutTimer?.cancel();
     _vitalsTimeoutTimer?.cancel();
     _nameController.dispose();
@@ -188,12 +225,7 @@ class ConsultationScreenState extends State<ConsultationScreen> {
         }
       }
     }
-    if (fields.containsKey('patient_name') && fields['patient_name'] != null) {
-      _nameController.text = fields['patient_name'].toString();
-    }
-    if (fields.containsKey('patient_phone') && fields['patient_phone'] != null) {
-      _phoneController.text = fields['patient_phone'].toString();
-    }
+    _consumeFormFields(fields);
     if (fields.containsKey('ticket_label') && fields['ticket_label'] != null) {
       _ticketLabel = fields['ticket_label'].toString();
       _submitTimeoutTimer?.cancel();
@@ -209,21 +241,6 @@ class ConsultationScreenState extends State<ConsultationScreen> {
     }
     if (fields.containsKey('form_validation_error') && fields['form_validation_error'] != null) {
       _formValidationError = fields['form_validation_error'].toString();
-    }
-    if (fields.containsKey('selected_reason') && fields['selected_reason'] != null) {
-      _selectedReason = fields['selected_reason'].toString();
-    } else if (fields.containsKey('reason_code') && fields['reason_code'] != null) {
-      _selectedReason = fields['reason_code'].toString();
-    }
-    if (fields.containsKey('selected_doctor') && fields['selected_doctor'] != null) {
-      _selectedDoctor = fields['selected_doctor'].toString();
-    } else if (fields.containsKey('doctor') && fields['doctor'] != null) {
-      _selectedDoctor = fields['doctor'].toString();
-    }
-    if (fields.containsKey('selected_period') && fields['selected_period'] != null) {
-      _selectedPeriod = fields['selected_period'].toString();
-    } else if (fields.containsKey('period') && fields['period'] != null) {
-      _selectedPeriod = fields['period'].toString();
     }
     if (fields.containsKey('vitals_state')) {
       final state = fields['vitals_state'].toString();
@@ -251,6 +268,50 @@ class ConsultationScreenState extends State<ConsultationScreen> {
         _vitalsSuccess = false;
         _vitalsError = null;
       }
+    }
+  }
+
+  /// Champs du formulaire envoyés par le serveur (voix) : appliqués UNE fois puis retirés de la table.
+  ///
+  /// Conservés, ils seraient rejoués à chaque reconstruction de l'écran et écraseraient un choix
+  /// tactile fait entre-temps (ex. « Dr Bell » dicté, puis « Dr Alice » touché : retour à Bell).
+  void _consumeFormFields(Map<String, dynamic> fields) {
+    String? take(List<String> keys) {
+      String? value;
+      for (final key in keys) {
+        if (fields.containsKey(key)) {
+          final raw = fields[key];
+          try {
+            fields.remove(key);
+          } catch (_) {/* table non modifiable : valeur lue sans être retirée */}
+          value ??= raw?.toString();
+        }
+      }
+      return value;
+    }
+
+    final reason = take(['selected_reason', 'reason_code']);
+    final doctor = take(['selected_doctor', 'doctor_code', 'doctor']);
+    final period = take(['selected_period', 'period']);
+    final name = take(['patient_name']);
+    final phone = take(['patient_phone', 'contact']);
+
+    _applyingServerFields = true;
+    try {
+      if (reason != null && reason.isNotEmpty) _selectedReason = reason;
+      if (doctor != null && doctor.isNotEmpty) {
+        _selectedDoctor = doctor.toUpperCase();
+        // Chaque médecin a sa période : le serveur la donne, sinon on la déduit du catalogue
+        _selectedPeriod = (period != null && period.isNotEmpty)
+            ? period
+            : (DoctorCatalog.byCode(doctor)?.period ?? _selectedPeriod);
+      } else if (period != null && period.isNotEmpty) {
+        _selectedPeriod = period;
+      }
+      if (name != null) _nameController.text = name;
+      if (phone != null) _phoneController.text = phone;
+    } finally {
+      _applyingServerFields = false;
     }
   }
 
@@ -453,11 +514,11 @@ class ConsultationScreenState extends State<ConsultationScreen> {
     };
 
     final defaultTips = {
-      1: "Dites : « Générale », « Suivi » ou « Annuler »",
-      2: "Dites : « Médecin A », « Médecin B » ou « Suivant »",
-      3: "Dites : « Continuer » ou « Précédent »",
+      1: "Dites : « Générale », « Suivi » ou « Autre »",
+      2: "Dites le prénom du médecin : « ${DoctorCatalog.spokenNames.join(' », « ')} »",
+      3: "Dites votre nom, puis votre numéro de téléphone",
       4: "Dites : « Mesurer », « Suivant » ou « Passer »",
-      5: "Dites : « Confirmer » ou « Annuler »",
+      5: "Dites : « Confirmer », « Précédent » ou « Annuler »",
     };
 
     return LandscapeScaffold(
@@ -597,7 +658,10 @@ class ConsultationScreenState extends State<ConsultationScreen> {
               subtitle: "Premier avis ou consultation médicale courante",
               voiceHint: "Générale",
               isSelected: _selectedReason == 'consultation_generale',
-              onTap: () => setState(() => _selectedReason = 'consultation_generale'),
+              onTap: () {
+                setState(() => _selectedReason = 'consultation_generale');
+                _notifyFormChanged();
+              },
             ),
             const SizedBox(height: 12),
             ActionButton(
@@ -605,7 +669,10 @@ class ConsultationScreenState extends State<ConsultationScreen> {
               subtitle: "Visite de contrôle ou renouvellement d'ordonnance",
               voiceHint: "Suivi",
               isSelected: _selectedReason == 'suivi_medical',
-              onTap: () => setState(() => _selectedReason = 'suivi_medical'),
+              onTap: () {
+                setState(() => _selectedReason = 'suivi_medical');
+                _notifyFormChanged();
+              },
             ),
             const SizedBox(height: 12),
             ActionButton(
@@ -613,7 +680,10 @@ class ConsultationScreenState extends State<ConsultationScreen> {
               subtitle: "Certificat, avis spécifique ou orientation",
               voiceHint: "Autre",
               isSelected: _selectedReason == 'autre_motif',
-              onTap: () => setState(() => _selectedReason = 'autre_motif'),
+              onTap: () {
+                setState(() => _selectedReason = 'autre_motif');
+                _notifyFormChanged();
+              },
             ),
           ],
         ),
@@ -621,74 +691,41 @@ class ConsultationScreenState extends State<ConsultationScreen> {
     );
   }
 
-  // Étape 2 : Médecin et Période
+  // Étape 2 : Médecin (le prénom détermine aussi la période)
   Widget _buildDoctorStep() {
+    Widget tile(DoctorInfo d) => ActionButton(
+          label: d.label,
+          subtitle: '${DoctorCatalog.periodName(d.period)} · ${DoctorCatalog.hours(d.period)}',
+          icon: Icons.medical_services_outlined,
+          voiceHint: d.name,
+          isSelected: _selectedDoctor == d.code,
+          onTap: () {
+            setState(() {
+              _selectedDoctor = d.code;
+              _selectedPeriod = d.period;
+            });
+            _notifyFormChanged();
+          },
+        );
+
+    final doctors = DoctorCatalog.doctors;
+    final rows = <Widget>[];
+    for (var i = 0; i < doctors.length; i += 2) {
+      if (i > 0) rows.add(const SizedBox(height: 12));
+      rows.add(Row(
+        children: [
+          Expanded(child: tile(doctors[i])),
+          const SizedBox(width: 12),
+          Expanded(child: i + 1 < doctors.length ? tile(doctors[i + 1]) : const SizedBox.shrink()),
+        ],
+      ));
+    }
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: ActionButton(
-                    label: "Médecin A (Matin)",
-                    subtitle: "08 h 00 – 12 h 00",
-                    voiceHint: "Médecin A",
-                    isSelected: _selectedDoctor == 'A' && _selectedPeriod == 'MAT',
-                    onTap: () => setState(() {
-                      _selectedDoctor = 'A';
-                      _selectedPeriod = 'MAT';
-                    }),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ActionButton(
-                    label: "Médecin B (Après-midi)",
-                    subtitle: "13 h 00 – 18 h 00",
-                    voiceHint: "Médecin B",
-                    isSelected: _selectedDoctor == 'B' && _selectedPeriod == 'AM',
-                    onTap: () => setState(() {
-                      _selectedDoctor = 'B';
-                      _selectedPeriod = 'AM';
-                    }),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ActionButton(
-                    label: "Médecin C (Matin)",
-                    subtitle: "08 h 00 – 12 h 00",
-                    voiceHint: "Médecin C",
-                    isSelected: _selectedDoctor == 'C' && _selectedPeriod == 'MAT',
-                    onTap: () => setState(() {
-                      _selectedDoctor = 'C';
-                      _selectedPeriod = 'MAT';
-                    }),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ActionButton(
-                    label: "Médecin D (Après-midi)",
-                    subtitle: "13 h 00 – 18 h 00",
-                    voiceHint: "Médecin D",
-                    isSelected: _selectedDoctor == 'D' && _selectedPeriod == 'AM',
-                    onTap: () => setState(() {
-                      _selectedDoctor = 'D';
-                      _selectedPeriod = 'AM';
-                    }),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          children: rows,
         ),
       ),
     );
@@ -1090,8 +1127,8 @@ class ConsultationScreenState extends State<ConsultationScreen> {
   Widget _buildReviewStep() {
     final periodLabel = _selectedPeriod == null
         ? 'Créneau non choisi'
-        : (_selectedPeriod == 'MAT' ? 'Matin (08h00 – 12h00)' : 'Après-midi (13h00 – 18h00)');
-    final doctorLabel = _selectedDoctor == null ? 'Médecin non choisi' : 'Médecin $_selectedDoctor';
+        : '${DoctorCatalog.periodName(_selectedPeriod)} (${DoctorCatalog.hours(_selectedPeriod).replaceAll(' ', '')})';
+    final doctorLabel = _selectedDoctor == null ? 'Médecin non choisi' : DoctorCatalog.label(_selectedDoctor);
     final reasonLabel = _selectedReason == null
         ? 'Non sélectionné'
         : (_selectedReason == 'consultation_generale'
@@ -1228,8 +1265,8 @@ class ConsultationScreenState extends State<ConsultationScreen> {
 
   // Écran Ticket final — Reçu médical à bord festonné façon UI_style.jpeg !
   Widget _buildTicketScreen() {
-    final periodLabel = _selectedPeriod == 'MAT' ? 'Matin' : 'Après-midi';
-    final doctorLabel = _selectedDoctor != null ? "Médecin $_selectedDoctor" : "Médecin";
+    final periodLabel = DoctorCatalog.periodName(_selectedPeriod);
+    final doctorLabel = DoctorCatalog.label(_selectedDoctor);
     final patientLabel = _nameController.text.trim().isEmpty ? "Anonyme" : _nameController.text.trim();
     final hasVitals = _temperatureC != null || _heartRateBpm != null || _spo2Percent != null;
 

@@ -24,6 +24,11 @@ void main() {
       expect(spoken.contains('RAZAKAHARISOA'), isFalse);
     });
 
+    test('prénom du médecin A : tréma pour ne pas lire « Rèssa »', () {
+      expect(TtsPronunciation.apply('Très bien, le docteur Raissa, le matin.'), 'Très bien, le docteur Raïssa, le matin.');
+      expect(TtsPronunciation.apply('Raïssa ou Pierrot'), 'Raïssa ou Pierrot'); // idempotent
+    });
+
     test('ne touche pas aux autres phrases', () {
       const text = 'Très bien, suivez-moi vers la Pharmacie.';
       expect(TtsPronunciation.apply(text), text);

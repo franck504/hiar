@@ -790,38 +790,35 @@ class _HiarAppState extends State<HiarApp> {
   }
 
   /// Efface entièrement les données du formulaire de consultation et réinitialise les constantes.
+  /// Efface TOUT ce qui concerne le patient courant (formulaire, constantes, ticket).
+  /// Sans setState : à appeler dans un setState existant ou juste avant un rebuild.
+  void _wipeConsultationFields() {
+    _consultationStep = 1;
+    for (final key in const [
+      'patient_name', 'contact', 'patient_phone',
+      'reason_code', 'selected_reason',
+      'doctor_code', 'selected_doctor', 'doctor',
+      'period', 'selected_period',
+      'temperature_c', 'temperature', 'heart_rate_bpm', 'heart_rate', 'spo2_percent', 'spo2',
+      'ticket_label', 'appointment_id', 'booking_error', 'form_validation_error',
+      'vitals_state', 'vitals_error',
+    ]) {
+      _dynamicFields.remove(key);
+    }
+  }
+
   void _clearConsultationData() {
-    setState(() {
-      _consultationStep = 1;
-      _dynamicFields.remove('patient_name');
-      _dynamicFields.remove('contact');
-      _dynamicFields.remove('patient_phone');
-      _dynamicFields.remove('reason_code');
-      _dynamicFields.remove('selected_reason');
-      _dynamicFields.remove('doctor_code');
-      _dynamicFields.remove('selected_doctor');
-      _dynamicFields.remove('doctor');
-      _dynamicFields.remove('period');
-      _dynamicFields.remove('selected_period');
-      _dynamicFields.remove('temperature_c');
-      _dynamicFields.remove('temperature');
-      _dynamicFields.remove('heart_rate_bpm');
-      _dynamicFields.remove('heart_rate');
-      _dynamicFields.remove('spo2_percent');
-      _dynamicFields.remove('spo2');
-      _dynamicFields.remove('ticket_label');
-      _dynamicFields.remove('appointment_id');
-      _dynamicFields.remove('booking_error');
-      _dynamicFields.remove('form_validation_error');
-      _dynamicFields.remove('vitals_state');
-      _dynamicFields.remove('vitals_error');
-    });
+    setState(_wipeConsultationFields);
     _consultationKey.currentState?.resetForm();
   }
 
   void _goToScreen(String screen) {
     VoiceService.instance.stopSpeaking();
+    // Le patient quitte la consultation par n'importe quel chemin (voix « accueil », « terminer », retour…) :
+    // son nom, son téléphone et ses constantes ne doivent jamais apparaître chez le patient suivant.
+    final leavingConsultation = _currentScreen == 'consultation' && screen != 'consultation';
     setState(() {
+      if (leavingConsultation) _wipeConsultationFields();
       _currentScreen = screen;
       _recognizedText = null;
       if (screen == 'consultation' && _consultationStep == 1) {
@@ -1270,9 +1267,13 @@ class _HiarAppState extends State<HiarApp> {
                   _hub.publishAction('robot.stop', {});
                   _triggerStop();
                 },
+                onFormChanged: (form) {
+                  _hub.publishUiState('consultation', ['form'], step: _consultationStep, consultationData: form);
+                },
                 onStepChanged: (newStep) {
                   _consultationStep = newStep;
-                  _hub.publishAction('consult.step_changed', {'step': newStep});
+                  final form = _consultationKey.currentState?.formSnapshot() ?? const <String, dynamic>{};
+                  _hub.publishAction('consult.step_changed', {'step': newStep, 'fields': form});
                   _hub.publishUiState(
                     'consultation',
                     ['step_$newStep'],

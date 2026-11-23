@@ -21,6 +21,9 @@ class TtsPronunciation {
     //     'Razakarissoua'         (sans le « h » aspiré, plus fluide)
     _Rule(RegExp(r'razaka[\s\-]*harisoa', caseSensitive: false), 'Razakaharissoua'),
 
+    // Médecin A : en français « ai » se lit « è » (« Rèssa ») ; le tréma force « Ra-ï-ssa ».
+    _Rule(RegExp(r'\braissa\b', caseSensitive: false), 'Raïssa'),
+
     // Prénom : l'accent aide le moteur français à lire « sé-si-lia » et non « ke-ki-lia ».
     _Rule(RegExp(r'\bcecilia\b', caseSensitive: false), 'Cécilia'),
   ];
