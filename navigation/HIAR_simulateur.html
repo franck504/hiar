@@ -1,0 +1,1276 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HIAR - Simulateur de navigation</title>
+<style>
+:root{--bg:#f4f3ee;--panel:#ffffff;--ink:#1f1f1d;--muted:#6b6a65;--line:#dcdad2;--accent:#2a6fdb;--ok:#1a8a5a;--warn:#b7791f;--bad:#c0392b;--viol:#7a4fd0;--floor:#ebe8de;--wall:#33322e;--chip:#f0eee6;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--panel:#1e1d1b;--ink:#ecebe6;--muted:#9a988f;--line:#35332e;--accent:#6aa0ff;--ok:#4cc58d;--warn:#e0b04a;--bad:#ff7a6b;--viol:#b194ff;--floor:#2b2a26;--wall:#0b0b0a;--chip:#2a2926}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1320px;margin:0 auto;padding:12px 16px 40px}
+h1{font-size:20px;font-weight:600;margin:6px 0 2px}
+h2{font-size:14px;font-weight:600;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 12px;font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));margin-top:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.bar label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+button,select,input[type=text]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.sm{padding:3px 8px;font-size:12px}
+button.act{border-color:var(--accent);background:var(--chip)}
+input[type=text]{cursor:text;width:100%}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=number]{width:74px;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 4px}
+.cwrap{position:relative;border-radius:10px;overflow:hidden;background:var(--bg);border:1px solid var(--line)}
+canvas{display:block;width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:8px}
+.dpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:240px;margin:6px 0 10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}
+.kv span:nth-child(odd){color:var(--muted)}
+.kv span:nth-child(even){font-family:var(--mono);font-size:12.5px;word-break:break-word}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;background:var(--chip)}
+.badge.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.badge.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.badge.warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+#console{font:12px/1.45 var(--mono);height:270px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;white-space:pre-wrap}
+#console div{border-bottom:1px solid transparent}
+.l-tx{color:var(--muted)}.l-bad{color:var(--bad)}.l-ok{color:var(--ok)}.l-acc{color:var(--accent)}.l-warn{color:var(--warn)}.l-viol{color:var(--viol)}.l-mut{color:var(--muted)}
+.prm{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;margin-bottom:6px}
+.prm .nm{font-size:12px}
+.prm .nm small{color:var(--muted)}
+.prm input[type=range]{grid-column:1 / span 2}
+details{margin-top:6px}
+summary{cursor:pointer;font-weight:600;font-size:13px;padding:4px 0}
+.note{font-size:12px;color:var(--muted);margin:6px 0}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+td,th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>*{min-width:0}
+.warnbox{background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);border-radius:8px;padding:6px 10px;font-size:12.5px;margin:6px 0}
+.okbox{background:color-mix(in srgb,var(--ok) 12%,transparent);border:1px solid color-mix(in srgb,var(--ok) 40%,transparent);border-radius:8px;padding:6px 10px;font-size:12.5px;margin:6px 0}
+progress{width:100%;height:8px}
+@media (max-width:560px){.wrap{padding:8px 10px 30px}.grid{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>HIAR - Simulateur de navigation par couloirs</h1>
+<p class="sub">Robot ESP32 (L298N, HC-SR04, 2 IR analogiques, DS18B20, MAX30102). La logique du firmware <code>HIAR_ESP32_integration_vitals.ino</code> est portée telle quelle (garde ultrason, comptage d'ouvertures, entrée et sortie de couloir, signes vitaux). Seule la physique (piste, moteurs, capteurs) est simulée.</p>
+
+<section class="card" id="stage">
+  <div class="bar">
+    <button id="bPlay" class="pri">Pause</button>
+    <button id="bStep" class="sm">+1 s</button>
+    <button id="bReset">Réinitialiser</button>
+    <label>Vitesse
+      <select id="sSpeed"><option value="0.25">x0,25</option><option value="0.5">x0,5</option><option value="1" selected>x1</option><option value="2">x2</option><option value="4">x4</option><option value="8">x8</option><option value="16">x16</option></select>
+    </label>
+    <label>Vue
+      <select id="sView"><option value="auto">auto</option><option value="v">verticale</option><option value="h">horizontale</option></select>
+    </label>
+    <label>Clic sur la piste
+      <select id="sMode"><option value="obs">ajouter / retirer un obstacle</option><option value="tp">placer le robot</option><option value="none">aucune action</option></select>
+    </label>
+    <label>Cap du robot placé
+      <select id="sHead"><option value="0">nord (vers le fond)</option><option value="180">sud (vers l'accueil)</option><option value="90">est</option><option value="270">ouest</option></select>
+    </label>
+    <label><input type="checkbox" id="cTrail" checked>Trace</label>
+    <label><input type="checkbox" id="cBeams" checked>Faisceaux</label>
+  </div>
+  <div class="cwrap"><canvas id="map"></canvas></div>
+  <div class="legend">
+    <span><i style="background:#2a6fdb"></i>Robot (avant = pointe)</span>
+    <span><i style="background:#1a8a5a"></i>IR libre (1)</span>
+    <span><i style="background:#c0392b"></i>IR mur (0)</span>
+    <span><i style="background:#2a6fdb;opacity:.35"></i>Cône ultrason</span>
+    <span><i style="background:#e08a1e"></i>Obstacle</span>
+    <span>Flèches du clavier : F / B / L / R, espace : STOP</span>
+  </div>
+</section>
+
+<div class="grid">
+
+<section class="card">
+  <h2>Commandes</h2>
+  <div class="btns">
+    <button data-cmd="GOTO,ACCUEIL">Aller à l'accueil</button>
+    <button data-cmd="GOTO,TOILETTES">Aller aux toilettes</button>
+    <button data-cmd="GOTO,PHARMACIE">Aller à la pharmacie</button>
+    <button data-cmd="GOTO,DOCTEUR">Aller chez le docteur</button>
+  </div>
+  <div class="row"><button data-cmd="NAVSTOP" class="sm">NAVSTOP</button><button data-cmd="STOP" class="sm">STOP</button><button data-cmd="WHERE" class="sm">WHERE</button><button data-cmd="STATUS" class="sm">STATUS</button><button data-cmd="PING" class="sm">PING</button><button data-cmd="AUTO,ON" class="sm">AUTO,ON</button><button data-cmd="AUTO,OFF" class="sm">AUTO,OFF</button></div>
+  <div class="dpad">
+    <span></span><button data-cmd="F">F</button><span></span>
+    <button data-cmd="L">L</button><button data-cmd="S">S</button><button data-cmd="R">R</button>
+    <span></span><button data-cmd="B">B</button><span></span>
+  </div>
+  <div class="row"><input type="text" id="tCmd" placeholder="Commande série (ex. GOTO,DOCTEUR)" autocomplete="off" maxlength="40"><button id="bSend" class="sm">Envoyer</button></div>
+  <p class="note">Un mouvement manuel s'arrête après MAX_MOVE_DURATION, comme sur le robot. Juste après un reset, le robot refuse d'avancer tant qu'il n'a pas de mesure ultrason valide (REJECTED,FORWARD_UNSAFE).</p>
+  <div class="row" style="margin-top:6px">
+    <button id="bSudden" class="sm">Obstacle soudain à 45 cm devant</button>
+    <button id="bClearObs" class="sm">Retirer les obstacles</button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>État en direct</h2>
+  <div class="kv" id="kv"></div>
+</section>
+
+<section class="card">
+  <h2>Oscilloscope des capteurs (15 s)</h2>
+  <canvas id="scope" height="230"></canvas>
+  <p class="note">Haut : ultrason filtré (cm) et seuil d'arrêt. Milieu : IR gauche (bleu) et IR droit (orange), seuils en pointillé. Bas : état de navigation. Traits verticaux : événements série.</p>
+</section>
+
+<section class="card">
+  <h2>Moniteur série</h2>
+  <div class="row" style="margin-bottom:6px">
+    <label><input type="checkbox" id="fDist">DIST</label>
+    <label><input type="checkbox" id="fIr">IR</label>
+    <label><input type="checkbox" id="fRaw">IR_RAW</label>
+    <button id="bClr" class="sm">Effacer</button>
+    <button id="bDl" class="sm">Télécharger le journal</button>
+  </div>
+  <div id="console"></div>
+</section>
+
+<section class="card">
+  <h2>Signes vitaux (DS18B20 et MAX30102)</h2>
+  <div class="row"><button data-cmd="VITALS,START" class="sm">VITALS,START</button><button data-cmd="VITALS,CANCEL" class="sm">VITALS,CANCEL</button></div>
+  <div class="prm" style="margin-top:8px"><span class="nm">Doigt sur le MAX30102</span><input type="checkbox" id="vFinger" checked></div>
+  <div class="prm"><span class="nm">Fréquence réelle <small>bpm</small></span><b id="vBpmV">72</b><input type="range" id="vBpm" min="40" max="180" value="72"></div>
+  <div class="prm"><span class="nm">Température réelle <small>°C</small></span><b id="vTempV">36.7</b><input type="range" id="vTemp" min="34" max="40" step="0.1" value="36.7"></div>
+  <div class="prm"><span class="nm">DS18B20 branché <small>(au reset)</small></span><input type="checkbox" id="vTc" checked></div>
+  <div class="prm"><span class="nm">MAX30102 branché <small>(au reset)</small></span><input type="checkbox" id="vPc" checked></div>
+  <div class="kv" id="kvV" style="margin-top:6px"></div>
+  <p class="note">Pendant une mesure, les mouvements sont refusés (REJECTED,MEASURING) et une navigation est abandonnée (NAV,ABORT_MEASURING). Sans doigt, la mesure expire après 20 s et donne heart_rate_bpm=NA.</p>
+</section>
+
+<section class="card" id="cCal">
+  <h2>Calibration conseillée</h2>
+  <div id="calBody"></div>
+</section>
+
+<section class="card">
+  <h2>Paramètres</h2>
+  <div class="row"><button id="pCal" class="sm">Charger les valeurs calibrées</button><button id="pIno" class="sm">Charger les valeurs du fichier .ino</button></div>
+  <p class="note">Les constantes du firmware s'appliquent en direct. Les paramètres de piste relancent la simulation. Les valeurs « robot réel » sont des hypothèses à remplacer par vos mesures.</p>
+  <div id="params"></div>
+</section>
+
+<section class="card">
+  <h2>Tests automatiques</h2>
+  <div class="row"><button id="bTests" class="pri">Lancer les tests</button><button id="bMC" class="sm">Monte-Carlo (20 parcours)</button></div>
+  <progress id="prog" value="0" max="1" style="display:none;margin-top:8px"></progress>
+  <div id="testOut" style="margin-top:8px"></div>
+  <p class="note">Chaque test part d'un robot neuf avec les paramètres actuels (bruit compris). Les tests vérifient la position réelle du robot, pas seulement ce que le firmware annonce.</p>
+</section>
+
+<section class="card">
+  <h2>Ce que le simulateur modélise</h2>
+  <details open><summary>Hypothèses et limites</summary>
+  <ul style="margin:6px 0 0 18px;padding:0;font-size:13px">
+    <li>Firmware : boucle exécutée toutes les 10 ms simulées ; ultrason déclenché toutes les 60 ms, médiane de 3 mesures, péremption à 200 ms ; machine à états de navigation identique au .ino.</li>
+    <li>IR analogique : valeur ADC proportionnelle à la distance du mur (0 à 80 cm sur 0 à 4095), 1 = libre au-dessus du seuil. Le vrai capteur dépend de la surface et de la lumière : mesurez-le avec IR_RAW.</li>
+    <li>Moteurs : vitesse et rotation proportionnelles au pourcentage PWM, avec une zone morte en dessous de laquelle le robot ne bouge pas. Les valeurs par défaut (40 cm/s et 200 °/s à 100 %) sont une hypothèse.</li>
+    <li>Collisions : le robot (16 x 20 cm) est bloqué par les murs et les obstacles, le firmware n'en est pas informé. Chaque choc est compté.</li>
+    <li>Piste : couloir principal de 50 cm, trois couloirs de 30 cm sur 70 cm de profondeur, à gauche, centres à 60, 140 et 220 cm de l'accueil.</li>
+    <li>Localisation : topologique par comptage d'ouvertures. Si le robot est déplacé ou arrêté en pleine piste, le lieu perçu peut devenir faux : la ligne « zone réelle » le montre.</li>
+  </ul></details>
+</section>
+
+</div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   CONSTANTES MONDE
+   Repère piste (cm) : x vers la droite, y vers le bas.
+   Le couloir principal va de y=300 (accueil) à y=0 (fond).
+   Cap 0 = nord (vers le fond), sens horaire positif.
+   ============================================================ */
+const ROBOT_W=16, ROBOT_L=20, US_FWD=10, WORLD_L=300, WALLT=5;
+const YC=[0,240,160,80];
+const PLACE_NAMES=['ACCUEIL','TOILETTES','PHARMACIE','DOCTEUR'];
+const MODE_NAMES=['IDLE','FORWARD','BACKWARD','LEFT','RIGHT'];
+const NAV_NAMES=['NAV_IDLE','NAV_TURNING','NAV_DRIVING','NAV_ALIGN','NAV_ENTER_DRIVE','NAV_EXIT_DRIVE'];
+const OS_NAMES=['OS_WALL','OS_MAYBE_OPEN','OS_OPEN','OS_MAYBE_WALL'];
+const TN_NAMES=['TN_MAIN_180','TN_ENTER','TN_EXIT_180','TN_EXIT_90'];
+const VS_NAMES=['VITALS_IDLE','VITALS_ACQUIRING','VITALS_TEMP_WAIT','VITALS_DONE'];
+const DT=10;
+
+const DEFAULTS={
+  MOTOR_SPEED_PERCENT:50,OBSTACLE_STOP_CM:25,EXIT_STOP_CM:12,EXIT_DONE_CM:15,
+  TURN_180_MS:1800,TURN_90_MS:900,ALIGN_MS:650,OPENING_CONFIRM_MS:300,WALL_CONFIRM_MS:300,
+  IR_LEFT_THRESHOLD:1200,IR_RIGHT_THRESHOLD:1200,MAX_MOVE_DURATION:2000,GUARD_INTERVAL:60,
+  MAX_DISTANCE_AGE_MS:200,NAV_MAX_MS:90000,NAV_RETRY_MS:200,
+  V100:40,W100:200,DEADZONE:20,IR_OFFSET:4,DRIFT:0,TURN_SLIP:0,
+  US_SIGMA:0.3,US_DROP:0,IR_NOISE:40,IR_SPIKE:0,
+  MAIN_W:50,SIDE_W:30,SIDE_D:70
+};
+const INO_VALUES={MOTOR_SPEED_PERCENT:5,ALIGN_MS:100,EXIT_DONE_CM:17};
+
+/* ============================================================
+   OUTILS
+   ============================================================ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function buildGeom(P){
+  const W=P.MAIN_W,sw=P.SIDE_W,sd=P.SIDE_D;
+  const rects=[{x0:0,x1:W,y0:0,y1:WORLD_L}];
+  const corners=[];
+  for(let i=1;i<=3;i++){
+    rects.push({x0:-sd,x1:0.001,y0:YC[i]-sw/2,y1:YC[i]+sw/2,idx:i});
+    corners.push([0,YC[i]-sw/2],[0,YC[i]+sw/2]);
+  }
+  return{rects,corners,W,sw,sd};
+}
+function isFree(G,obs,x,y){
+  let f=false;
+  const R=G.rects;
+  for(let i=0;i<R.length;i++){const r=R[i];if(x>r.x0&&x<r.x1&&y>r.y0&&y<r.y1){f=true;break}}
+  if(!f)return false;
+  for(let i=0;i<obs.length;i++){const o=obs[i];if(Math.abs(x-o.x)<o.w/2&&Math.abs(y-o.y)<o.h/2)return false}
+  return true;
+}
+function castRay(G,obs,ox,oy,dx,dy,max,step){
+  if(!isFree(G,obs,ox,oy))return 0;
+  for(let d=step;d<=max;d+=step){if(!isFree(G,obs,ox+dx*d,oy+dy*d))return d-step*0.5}
+  return Infinity;
+}
+const PERIM=(function(){const a=[];for(let ly=-10;ly<=10.001;ly+=2.5){a.push([-8,ly],[8,ly])}for(let lx=-6;lx<=6.001;lx+=2){a.push([lx,-10],[lx,10])}return a})();
+function collides(G,obs,x,y,h){
+  const s=Math.sin(h),c=Math.cos(h);
+  for(let i=0;i<PERIM.length;i++){
+    const lx=PERIM[i][0]*0.999,ly=PERIM[i][1]*0.999;
+    if(!isFree(G,obs,x+c*lx+s*ly,y+s*lx-c*ly))return true;
+  }
+  const inside=function(cx,cy){const dx=cx-x,dy=cy-y;const lx=dx*c+dy*s,ly=dx*s-dy*c;return Math.abs(lx)<7.95&&Math.abs(ly)<9.95};
+  for(let i=0;i<G.corners.length;i++){if(inside(G.corners[i][0],G.corners[i][1]))return true}
+  for(let i=0;i<obs.length;i++){const o=obs[i];for(let a=-1;a<=1;a+=2)for(let b=-1;b<=1;b+=2){if(inside(o.x+a*o.w/2,o.y+b*o.h/2))return true}}
+  return false;
+}
+
+/* ============================================================
+   SIMULATEUR : physique + port du firmware
+   ============================================================ */
+function createSim(P,ENV,seed,opt){
+  opt=opt||{};
+  const rnd=mulberry32(seed||1);
+  const gauss=function(){let u=0;while(u===0)u=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*rnd())};
+  const G=buildGeom(P);
+  const obs=[];
+  const R={x:G.W/2,y:268,h:0,dist:0,chocs:0,colliding:false,flash:-1e9,trail:[]};
+  const stats={ok:0,ko:0};
+  const lines=[];const marks=[];const hist=[];
+  let lineId=0;
+  const dbg={usD:Infinity,irD:[Infinity,Infinity],rays:[]};
+  const F={
+    t:0,cmdQueue:[],autoMode:false,
+    motionMode:0,movementStartTime:0,motionPending:false,pendingMotion:0,pendingSince:0,turnGain:1,
+    guardBuffer:[-1,-1,-1],guardBufIdx:0,invalidCount:0,lastGuardTrigger:0,
+    lastFilteredDistance:-1,lastRawDistance:-1,lastValidDistanceMs:0,hasValidDistance:false,
+    usState:0,usEchoDurationUs:0,usResultReady:false,usResultValid:false,usEchoStarted:false,usTriggerTimeUs:0,lastUsTriggerUs:-1e9,usPending:null,
+    irRawL:0,irRawR:0,lastIrLeftState:-1,lastIrRightState:-1,lastIrPublish:0,lastIrRawPublish:0,
+    navState:0,openState:0,turnNext:0,currentPlace:0,targetPlace:0,facing:1,exitDir:1,insideCorridor:false,
+    openT0:0,navStartMs:0,navTurnStart:0,navLastTry:0,turnDuration:0,alignStart:0,exitStartMs:0,
+    vitalsState:0,vitalsSessionStart:0,vitalsTempRequestMs:0,vitalsLastBeatMs:0,vitalsHaveLastBeat:false,
+    vitalsBeatCount:0,vitalsRecent:[0,0,0,0],vitalsRecentIdx:0,vitalsRecentCount:0,
+    vitalsTempReady:!!ENV.tempConnected,vitalsPulseReady:!!ENV.pulseConnected,
+    fifo:[],nextBeat:0,fingerSince:-1,lastResult:null,
+    lastHist:0
+  };
+  const millis=function(){return Math.floor(F.t)};
+  const micros=function(){return F.t*1000};
+
+  /* ---------- sortie série ---------- */
+  function out(s){
+    if(opt.keep&&!opt.keep(s))return;
+    if(!opt.keep&&!opt.verbose&&/^(DIST|IR_RAW|IR,)/.test(s))return;
+    lines.push({id:lineId++,t:F.t,s:s});
+    if(lines.length>3000)lines.splice(0,1000);
+    if(/^(PLACE|ARRIVED|SAFETY|NAV|REJECTED|SIM,CHOC)/.test(s)){marks.push({t:F.t,s:s});if(marks.length>200)marks.splice(0,50)}
+    if(s.indexOf('ARRIVED,')===0)verifyArrival(s.slice(8));
+  }
+  function zoneText(){
+    if(R.x<0){for(let i=1;i<=3;i++){if(Math.abs(R.y-YC[i])<=G.sw/2+0.5)return'couloir '+PLACE_NAMES[i].toLowerCase()}}
+    if(R.y>=WORLD_L-45)return'accueil';
+    let n=0;for(let i=1;i<=3;i++){if(YC[i]>R.y)n++}
+    return'couloir principal (après '+n+' ouverture'+(n>1?'s':'')+')';
+  }
+  function verifyArrival(name){
+    const i=PLACE_NAMES.indexOf(name);let ok;
+    if(i===0)ok=R.x>=0&&R.y>=WORLD_L-45;
+    else ok=R.x<-15&&Math.abs(R.y-YC[i])<=G.sw/2;
+    if(ok){stats.ok++;out('SIM,OK,'+name+' confirmé (position réelle)')}
+    else{stats.ko++;out('SIM,ERREUR,arrivée annoncée '+name+' mais le robot est en '+zoneText())}
+  }
+
+  /* ---------- capteurs physiques ---------- */
+  function fwdV(){return[Math.sin(R.h),-Math.cos(R.h)]}
+  function rgtV(){return[Math.cos(R.h),Math.sin(R.h)]}
+  function usTrue(){
+    const f=fwdV(),ox=R.x+f[0]*US_FWD,oy=R.y+f[1]*US_FWD;
+    let best=Infinity;dbg.rays=[];
+    const angs=[-6,-3,0,3,6];
+    for(let k=0;k<angs.length;k++){
+      const ang=R.h+angs[k]*Math.PI/180;
+      const d=castRay(G,obs,ox,oy,Math.sin(ang),-Math.cos(ang),420,1);
+      dbg.rays.push({ang:ang,d:d,ox:ox,oy:oy});
+      if(d<best)best=d;
+    }
+    return best;
+  }
+  function irSample(side){
+    const f=fwdV(),r=rgtV();
+    const ox=R.x+f[0]*P.IR_OFFSET+r[0]*side*ROBOT_W/2;
+    const oy=R.y+f[1]*P.IR_OFFSET+r[1]*side*ROBOT_W/2;
+    const d=castRay(G,obs,ox,oy,r[0]*side,r[1]*side,80,1);
+    dbg.irD[side<0?0:1]={d:Math.min(d,80),ox:ox,oy:oy,dx:r[0]*side,dy:r[1]*side};
+    const dist=Math.min(d,80);
+    let raw=4095*dist/80+gauss()*P.IR_NOISE;
+    if(rnd()*100<P.IR_SPIKE){const thr=side<0?P.IR_LEFT_THRESHOLD:P.IR_RIGHT_THRESHOLD;raw=raw>thr?0:4095}
+    return Math.max(0,Math.min(4095,Math.round(raw)));
+  }
+
+  /* ---------- ultrason (ISR simulée) ---------- */
+  function requestUltrasonic(){
+    if(F.usState!==0)return false;
+    const now=micros();
+    if(now-F.lastUsTriggerUs<60000)return false;
+    F.lastUsTriggerUs=now;
+    F.usResultReady=false;F.usResultValid=false;F.usEchoStarted=false;
+    F.usTriggerTimeUs=now;F.usState=1;
+    let d=usTrue();dbg.usD=d;
+    if(isFinite(d)&&d<=400&&rnd()*100>=P.US_DROP){
+      d=Math.max(0,d+gauss()*P.US_SIGMA);
+      F.usPending={fallAt:now+500+d*58.3,dur:d*58.3};
+    }else F.usPending=null;
+    return true;
+  }
+  function usISR(){
+    if(F.usPending&&F.usState===1&&micros()>=F.usPending.fallAt){
+      F.usEchoDurationUs=F.usPending.dur;F.usResultValid=true;F.usResultReady=true;
+      F.usEchoStarted=false;F.usState=0;F.usPending=null;
+    }
+  }
+  function updateUltrasonic(){
+    if(F.usState===1&&micros()-F.usTriggerTimeUs>25000){
+      F.usState=0;F.usEchoStarted=false;F.usResultValid=false;F.usResultReady=true;F.usPending=null;
+    }
+  }
+  function getUltrasonicDistance(){
+    if(!F.usResultReady)return null;
+    F.usResultReady=false;
+    const valid=F.usResultValid,dur=F.usEchoDurationUs;
+    if(!valid||dur===0)return -1;
+    return(dur*0.0343)/2;
+  }
+
+  /* ---------- moteurs ---------- */
+  function setMotion(mode){
+    const prev=F.motionMode;
+    F.motionPending=false;F.motionMode=mode;
+    if((mode===3||mode===4)&&mode!==prev)F.turnGain=1+gauss()*P.TURN_SLIP/100;
+    if(mode!==0&&mode!==prev)F.movementStartTime=millis();
+  }
+  function computeGuardDistance(){
+    const tmp=[];
+    for(let i=0;i<3;i++){if(F.guardBuffer[i]>=0)tmp.push(F.guardBuffer[i])}
+    const n=tmp.length;
+    if(n===0)return -1;
+    if(n===1)return tmp[0];
+    if(n===2)return(tmp[0]+tmp[1])*0.5;
+    tmp.sort(function(a,b){return a-b});
+    return tmp[1];
+  }
+  function currentStopCm(){return F.navState===5?P.EXIT_STOP_CM:P.OBSTACLE_STOP_CM}
+  function updateForwardGuard(){
+    let now=millis();
+    const d=getUltrasonicDistance();
+    if(d!==null){
+      if(d<0){
+        F.invalidCount++;F.hasValidDistance=false;F.lastRawDistance=-1;F.lastFilteredDistance=-1;
+        F.guardBuffer=[-1,-1,-1];F.guardBufIdx=0;
+        if(F.motionMode===1){setMotion(0);out('SAFETY,SENSOR_INVALID')}
+        else if(F.invalidCount===3){out('SAFETY,SENSOR_INVALID')}
+      }else{
+        F.invalidCount=0;F.lastRawDistance=d;F.lastValidDistanceMs=now;F.hasValidDistance=true;
+        F.guardBuffer[F.guardBufIdx]=d;F.guardBufIdx=(F.guardBufIdx+1)%3;
+        F.lastFilteredDistance=computeGuardDistance();
+        out('DIST,'+F.lastFilteredDistance.toFixed(1));
+        if(F.motionMode===1&&(d<currentStopCm()||F.lastFilteredDistance<currentStopCm())){
+          setMotion(0);out('SAFETY,OBSTACLE,'+d.toFixed(1));
+        }
+      }
+    }
+    now=millis();
+    if(F.hasValidDistance&&now-F.lastValidDistanceMs>P.MAX_DISTANCE_AGE_MS){
+      F.hasValidDistance=false;F.lastRawDistance=-1;F.lastFilteredDistance=-1;
+      F.guardBuffer=[-1,-1,-1];F.guardBufIdx=0;
+      if(F.motionMode===1){setMotion(0);out('SAFETY,SENSOR_STALE')}
+    }
+    if(now-F.lastGuardTrigger<P.GUARD_INTERVAL)return;
+    if(requestUltrasonic())F.lastGuardTrigger=now;
+  }
+  function readIrState(side){return side==='L'?(F.irRawL>P.IR_LEFT_THRESHOLD?1:0):(F.irRawR>P.IR_RIGHT_THRESHOLD?1:0)}
+  function publishIrStates(){
+    const now=millis();
+    const leftState=F.irRawL>P.IR_LEFT_THRESHOLD?1:0,rightState=F.irRawR>P.IR_RIGHT_THRESHOLD?1:0;
+    if(now-F.lastIrRawPublish>=250){out('IR_RAW,LEFT,'+F.irRawL);out('IR_RAW,RIGHT,'+F.irRawR);F.lastIrRawPublish=now}
+    const periodic=(now-F.lastIrPublish>=100);
+    if(leftState!==F.lastIrLeftState||periodic){out('IR,LEFT,'+leftState);F.lastIrLeftState=leftState}
+    if(rightState!==F.lastIrRightState||periodic){out('IR,RIGHT,'+rightState);F.lastIrRightState=rightState}
+    if(periodic)F.lastIrPublish=now;
+  }
+  function vitalsIsBusy(){return F.vitalsState===1||F.vitalsState===2}
+  function forwardSafetyClear(){
+    return F.hasValidDistance&&millis()-F.lastValidDistanceMs<=P.MAX_DISTANCE_AGE_MS&&
+      F.lastRawDistance>=currentStopCm()&&F.lastFilteredDistance>=currentStopCm();
+  }
+  function applyMotion(mode){
+    if(vitalsIsBusy()){setMotion(0);out('REJECTED,MEASURING');return}
+    if(mode===1&&!forwardSafetyClear()){setMotion(0);out('REJECTED,FORWARD_UNSAFE');return}
+    setMotion(mode);
+  }
+  function requestMotion(mode){
+    if(vitalsIsBusy()){out('REJECTED,MEASURING');return}
+    const reversing=mode!==0&&F.motionMode!==0&&mode!==F.motionMode;
+    if(reversing){setMotion(0);F.pendingMotion=mode;F.pendingSince=millis();F.motionPending=true}
+    else applyMotion(mode);
+  }
+  function updatePendingMotion(){
+    if(vitalsIsBusy()){if(F.motionPending)F.motionPending=false;return}
+    if(F.motionPending&&millis()-F.pendingSince>=150){const m=F.pendingMotion;F.motionPending=false;applyMotion(m)}
+  }
+  function decideAutonomousMotion(){
+    if(!F.autoMode)return;
+    if(F.navState!==0)return;
+    if(vitalsIsBusy())return;
+    if(!F.hasValidDistance||millis()-F.lastValidDistanceMs>P.MAX_DISTANCE_AGE_MS){
+      if(F.motionMode===1){setMotion(0);out('SAFETY,SENSOR_STALE')}
+      return;
+    }
+    const frontClear=F.lastRawDistance>=P.OBSTACLE_STOP_CM&&F.lastFilteredDistance>=P.OBSTACLE_STOP_CM;
+    const irLeft=readIrState('L'),irRight=readIrState('R');
+    if(frontClear){
+      if(F.motionMode!==1){requestMotion(1);out('AUTO,FORWARD')}
+    }else{
+      if(irLeft===1&&irRight===0){if(F.motionMode!==3){requestMotion(3);out('AUTO,LEFT')}}
+      else if(irRight===1&&irLeft===0){if(F.motionMode!==4){requestMotion(4);out('AUTO,RIGHT')}}
+      else if(irLeft===1&&irRight===1){if(F.motionMode!==3){requestMotion(3);out('AUTO,LEFT_PREF')}}
+      else{if(F.motionMode!==0){setMotion(0);out('AUTO,STOP_BOTH_BLOCKED')}}
+    }
+  }
+
+  /* ---------- navigation entre lieux ---------- */
+  function openingEvent(clear){
+    const now=millis();
+    switch(F.openState){
+      case 0:if(clear){F.openState=1;F.openT0=now}break;
+      case 1:if(!clear){F.openState=0}else if(now-F.openT0>=P.OPENING_CONFIRM_MS){F.openState=2;return true}break;
+      case 2:if(!clear){F.openState=3;F.openT0=now}break;
+      case 3:if(clear){F.openState=2}else if(now-F.openT0>=P.WALL_CONFIRM_MS){F.openState=0}break;
+    }
+    return false;
+  }
+  function navStop(reason){setMotion(0);F.navState=0;out('NAV,'+reason)}
+  function navArrived(){setMotion(0);F.navState=0;out('ARRIVED,'+PLACE_NAMES[F.currentPlace])}
+  function startTurn(m,ms,next){setMotion(m);F.turnDuration=ms;F.turnNext=next;F.navTurnStart=millis();F.navState=1}
+  function goTo(target){
+    if(target<0||target>=4)return;
+    if(vitalsIsBusy()){out('REJECTED,MEASURING');return}
+    if(F.navState===1){out('REJECTED,TURNING');return}
+    if(target===F.currentPlace){navArrived();return}
+    F.autoMode=false;F.targetPlace=target;F.navStartMs=millis();
+    const needed=target>F.currentPlace?1:-1;
+    if(F.insideCorridor){F.exitDir=needed;startTurn(3,P.TURN_180_MS,2)}
+    else if(needed!==F.facing){startTurn(3,P.TURN_180_MS,0)}
+    else F.navState=2;
+    out('NAV,GO,'+PLACE_NAMES[target]);
+  }
+  function updateNavigation(){
+    if(F.navState===0)return;
+    const now=millis();
+    if(vitalsIsBusy()){navStop('ABORT_MEASURING');return}
+    if(now-F.navStartMs>P.NAV_MAX_MS){navStop('TIMEOUT');return}
+    if(F.navState===1){
+      if(now-F.navTurnStart<F.turnDuration)return;
+      setMotion(0);
+      switch(F.turnNext){
+        case 0:F.facing=-F.facing;F.openState=(F.currentPlace===0)?0:2;F.navState=2;break;
+        case 1:F.insideCorridor=true;F.navState=4;break;
+        case 2:F.exitStartMs=0;F.navState=5;break;
+        case 3:F.insideCorridor=false;F.facing=F.exitDir;F.openState=2;F.navState=2;break;
+      }
+      return;
+    }
+    if(F.navState===3){
+      if(now-F.alignStart>=P.ALIGN_MS){setMotion(0);startTurn(F.facing===1?3:4,P.TURN_90_MS,1)}
+      return;
+    }
+    if(F.navState===4){
+      const endWall=F.hasValidDistance&&F.lastFilteredDistance>=0&&F.lastFilteredDistance<P.OBSTACLE_STOP_CM;
+      if(endWall){navArrived();return}
+      if(F.motionMode!==1&&!F.motionPending&&now-F.navLastTry>=P.NAV_RETRY_MS){F.navLastTry=now;requestMotion(1)}
+      return;
+    }
+    if(F.navState===5){
+      if(F.exitStartMs&&F.hasValidDistance&&F.lastFilteredDistance>=0&&F.lastFilteredDistance<P.EXIT_DONE_CM){
+        setMotion(0);startTurn(F.exitDir===1?3:4,P.TURN_90_MS,3);return;
+      }
+      if(!F.exitStartMs){
+        if(F.motionMode!==1&&!F.motionPending&&now-F.navLastTry>=P.NAV_RETRY_MS){F.navLastTry=now;requestMotion(1)}
+        if(F.motionMode===1)F.exitStartMs=now;
+      }else if(F.motionMode!==1){navStop('EXIT_BLOCKED')}
+      return;
+    }
+    const endWall=F.hasValidDistance&&F.lastFilteredDistance>=0&&F.lastFilteredDistance<P.OBSTACLE_STOP_CM;
+    if(F.targetPlace===0&&F.facing===-1&&endWall){F.currentPlace=0;navArrived();return}
+    if(F.motionMode!==1&&!F.motionPending&&now-F.navLastTry>=P.NAV_RETRY_MS){F.navLastTry=now;requestMotion(1)}
+    const clear=(readIrState(F.facing===1?'L':'R')===1);
+    if(F.motionMode===1&&openingEvent(clear)){
+      const np=F.currentPlace+F.facing;
+      if(np>=1&&np<4){
+        F.currentPlace=np;out('PLACE,'+PLACE_NAMES[np]);
+        if(F.currentPlace===F.targetPlace){F.alignStart=now;F.navState=3}
+      }
+    }
+  }
+  function handleNavCommand(cmd){
+    if(cmd==='GOTO,ACCUEIL')goTo(0);
+    else if(cmd==='GOTO,TOILETTES')goTo(1);
+    else if(cmd==='GOTO,PHARMACIE')goTo(2);
+    else if(cmd==='GOTO,DOCTEUR')goTo(3);
+    else if(cmd==='WHERE')out('PLACE,'+PLACE_NAMES[F.currentPlace]);
+    else if(cmd==='NAVSTOP')navStop('CANCELLED');
+    else out('ERROR,UNKNOWN_GOTO');
+  }
+
+  /* ---------- signes vitaux ---------- */
+  function vitalsPrintReady(){out('READY,temp='+(F.vitalsTempReady?1:0)+',pulse='+(F.vitalsPulseReady?1:0))}
+  function vitalsResetBeatData(){F.vitalsHaveLastBeat=false;F.vitalsLastBeatMs=0;F.vitalsBeatCount=0;F.vitalsRecentIdx=0;F.vitalsRecentCount=0}
+  function vitalsStart(){
+    if(!F.vitalsTempReady&&!F.vitalsPulseReady){out('ERROR,NO_SENSOR');return}
+    vitalsResetBeatData();F.vitalsState=1;F.vitalsSessionStart=millis();out('STATE,RUNNING');
+  }
+  function vitalsPublishResult(){
+    let tempOk=false,t=0;
+    if(F.vitalsTempReady){
+      t=ENV.tempConnected?ENV.temp+gauss()*0.05:-127;
+      tempOk=(t!==-127)&&t>=25&&t<=45;
+    }
+    let bpmOk=false,bpm=0;
+    if(F.vitalsPulseReady&&F.vitalsBeatCount>=5&&F.vitalsRecentCount>0){
+      let sum=0;for(let i=0;i<F.vitalsRecentCount;i++)sum+=F.vitalsRecent[i];
+      bpm=sum/F.vitalsRecentCount;bpmOk=bpm>=40&&bpm<=200;
+    }
+    const line='RESULT,temperature_c='+(tempOk?t.toFixed(1):'NA')+',heart_rate_bpm='+(bpmOk?Math.floor(bpm+0.5):'NA')+',spo2_percent=NA';
+    out(line);out('STATE,DONE');
+    F.lastResult={temp:tempOk?t:null,bpm:bpmOk?Math.floor(bpm+0.5):null,at:F.t};
+    F.vitalsState=3;
+  }
+  function vitalsFinishAcquisition(){
+    if(F.vitalsState!==1)return;
+    if(F.vitalsTempReady){F.vitalsTempRequestMs=millis();F.vitalsState=2}
+    else vitalsPublishResult();
+  }
+  function vitalsCancel(){if(vitalsIsBusy()){F.vitalsState=0;vitalsResetBeatData();out('STATE,CANCELLED')}}
+  function vitalsUpdate(){
+    const now=millis();
+    if(F.vitalsState===3){F.vitalsState=0;return}
+    if(F.vitalsState===1){
+      if(F.vitalsPulseReady){
+        while(F.fifo.length>0){
+          const smp=F.fifo.shift();
+          if(smp.ir<50000){vitalsResetBeatData();continue}
+          if(smp.beat){
+            if(F.vitalsHaveLastBeat){
+              const bpm=60000/(now-F.vitalsLastBeatMs);
+              if(bpm>=40&&bpm<=200){
+                F.vitalsRecent[F.vitalsRecentIdx]=bpm;F.vitalsRecentIdx=(F.vitalsRecentIdx+1)%4;
+                if(F.vitalsRecentCount<4)F.vitalsRecentCount++;
+                F.vitalsBeatCount++;
+              }
+            }
+            F.vitalsLastBeatMs=now;F.vitalsHaveLastBeat=true;
+          }
+        }
+      }
+      const enough=!F.vitalsPulseReady||F.vitalsBeatCount>=8;
+      const timeout=now-F.vitalsSessionStart>=20000;
+      if(enough||timeout)vitalsFinishAcquisition();
+      return;
+    }
+    if(F.vitalsState===2&&now-F.vitalsTempRequestMs>=750)vitalsPublishResult();
+  }
+  function pulseGen(){
+    if(!F.vitalsPulseReady)return;
+    const finger=ENV.finger;
+    if(finger){if(F.fingerSince<0){F.fingerSince=F.t;F.nextBeat=F.t+1500}}else F.fingerSince=-1;
+    let beat=false;
+    if(finger&&F.t>=F.nextBeat){beat=true;F.nextBeat=F.t+60000/ENV.bpm+gauss()*12}
+    F.fifo.push({ir:finger?90000+gauss()*2000:3000,beat:beat});
+    if(F.fifo.length>32)F.fifo.shift();
+  }
+
+  /* ---------- sécurité mouvement manuel, commandes série ---------- */
+  function checkMoveTimeout(){
+    if(F.motionMode===0)return;
+    if(F.navState!==0)return;
+    if(millis()-F.movementStartTime>P.MAX_MOVE_DURATION){setMotion(0);out('SAFETY,MOVE_TIMEOUT')}
+  }
+  function manualMotion(m){
+    F.autoMode=false;
+    if(F.navState!==0)navStop('MANUAL_OVERRIDE');
+    requestMotion(m);
+  }
+  function handleCommand(raw){
+    const cmd=raw.toUpperCase();
+    if(cmd.indexOf('GOTO,')===0||cmd==='WHERE'||cmd==='NAVSTOP')handleNavCommand(cmd);
+    else if(cmd==='FORWARD'||cmd==='F')manualMotion(1);
+    else if(cmd==='BACKWARD'||cmd==='B')manualMotion(2);
+    else if(cmd==='LEFT'||cmd==='L')manualMotion(3);
+    else if(cmd==='RIGHT'||cmd==='R')manualMotion(4);
+    else if(cmd==='STOP'||cmd==='S'){F.autoMode=false;if(F.navState!==0)navStop('STOPPED');F.motionPending=false;setMotion(0)}
+    else if(cmd==='AUTO,ON'){if(F.navState!==0)navStop('MANUAL_OVERRIDE');F.autoMode=true;out('AUTO,ENABLED')}
+    else if(cmd==='AUTO,OFF'){F.autoMode=false;setMotion(0);out('AUTO,DISABLED')}
+    else if(cmd==='VITALS,START'){if(F.navState!==0)navStop('ABORT_MEASURING');F.autoMode=false;setMotion(0);vitalsStart()}
+    else if(cmd==='VITALS,CANCEL')vitalsCancel();
+    else if(cmd==='STATUS'){out('PLACE,'+PLACE_NAMES[F.currentPlace]);vitalsPrintReady()}
+    else if(cmd==='PING')out('PONG');
+    else out('ERROR,UNKNOWN_COMMAND');
+  }
+  function readSerial(){
+    while(F.cmdQueue.length){
+      const c=F.cmdQueue.shift();
+      out('> '+c);
+      if(c.length>32){out('ERROR,LINE_TOO_LONG');continue}
+      if(c.length>0)handleCommand(c);
+    }
+  }
+
+  /* ---------- physique du robot ---------- */
+  function physics(dtS){
+    const pct=P.MOTOR_SPEED_PERCENT,act=pct>=P.DEADZONE;
+    const lin=act?P.V100*pct/100:0,ang=act?P.W100*pct/100:0;
+    let v=0,w=0;
+    switch(F.motionMode){case 1:v=lin;break;case 2:v=-lin;break;case 3:w=-ang*F.turnGain;break;case 4:w=ang*F.turnGain;break}
+    if(!v&&!w)return;
+    const dh=(w+(v>0?P.DRIFT:v<0?-P.DRIFT:0))*Math.PI/180*dtS;
+    const nh=R.h+dh;
+    const nx=R.x+Math.sin(nh)*v*dtS,ny=R.y-Math.cos(nh)*v*dtS;
+    if(collides(G,obs,nx,ny,nh)){
+      if(!R.colliding){R.colliding=true;R.chocs++;R.flash=F.t;out('SIM,CHOC,contre un mur ou un obstacle ('+zoneText()+')')}
+    }else{
+      R.colliding=false;R.dist+=Math.abs(v)*dtS;R.x=nx;R.y=ny;R.h=nh;
+      const lt=R.trail[R.trail.length-1];
+      if(!lt||Math.hypot(lt[0]-R.x,lt[1]-R.y)>3){R.trail.push([R.x,R.y]);if(R.trail.length>1500)R.trail.splice(0,300)}
+    }
+  }
+
+  /* ---------- boucle ---------- */
+  function loop(){
+    readSerial();updateUltrasonic();updateForwardGuard();updatePendingMotion();updateNavigation();
+    decideAutonomousMotion();checkMoveTimeout();publishIrStates();vitalsUpdate();
+  }
+  function step(){
+    F.t+=DT;
+    F.irRawL=irSample(-1);F.irRawR=irSample(1);
+    usISR();pulseGen();
+    loop();
+    physics(DT/1000);
+    if(F.t-F.lastHist>=50){
+      F.lastHist=F.t;
+      hist.push({t:F.t,us:F.hasValidDistance?F.lastFilteredDistance:null,l:F.irRawL,r:F.irRawR,nav:F.navState,m:F.motionMode});
+      if(hist.length>900)hist.splice(0,100);
+    }
+  }
+  function run(maxMs,until){
+    const end=F.t+maxMs;
+    while(F.t<end){if(until&&until())break;step()}
+    return F.t;
+  }
+  function addObstacle(x,y,w,h){
+    w=w||14;h=h||14;
+    if(!isFree(G,[],x,y))return false;
+    const o={x:x,y:y,w:w,h:h};
+    obs.push(o);
+    if(collides(G,obs,R.x,R.y,R.h)){obs.pop();return false}
+    return true;
+  }
+  function removeObstacleAt(x,y){
+    for(let i=0;i<obs.length;i++){const o=obs[i];if(Math.abs(x-o.x)<=o.w/2+1&&Math.abs(y-o.y)<=o.h/2+1){obs.splice(i,1);return true}}
+    return false;
+  }
+  function teleport(x,y,hDeg){
+    const h=hDeg*Math.PI/180;
+    if(!isFree(G,obs,x,y)||collides(G,obs,x,y,h))return false;
+    R.x=x;R.y=y;R.h=h;R.trail=[];R.colliding=false;return true;
+  }
+  setMotion(0);
+  vitalsPrintReady();
+  out('BOOT,OK');
+  return{F:F,R:R,G:G,P:P,ENV:ENV,obs:obs,lines:lines,marks:marks,hist:hist,stats:stats,dbg:dbg,
+    step:step,run:run,send:function(c){F.cmdQueue.push(c)},zoneText:zoneText,addObstacle:addObstacle,
+    removeObstacleAt:removeObstacleAt,teleport:teleport,out:out};
+}
+
+/* ============================================================
+   CALIBRATION
+   ============================================================ */
+function idealValues(P){
+  const act=P.MOTOR_SPEED_PERCENT>=P.DEADZONE;
+  const v=act?P.V100*P.MOTOR_SPEED_PERCENT/100:0;
+  const w=act?P.W100*P.MOTOR_SPEED_PERCENT/100:0;
+  const gap=P.MAIN_W/2-ROBOT_W/2;
+  const far=Math.min(80,gap+P.SIDE_D);
+  const dthr=gap+0.45*(far-gap);
+  const alignCm=P.SIDE_W/2-(v*P.OPENING_CONFIRM_MS/1000-P.IR_OFFSET);
+  return{
+    v:v,w:w,
+    t180:w?Math.round(180/w*1000/10)*10:null,
+    t90:w?Math.round(90/w*1000/10)*10:null,
+    align:v?Math.max(0,Math.round(alignCm/v*1000/10)*10):null,
+    alignCm:alignCm,
+    alignTol:v?Math.round((P.SIDE_W-ROBOT_W)/2/v*1000):null,
+    exitDone:Math.round(P.MAIN_W/2-US_FWD),
+    ir:Math.round(4095*dthr/80/10)*10,
+    gap:gap,
+    irWall:Math.round(4095*gap/80),
+    irOpen:Math.round(4095*far/80)
+  };
+}
+</script>
+
+<script>
+/* ============================================================
+   INTERFACE
+   ============================================================ */
+(function(){
+const $=function(id){return document.getElementById(id)};
+let P=Object.assign({},DEFAULTS);
+const ENV={finger:true,bpm:72,temp:36.7,tempConnected:true,pulseConnected:true};
+const filt={dist:false,ir:false,raw:false};
+let sim=null,running=true,speed=1,simAcc=0,seedCounter=1;
+function keepLine(s){
+  if(/^DIST/.test(s))return filt.dist;
+  if(/^IR_RAW/.test(s))return filt.raw;
+  if(/^IR,/.test(s))return filt.ir;
+  return true;
+}
+function doReset(){
+  sim=createSim(P,ENV,(seedCounter++)*7919+3,{keep:keepLine});
+  conLast=-1;$('console').innerHTML='';
+  layout();
+}
+
+/* ---------- paramètres ---------- */
+const PDEF=[
+ {g:'Firmware (constantes du .ino)',open:true,items:[
+  ['MOTOR_SPEED_PERCENT','MOTOR_SPEED_PERCENT',5,100,1,'%'],
+  ['OBSTACLE_STOP_CM','OBSTACLE_STOP_CM',10,60,1,'cm'],
+  ['EXIT_STOP_CM','EXIT_STOP_CM',5,30,1,'cm'],
+  ['EXIT_DONE_CM','EXIT_DONE_CM',8,40,1,'cm'],
+  ['TURN_180_MS','TURN_180_MS',500,4000,10,'ms'],
+  ['TURN_90_MS','TURN_90_MS',250,2000,10,'ms'],
+  ['ALIGN_MS','ALIGN_MS',0,1500,10,'ms'],
+  ['OPENING_CONFIRM_MS','OPENING_CONFIRM_MS',50,1000,10,'ms'],
+  ['WALL_CONFIRM_MS','WALL_CONFIRM_MS',50,1000,10,'ms'],
+  ['IR_LEFT_THRESHOLD','IR_LEFT_THRESHOLD',200,3800,10,'ADC'],
+  ['IR_RIGHT_THRESHOLD','IR_RIGHT_THRESHOLD',200,3800,10,'ADC'],
+  ['MAX_MOVE_DURATION','MAX_MOVE_DURATION',500,5000,100,'ms']]},
+ {g:'Robot réel (hypothèses à mesurer)',open:false,items:[
+  ['V100','Vitesse à 100 %',10,100,1,'cm/s'],
+  ['W100','Rotation à 100 %',60,400,5,'°/s'],
+  ['DEADZONE','Zone morte des moteurs',0,60,1,'%'],
+  ['IR_OFFSET','Position des IR devant le centre',-8,10,1,'cm'],
+  ['DRIFT','Dérive en ligne droite',-5,5,0.1,'°/s'],
+  ['TURN_SLIP','Dispersion des rotations',0,20,1,'%']]},
+ {g:'Bruit des capteurs',open:false,items:[
+  ['US_SIGMA','Bruit ultrason (écart-type)',0,3,0.1,'cm'],
+  ['US_DROP','Mesures ultrason perdues',0,30,1,'%'],
+  ['IR_NOISE','Bruit IR (écart-type)',0,500,10,'ADC'],
+  ['IR_SPIKE','Parasites IR (par lecture)',0,5,0.1,'%']]},
+ {g:'Piste (relance la simulation)',open:false,items:[
+  ['MAIN_W','Largeur du couloir principal',40,90,1,'cm',true],
+  ['SIDE_W','Largeur des couloirs latéraux',20,50,1,'cm',true],
+  ['SIDE_D','Profondeur des couloirs latéraux',40,100,5,'cm',true]]}
+];
+const inputs={};
+function buildParams(){
+  const root=$('params');root.innerHTML='';
+  PDEF.forEach(function(grp){
+    const d=document.createElement('details');if(grp.open)d.open=true;
+    const sm=document.createElement('summary');sm.textContent=grp.g;d.appendChild(sm);
+    grp.items.forEach(function(it){
+      const k=it[0],div=document.createElement('div');div.className='prm';
+      const nm=document.createElement('span');nm.className='nm';nm.innerHTML=it[1]+' <small>'+it[5]+'</small>';
+      const num=document.createElement('input');num.type='number';num.min=it[2];num.max=it[3];num.step=it[4];
+      const rg=document.createElement('input');rg.type='range';rg.min=it[2];rg.max=it[3];rg.step=it[4];
+      const upd=function(v){v=parseFloat(v);if(isNaN(v))return;P[k]=v;num.value=v;rg.value=v;if(it[6])doReset();refreshCal()};
+      num.addEventListener('change',function(){upd(num.value)});
+      rg.addEventListener('input',function(){upd(rg.value)});
+      div.appendChild(nm);div.appendChild(num);div.appendChild(rg);d.appendChild(div);
+      inputs[k]={num:num,rg:rg};
+    });
+    root.appendChild(d);
+  });
+  syncInputs();
+}
+function syncInputs(){for(const k in inputs){inputs[k].num.value=P[k];inputs[k].rg.value=P[k]}}
+function setParams(o,reset){Object.assign(P,o);syncInputs();if(reset)doReset();refreshCal()}
+
+/* ---------- calibration ---------- */
+function refreshCal(){
+  const I=idealValues(P),b=$('calBody');
+  let h='<table><tr><th>Constante</th><th>Actuelle</th><th>Conseillée</th></tr>';
+  const row=function(n,cur,ideal,tol){
+    const ok=ideal===null?false:(tol?Math.abs(cur-ideal)<=tol:cur===ideal);
+    h+='<tr><td>'+n+'</td><td>'+cur+'</td><td>'+(ideal===null?'-':ideal)+' <span class="badge '+(ok?'ok':'warn')+'">'+(ok?'ok':'à régler')+'</span></td></tr>';
+  };
+  row('TURN_180_MS',P.TURN_180_MS,I.t180,40);
+  row('TURN_90_MS',P.TURN_90_MS,I.t90,20);
+  row('ALIGN_MS',P.ALIGN_MS,I.align,I.alignTol?Math.min(I.alignTol,150):50);
+  row('EXIT_DONE_CM',P.EXIT_DONE_CM,I.exitDone,2);
+  row('Seuil IR (gauche)',P.IR_LEFT_THRESHOLD,I.ir,500);
+  h+='</table>';
+  const w=[];
+  if(I.v===0)w.push('Les moteurs sont sous la zone morte ('+P.DEADZONE+' %) : le robot ne bouge pas. Augmentez MOTOR_SPEED_PERCENT.');
+  if(I.alignTol!==null)w.push('ALIGN_MS : le robot doit être centré dans l\'ouverture à ±'+((P.SIDE_W-ROBOT_W)/2)+' cm près, soit une tolérance de ±'+I.alignTol+' ms à cette vitesse.');
+  if(Math.hypot(ROBOT_W/2,ROBOT_L/2)>=P.SIDE_W/2)w.push('Le robot ne peut pas pivoter sur place dans un couloir latéral de '+P.SIDE_W+' cm (rayon de rotation '+Math.hypot(ROBOT_W/2,ROBOT_L/2).toFixed(1)+' cm).');
+  if(I.irWall>=P.IR_LEFT_THRESHOLD)w.push('Le mur du couloir principal ('+I.gap+' cm) donne ADC ≈ '+I.irWall+', au-dessus du seuil '+P.IR_LEFT_THRESHOLD+' : l\'IR verrait « libre » partout.');
+  h+='<div class="note">IR attendus : mur à '+I.gap+' cm ≈ ADC '+I.irWall+' ; ouverture ≈ ADC '+I.irOpen+'. Seuil conseillé : milieu pondéré ≈ '+I.ir+'.</div>';
+  w.forEach(function(t){h+='<div class="warnbox">'+t+'</div>'});
+  h+='<div class="row"><button id="applyCal" class="sm">Appliquer les valeurs conseillées</button></div>';
+  b.innerHTML=h;
+  $('applyCal').onclick=function(){
+    const o={};if(I.t180)o.TURN_180_MS=I.t180;if(I.t90)o.TURN_90_MS=I.t90;if(I.align!==null)o.ALIGN_MS=I.align;
+    o.EXIT_DONE_CM=I.exitDone;o.IR_LEFT_THRESHOLD=I.ir;o.IR_RIGHT_THRESHOLD=I.ir;setParams(o,false);
+  };
+}
+
+/* ---------- canvas piste ---------- */
+const cv=$('map'),ctx=cv.getContext('2d');
+let M={a:1,b:0,c:0,d:1,e:0,f:0},cvW=300,cvH=300,orient='v',viewMode='auto',scale=1,C={};
+function readColors(){
+  const cs=getComputedStyle(document.documentElement);
+  ['bg','panel','ink','muted','line','accent','ok','warn','bad','floor','wall','chip'].forEach(function(k){C[k]=cs.getPropertyValue('--'+k).trim()});
+}
+function layout(){
+  readColors();
+  const G=sim.G;
+  const wrap=cv.parentElement;const cw=Math.max(280,wrap.clientWidth);
+  orient=viewMode==='auto'?(cw>=760?'h':'v'):viewMode;
+  const pad=12,xmin=-G.sd-WALLT,xmax=G.W+WALLT,ymin=-WALLT,ymax=WORLD_L+WALLT;
+  const ww=xmax-xmin,hh=ymax-ymin;
+  let s,ch,ox,oy;
+  if(orient==='v'){
+    s=(cw-2*pad)/ww;ch=hh*s+2*pad;
+    const maxH=Math.max(420,window.innerHeight*0.86);
+    if(ch>maxH){s=(maxH-2*pad)/hh;ch=maxH}
+    ox=(cw-ww*s)/2;oy=pad;
+    M={a:s,b:0,c:0,d:s,e:ox-s*xmin,f:oy-s*ymin};
+  }else{
+    s=(cw-2*pad)/hh;ch=ww*s+2*pad;
+    ox=pad;oy=pad;
+    M={a:0,b:s,c:-s,d:0,e:ox+s*ymax,f:oy-s*xmin};
+  }
+  scale=s;cvW=cw;cvH=Math.round(ch);
+  const dpr=window.devicePixelRatio||1;
+  cv.width=Math.round(cvW*dpr);cv.height=Math.round(cvH*dpr);
+  cv.style.height=cvH+'px';
+}
+function w2s(x,y){return[M.a*x+M.c*y+M.e,M.b*x+M.d*y+M.f]}
+function s2w(sx,sy){const det=M.a*M.d-M.b*M.c;const X=sx-M.e,Y=sy-M.f;return[(M.d*X-M.c*Y)/det,(-M.b*X+M.a*Y)/det]}
+function label(txt,wx,wy,col,size,align){
+  const p=w2s(wx,wy),dpr=window.devicePixelRatio||1;
+  ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle=col||C.muted;ctx.font=(size||11)+'px system-ui,sans-serif';ctx.textAlign=align||'center';ctx.textBaseline='middle';
+  ctx.fillText(txt,p[0],p[1]);ctx.restore();
+}
+function setWorld(){const dpr=window.devicePixelRatio||1;ctx.setTransform(dpr*M.a,dpr*M.b,dpr*M.c,dpr*M.d,dpr*M.e,dpr*M.f)}
+const TINTS=['rgba(183,121,31,.20)','rgba(122,79,208,.17)','rgba(26,138,90,.19)','rgba(216,90,48,.19)'];
+function drawMap(){
+  const dpr=window.devicePixelRatio||1,G=sim.G,R=sim.R,F=sim.F;
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cvW,cvH);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,cvW,cvH);
+  setWorld();
+  ctx.fillStyle=C.wall;
+  G.rects.forEach(function(r){ctx.fillRect(r.x0-WALLT,r.y0-WALLT,r.x1-r.x0+2*WALLT,r.y1-r.y0+2*WALLT)});
+  ctx.fillStyle=C.floor;
+  G.rects.forEach(function(r){ctx.fillRect(r.x0,r.y0,r.x1-r.x0,r.y1-r.y0)});
+  ctx.fillStyle=TINTS[0];ctx.fillRect(0,WORLD_L-30,G.W,30);
+  G.rects.forEach(function(r){
+    if(!r.idx)return;
+    ctx.fillStyle=TINTS[r.idx];ctx.fillRect(r.x0,r.y0,r.x1-r.x0,r.y1-r.y0);
+    if(F.navState!==0&&F.targetPlace===r.idx){ctx.fillStyle=TINTS[r.idx];ctx.fillRect(r.x0,r.y0,r.x1-r.x0,r.y1-r.y0)}
+  });
+  if(F.navState!==0&&F.targetPlace===0){ctx.fillStyle=TINTS[0];ctx.fillRect(0,WORLD_L-30,G.W,30)}
+  sim.obs.forEach(function(o){
+    ctx.fillStyle='#e08a1e';ctx.fillRect(o.x-o.w/2,o.y-o.h/2,o.w,o.h);
+    ctx.strokeStyle='rgba(0,0,0,.45)';ctx.lineWidth=0.8;ctx.strokeRect(o.x-o.w/2,o.y-o.h/2,o.w,o.h);
+  });
+  if($('cTrail').checked&&R.trail.length>1){
+    ctx.strokeStyle=C.accent;ctx.globalAlpha=0.45;ctx.lineWidth=1.2;ctx.setLineDash([3,3]);
+    ctx.beginPath();R.trail.forEach(function(p,i){if(i===0)ctx.moveTo(p[0],p[1]);else ctx.lineTo(p[0],p[1])});ctx.stroke();
+    ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+  const f=[Math.sin(R.h),-Math.cos(R.h)];
+  if($('cBeams').checked){
+    const rays=sim.dbg.rays;
+    if(rays.length){
+      ctx.fillStyle='rgba(42,111,219,.14)';ctx.beginPath();
+      const o0=rays[0];ctx.moveTo(o0.ox,o0.oy);
+      rays.forEach(function(r){const d=Math.min(isFinite(r.d)?r.d:200,200);ctx.lineTo(r.ox+Math.sin(r.ang)*d,r.oy-Math.cos(r.ang)*d)});
+      ctx.closePath();ctx.fill();
+      const rc=rays[2],dc=Math.min(isFinite(rc.d)?rc.d:200,200);
+      ctx.strokeStyle=C.accent;ctx.lineWidth=0.8;ctx.setLineDash([2,2]);
+      ctx.beginPath();ctx.moveTo(rc.ox,rc.oy);ctx.lineTo(rc.ox+Math.sin(rc.ang)*dc,rc.oy-Math.cos(rc.ang)*dc);ctx.stroke();ctx.setLineDash([]);
+    }
+    [0,1].forEach(function(i){
+      const q=sim.dbg.irD[i];if(!q)return;
+      const state=(i===0?F.irRawL>P.IR_LEFT_THRESHOLD:F.irRawR>P.IR_RIGHT_THRESHOLD);
+      ctx.strokeStyle=state?C.ok:C.bad;ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.moveTo(q.ox,q.oy);ctx.lineTo(q.ox+q.dx*q.d,q.oy+q.dy*q.d);ctx.stroke();
+      ctx.fillStyle=state?C.ok:C.bad;ctx.beginPath();ctx.arc(q.ox+q.dx*q.d,q.oy+q.dy*q.d,1.4,0,6.3);ctx.fill();
+    });
+  }
+  ctx.save();ctx.translate(R.x,R.y);ctx.rotate(R.h);
+  const flash=(F.t-R.flash)<700;
+  ctx.fillStyle='#2a6fdb';ctx.fillRect(-8,-10,16,20);
+  ctx.fillStyle='#16407f';ctx.fillRect(-10,-8,2,6);ctx.fillRect(8,-8,2,6);ctx.fillRect(-10,3,2,6);ctx.fillRect(8,3,2,6);
+  ctx.fillStyle='#f0b030';ctx.beginPath();ctx.moveTo(-5,-10);ctx.lineTo(5,-10);ctx.lineTo(0,-15);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#fff';ctx.fillRect(-1.5,-9.5,3,2.5);
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(-8,-P.IR_OFFSET,1.3,0,6.3);ctx.arc(8,-P.IR_OFFSET,1.3,0,6.3);ctx.fill();
+  if(flash||R.colliding){ctx.strokeStyle=C.bad;ctx.lineWidth=1.8;ctx.strokeRect(-9.5,-11.5,19,23)}
+  ctx.restore();
+  /* étiquettes */
+  const sz=Math.max(10,Math.min(13,scale*5));
+  label('ACCUEIL',G.W/2,WORLD_L-14,C.ink,sz);
+  label('FOND',G.W/2,8,C.muted,sz);
+  [1,2,3].forEach(function(i){
+    label((i)+' '+PLACE_NAMES[i],-G.sd/2,YC[i],C.ink,sz);
+  });
+  label('50 cm',-G.sd+25,WORLD_L-6,C.muted,10);
+  setWorld();ctx.strokeStyle=C.muted;ctx.lineWidth=1;ctx.beginPath();
+  if(orient==='v'){ctx.moveTo(-G.sd,WORLD_L-14);ctx.lineTo(-G.sd+50,WORLD_L-14)}else{ctx.moveTo(-G.sd,WORLD_L-14);ctx.lineTo(-G.sd+50,WORLD_L-14)}
+  ctx.stroke();
+  /* badge d'état sur la piste */
+  const dpr2=window.devicePixelRatio||1;ctx.setTransform(dpr2,0,0,dpr2,0,0);
+  ctx.font='600 12px system-ui,sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+  const txt=NAV_NAMES[F.navState]+' · '+MODE_NAMES[F.motionMode]+'  t='+(F.t/1000).toFixed(1)+' s';
+  ctx.fillStyle=C.panel;ctx.globalAlpha=0.85;ctx.fillRect(6,6,ctx.measureText(txt).width+14,22);ctx.globalAlpha=1;
+  ctx.fillStyle=C.ink;ctx.fillText(txt,13,11);
+}
+
+/* ---------- oscilloscope ---------- */
+const sc=$('scope'),sctx=sc.getContext('2d');
+function drawScope(){
+  const dpr=window.devicePixelRatio||1,w=Math.max(260,sc.parentElement.clientWidth-24),h=230;
+  if(sc.width!==Math.round(w*dpr)||sc.height!==Math.round(h*dpr)){sc.width=Math.round(w*dpr);sc.height=Math.round(h*dpr);sc.style.height=h+'px'}
+  const g=sctx;g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+  const T=15000,tEnd=sim.F.t,t0=tEnd-T,hist=sim.hist;
+  const L=34,Rr=w-6;
+  const X=function(t){return L+(t-t0)/T*(Rr-L)};
+  const r1={y0:6,y1:92},r2={y0:100,y1:190},r3={y0:198,y1:222};
+  g.font='10px system-ui,sans-serif';g.textBaseline='middle';
+  [r1,r2].forEach(function(r){g.strokeStyle=C.line;g.lineWidth=1;g.strokeRect(L,r.y0,Rr-L,r.y1-r.y0)});
+  g.fillStyle=C.muted;g.textAlign='right';
+  const Y1=function(cm){return r1.y1-(Math.min(cm,150)/150)*(r1.y1-r1.y0)};
+  [0,50,100,150].forEach(function(v){g.fillText(v,L-3,Y1(v))});
+  const Y2=function(a){return r2.y1-(a/4095)*(r2.y1-r2.y0)};
+  [0,2000,4000].forEach(function(v){g.fillText(v,L-3,Y2(v))});
+  g.setLineDash([4,3]);
+  g.strokeStyle=C.bad;g.beginPath();g.moveTo(L,Y1(P.OBSTACLE_STOP_CM));g.lineTo(Rr,Y1(P.OBSTACLE_STOP_CM));g.stroke();
+  g.strokeStyle='#2a6fdb';g.beginPath();g.moveTo(L,Y2(P.IR_LEFT_THRESHOLD));g.lineTo(Rr,Y2(P.IR_LEFT_THRESHOLD));g.stroke();
+  if(P.IR_RIGHT_THRESHOLD!==P.IR_LEFT_THRESHOLD){g.strokeStyle='#e08a1e';g.beginPath();g.moveTo(L,Y2(P.IR_RIGHT_THRESHOLD));g.lineTo(Rr,Y2(P.IR_RIGHT_THRESHOLD));g.stroke()}
+  g.setLineDash([]);
+  const line=function(key,Y,col){
+    g.strokeStyle=col;g.lineWidth=1.4;g.beginPath();let on=false;
+    hist.forEach(function(p){
+      if(p.t<t0){return}
+      const v=p[key];
+      if(v===null){on=false;return}
+      const x=X(p.t),y=Y(v);
+      if(!on){g.moveTo(x,y);on=true}else g.lineTo(x,y);
+    });g.stroke();
+  };
+  line('us',Y1,C.ok);line('l',Y2,'#2a6fdb');line('r',Y2,'#e08a1e');
+  const NC=['#888','#e08a1e','#2a6fdb','#7a4fd0','#1a8a5a','#c0392b'];
+  hist.forEach(function(p,i){
+    if(p.t<t0)return;
+    const nx=hist[i+1]?X(hist[i+1].t):Rr;
+    g.fillStyle=NC[p.nav];g.globalAlpha=p.nav===0?0.25:0.85;g.fillRect(X(p.t),r3.y0,Math.max(1,nx-X(p.t)),r3.y1-r3.y0);
+  });
+  g.globalAlpha=1;
+  sim.marks.forEach(function(m){
+    if(m.t<t0)return;
+    const col=/SAFETY|CHOC/.test(m.s)?C.bad:/ARRIVED/.test(m.s)?C.ok:/PLACE/.test(m.s)?C.accent:C.warn;
+    g.strokeStyle=col;g.globalAlpha=0.7;g.lineWidth=1;g.beginPath();g.moveTo(X(m.t),r1.y0);g.lineTo(X(m.t),r3.y1);g.stroke();g.globalAlpha=1;
+  });
+  g.fillStyle=C.muted;g.textAlign='left';g.fillText('US cm',L+4,r1.y0+8);g.fillText('IR ADC',L+4,r2.y0+8);g.fillText('navigation',L+4,r3.y0+12);
+  g.textAlign='right';g.fillText('-15 s',L+28,r3.y1+0);g.fillText('maintenant',Rr,r3.y1+0);
+}
+
+/* ---------- console série ---------- */
+let conLast=-1;
+function lineClass(s){
+  if(s.charAt(0)==='>')return'l-tx';
+  if(/^SIM,(CHOC|ERREUR)/.test(s))return'l-bad';
+  if(/^SIM,OK/.test(s))return'l-ok';
+  if(/^(SAFETY|ERROR)/.test(s))return'l-bad';
+  if(/^ARRIVED/.test(s))return'l-ok';
+  if(/^PLACE/.test(s))return'l-acc';
+  if(/^(NAV|REJECTED|AUTO)/.test(s))return'l-warn';
+  if(/^RESULT/.test(s))return'l-viol';
+  return'l-mut';
+}
+function updateConsole(){
+  const con=$('console');
+  const L=sim.lines;if(!L.length)return;
+  const lastId=L[L.length-1].id;
+  if(lastId===conLast)return;
+  const atBottom=con.scrollTop+con.clientHeight>=con.scrollHeight-8;
+  const frag=document.createDocumentFragment();
+  for(let i=Math.max(0,L.length-200);i<L.length;i++){
+    const l=L[i];if(l.id<=conLast)continue;
+    const d=document.createElement('div');d.className=lineClass(l.s);
+    d.textContent=(l.t/1000).toFixed(2).padStart(7,' ')+'  '+l.s;frag.appendChild(d);
+  }
+  con.appendChild(frag);conLast=lastId;
+  while(con.childNodes.length>400)con.removeChild(con.firstChild);
+  if(atBottom)con.scrollTop=con.scrollHeight;
+}
+
+/* ---------- état ---------- */
+function setKV(el,rows){
+  let h='';rows.forEach(function(r){h+='<span>'+r[0]+'</span><span>'+r[1]+'</span>'});
+  if(el._h!==h){el.innerHTML=h;el._h=h}
+}
+function updateStatus(){
+  const F=sim.F,R=sim.R,S=sim.stats;
+  const truth=sim.zoneText();
+  const irL=F.irRawL>P.IR_LEFT_THRESHOLD?1:0,irR=F.irRawR>P.IR_RIGHT_THRESHOLD?1:0;
+  setKV($('kv'),[
+    ['Lieu perçu (firmware)','<b>'+PLACE_NAMES[F.currentPlace]+'</b>'],
+    ['Zone réelle',truth],
+    ['Cible',F.navState===0?'-':PLACE_NAMES[F.targetPlace]],
+    ['Navigation',NAV_NAMES[F.navState]],
+    ['Moteurs',MODE_NAMES[F.motionMode]+(F.motionPending?' (pause inversion)':'')+(P.MOTOR_SPEED_PERCENT<P.DEADZONE?' <span class="badge bad">sous la zone morte</span>':'')],
+    ['Ouverture (OpenState)',OS_NAMES[F.openState]],
+    ['Prochain virage',F.navState===1?TN_NAMES[F.turnNext]:'-'],
+    ['Face à / dans un couloir',(F.facing===1?'vers le fond':'vers l\'accueil')+' / '+(F.insideCorridor?'oui':'non')],
+    ['Ultrason brut / filtré',F.hasValidDistance?F.lastRawDistance.toFixed(1)+' / '+F.lastFilteredDistance.toFixed(1)+' cm':'aucune mesure valide'],
+    ['IR gauche',F.irRawL+' → '+irL+(irL?' (libre)':' (mur)')],
+    ['IR droit',F.irRawR+' → '+irR+(irR?' (libre)':' (mur)')],
+    ['Position x, y, cap',R.x.toFixed(1)+', '+R.y.toFixed(1)+', '+(((R.h*180/Math.PI)%360+360)%360).toFixed(0)+'°'],
+    ['Distance parcourue',(R.dist/100).toFixed(2)+' m'],
+    ['Chocs',R.chocs>0?'<span class="badge bad">'+R.chocs+'</span>':'<span class="badge ok">0</span>'],
+    ['Arrivées confirmées / erronées','<span class="badge ok">'+S.ok+'</span> <span class="badge '+(S.ko?'bad':'')+'">'+S.ko+'</span>'],
+    ['Mode autonome',F.autoMode?'actif':'inactif'],
+    ['Temps simulé',(F.t/1000).toFixed(1)+' s']
+  ]);
+  const vs=F.vitalsState;
+  setKV($('kvV'),[
+    ['État',VS_NAMES[vs]],
+    ['Capteurs prêts','température '+(F.vitalsTempReady?'oui':'non')+', pouls '+(F.vitalsPulseReady?'oui':'non')],
+    ['Battements valides',F.vitalsBeatCount+' / 8 (minimum 5)'],
+    ['Durée de la session',vs===1||vs===2?((F.t-F.vitalsSessionStart)/1000).toFixed(1)+' s / 20 s':'-'],
+    ['Dernier résultat',F.lastResult?('T = '+(F.lastResult.temp!==null?F.lastResult.temp.toFixed(1)+' °C':'NA')+' · FC = '+(F.lastResult.bpm!==null?F.lastResult.bpm+' bpm':'NA')):'-']
+  ]);
+}
+
+/* ---------- commandes ---------- */
+function send(c){sim.send(c)}
+document.querySelectorAll('[data-cmd]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-cmd'))})});
+$('bSend').addEventListener('click',function(){const v=$('tCmd').value.trim();if(v){send(v);$('tCmd').value=''}});
+$('tCmd').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();$('bSend').click()}});
+document.addEventListener('keydown',function(e){
+  if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'))return;
+  const m={ArrowUp:'F',ArrowDown:'B',ArrowLeft:'L',ArrowRight:'R',' ':'S'};
+  if(m[e.key]){e.preventDefault();send(m[e.key])}
+});
+$('bPlay').addEventListener('click',function(){running=!running;$('bPlay').textContent=running?'Pause':'Reprendre'});
+$('bStep').addEventListener('click',function(){for(let i=0;i<100;i++)sim.step()});
+$('bReset').addEventListener('click',doReset);
+$('sSpeed').addEventListener('change',function(){speed=parseFloat($('sSpeed').value)});
+$('sView').addEventListener('change',function(){viewMode=$('sView').value;layout()});
+$('bSudden').addEventListener('click',function(){
+  const R=sim.R,f=[Math.sin(R.h),-Math.cos(R.h)];
+  if(!sim.addObstacle(R.x+f[0]*(US_FWD+45),R.y+f[1]*(US_FWD+45)))sim.out('SIM,obstacle impossible à cet endroit');
+});
+$('bClearObs').addEventListener('click',function(){sim.obs.length=0});
+$('fDist').addEventListener('change',function(){filt.dist=$('fDist').checked});
+$('fIr').addEventListener('change',function(){filt.ir=$('fIr').checked});
+$('fRaw').addEventListener('change',function(){filt.raw=$('fRaw').checked});
+$('bClr').addEventListener('click',function(){sim.lines.length=0;$('console').innerHTML=''});
+$('bDl').addEventListener('click',function(){
+  const txt=sim.lines.map(function(l){return(l.t/1000).toFixed(3)+'\t'+l.s}).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='hiar_journal_serie.txt';a.click();
+});
+$('vFinger').addEventListener('change',function(){ENV.finger=$('vFinger').checked});
+$('vBpm').addEventListener('input',function(){ENV.bpm=+$('vBpm').value;$('vBpmV').textContent=ENV.bpm});
+$('vTemp').addEventListener('input',function(){ENV.temp=+$('vTemp').value;$('vTempV').textContent=ENV.temp.toFixed(1)});
+$('vTc').addEventListener('change',function(){ENV.tempConnected=$('vTc').checked;doReset()});
+$('vPc').addEventListener('change',function(){ENV.pulseConnected=$('vPc').checked;doReset()});
+$('pCal').addEventListener('click',function(){const I=idealValues(Object.assign({},P,{MOTOR_SPEED_PERCENT:50}));setParams({MOTOR_SPEED_PERCENT:50,TURN_180_MS:I.t180,TURN_90_MS:I.t90,ALIGN_MS:I.align,EXIT_DONE_CM:I.exitDone},true)});
+$('pIno').addEventListener('click',function(){setParams({MOTOR_SPEED_PERCENT:INO_VALUES.MOTOR_SPEED_PERCENT,ALIGN_MS:INO_VALUES.ALIGN_MS,EXIT_DONE_CM:INO_VALUES.EXIT_DONE_CM,TURN_180_MS:1800,TURN_90_MS:900},true)});
+
+/* clic sur la piste */
+cv.addEventListener('click',function(e){
+  const mode=$('sMode').value;if(mode==='none')return;
+  const rc=cv.getBoundingClientRect();
+  const sx=(e.clientX-rc.left)*(cvW/rc.width),sy=(e.clientY-rc.top)*(cvH/rc.height);
+  const w=s2w(sx,sy);
+  if(mode==='obs'){if(!sim.removeObstacleAt(w[0],w[1])){if(!sim.addObstacle(w[0],w[1]))sim.out('SIM,obstacle refusé (hors piste ou sur le robot)')}}
+  else if(mode==='tp'){if(!sim.teleport(w[0],w[1],+$('sHead').value))sim.out('SIM,placement refusé (mur ou obstacle)');else sim.out('SIM,robot déplacé : le firmware ne le sait pas ('+sim.zoneText()+')')}
+});
+
+/* ---------- tests automatiques ---------- */
+function newSim(seed,mod){
+  const p=Object.assign({},P),e=Object.assign({},ENV);if(mod)mod(p,e);
+  const s=createSim(p,e,seed||11,{});s.run(500);s.lines.length=0;return s;
+}
+function lastLine(s,re){for(let i=s.lines.length-1;i>=0;i--){if(re.test(s.lines[i].s))return s.lines[i].s}return null}
+function hasLine(s,re){return lastLine(s,re)!==null}
+function goWait(s,dest,max){s.send('GOTO,'+dest);s.step();const t0=s.F.t;s.run(max||110000,function(){return s.F.navState===0});return(s.F.t-t0)/1000}
+function verdictArr(s,dest,secs){
+  const arr=lastLine(s,/^ARRIVED/);
+  const ok=arr==='ARRIVED,'+dest&&s.stats.ko===0&&s.stats.ok>=1&&s.R.chocs===0;
+  let d='';
+  if(ok)d='arrivé en '+secs.toFixed(1)+' s, position confirmée, 0 choc';
+  else d=(arr?arr:'pas d\'arrivée')+' · zone réelle : '+s.zoneText()+' · chocs : '+s.R.chocs+(lastLine(s,/^NAV,/)?' · '+lastLine(s,/^NAV,/):'');
+  return{ok:ok,detail:d};
+}
+const TESTS=[
+ ['Accueil vers toilettes',function(){const s=newSim();const t=goWait(s,'TOILETTES');return verdictArr(s,'TOILETTES',t)}],
+ ['Accueil vers pharmacie',function(){const s=newSim();const t=goWait(s,'PHARMACIE');return verdictArr(s,'PHARMACIE',t)}],
+ ['Accueil vers docteur',function(){const s=newSim();const t=goWait(s,'DOCTEUR');return verdictArr(s,'DOCTEUR',t)}],
+ ['Tournée docteur, pharmacie, toilettes, accueil',function(){
+   const s=newSim();const seq=['DOCTEUR','PHARMACIE','TOILETTES','ACCUEIL'];let tt=0;
+   for(let i=0;i<seq.length;i++){tt+=goWait(s,seq[i]);if(!hasLine(s,new RegExp('^ARRIVED,'+seq[i]+'$')))break}
+   const ok=s.stats.ok===seq.length&&s.stats.ko===0&&s.R.chocs===0;
+   return{ok:ok,detail:ok?'4 arrivées confirmées en '+tt.toFixed(0)+' s, 0 choc':'arrivées confirmées : '+s.stats.ok+'/4, erreurs : '+s.stats.ko+', chocs : '+s.R.chocs+', zone : '+s.zoneText()};
+ }],
+ ['Aller-retour inter-couloirs (toilettes vers docteur vers toilettes)',function(){
+   const s=newSim();const seq=['TOILETTES','DOCTEUR','TOILETTES','DOCTEUR','ACCUEIL'];
+   for(let i=0;i<seq.length;i++){goWait(s,seq[i])}
+   const ok=s.stats.ok===seq.length&&s.stats.ko===0&&s.R.chocs===0;
+   return{ok:ok,detail:ok?'5 arrivées confirmées, 0 choc':'confirmées : '+s.stats.ok+'/5, erreurs : '+s.stats.ko+', chocs : '+s.R.chocs};
+ }],
+ ['Obstacle devant : arrêt avant le choc',function(){
+   const s=newSim();s.addObstacle(s.G.W/2,200);s.send('F');s.run(3500);
+   const stopped=hasLine(s,/^SAFETY,OBSTACLE/);
+   const d=s.F.hasValidDistance?s.F.lastFilteredDistance:-1;
+   const ok=stopped&&s.R.chocs===0&&d>=10;
+   return{ok:ok,detail:ok?'arrêt à '+d.toFixed(1)+' cm de l\'obstacle':(stopped?'arrêté':'pas d\'arrêt de sécurité')+', chocs : '+s.R.chocs+', distance : '+d.toFixed(1)+' cm'};
+ }],
+ ['Mouvement manuel borné à MAX_MOVE_DURATION',function(){
+   const s=newSim();s.send('F');s.run(P.MAX_MOVE_DURATION+1200);
+   const ok=hasLine(s,/^SAFETY,MOVE_TIMEOUT/)&&s.F.motionMode===0;
+   return{ok:ok,detail:ok?'arrêt automatique après '+(P.MAX_MOVE_DURATION/1000).toFixed(1)+' s':'le robot ne s\'est pas arrêté par timeout ('+lastLine(s,/^(SAFETY|REJECTED)/)+')'};
+ }],
+ ['NAVSTOP pendant un trajet',function(){
+   const s=newSim();s.send('GOTO,DOCTEUR');s.run(3000);s.send('NAVSTOP');s.run(100);
+   const ok=hasLine(s,/^NAV,CANCELLED/)&&s.F.motionMode===0&&s.F.navState===0;
+   return{ok:ok,detail:ok?'moteurs coupés dans les 100 ms':'état : '+NAV_NAMES[s.F.navState]+' / '+MODE_NAMES[s.F.motionMode]};
+ }],
+ ['Les signes vitaux bloquent le mouvement',function(){
+   const s=newSim();s.send('VITALS,START');s.step();s.send('F');s.step();
+   const rej=hasLine(s,/^REJECTED,MEASURING/);
+   s.run(30000,function(){return s.F.vitalsState===0&&hasLine(s,/^RESULT/)});
+   const res=lastLine(s,/^RESULT/);
+   let ok=false,det='pas de résultat';
+   if(res){
+     const m=/temperature_c=([\d.]+|NA),heart_rate_bpm=(\d+|NA)/.exec(res);
+     const t=m&&m[1]!=='NA'?parseFloat(m[1]):null,b=m&&m[2]!=='NA'?parseInt(m[2],10):null;
+     ok=rej&&t!==null&&Math.abs(t-ENV.temp)<0.4&&b!==null&&Math.abs(b-ENV.bpm)<=4;
+     det=(rej?'mouvement refusé · ':'mouvement NON refusé · ')+res.replace('RESULT,','');
+   }
+   return{ok:ok,detail:det};
+ }],
+ ['Sans doigt : fréquence cardiaque NA après 20 s',function(){
+   const s=newSim(11,function(p,e){e.finger=false});s.send('VITALS,START');s.step();
+   const t0=s.F.t;s.run(30000,function(){return hasLine(s,/^RESULT/)});
+   const res=lastLine(s,/^RESULT/);const dur=(s.F.t-t0)/1000;
+   const ok=!!res&&/heart_rate_bpm=NA/.test(res)&&dur>=19&&dur<=23;
+   return{ok:ok,detail:res?res.replace('RESULT,','')+' après '+dur.toFixed(1)+' s':'aucun résultat'};
+ }],
+ ['Une mesure interrompt la navigation',function(){
+   const s=newSim();s.send('GOTO,DOCTEUR');s.run(2500);s.send('VITALS,START');s.run(300);
+   const ok=hasLine(s,/^NAV,ABORT_MEASURING/)&&s.F.motionMode===0;
+   return{ok:ok,detail:ok?'navigation abandonnée, moteurs à l\'arrêt':'état : '+NAV_NAMES[s.F.navState]+' / '+MODE_NAMES[s.F.motionMode]};
+ }]
+];
+function renderTests(rows){
+  let h='<table><tr><th></th><th>Test</th><th>Résultat</th></tr>';
+  rows.forEach(function(r){h+='<tr><td>'+(r.ok?'<span class="badge ok">OK</span>':'<span class="badge bad">KO</span>')+'</td><td>'+r.name+'</td><td>'+r.detail+'</td></tr>'});
+  const n=rows.filter(function(r){return r.ok}).length;
+  h+='</table><p class="note">'+n+' / '+rows.length+' tests réussis avec les paramètres actuels.</p>';
+  $('testOut').innerHTML=h;
+}
+async function runTests(){
+  const rows=[];const prog=$('prog');prog.style.display='block';prog.max=TESTS.length;prog.value=0;
+  $('bTests').disabled=true;
+  for(let i=0;i<TESTS.length;i++){
+    let r;try{r=TESTS[i][1]()}catch(err){r={ok:false,detail:'exception : '+err.message}}
+    rows.push({name:TESTS[i][0],ok:r.ok,detail:r.detail});
+    prog.value=i+1;renderTests(rows);
+    await new Promise(function(res){setTimeout(res,0)});
+  }
+  prog.style.display='none';$('bTests').disabled=false;
+  return rows;
+}
+async function monteCarlo(n){
+  const prog=$('prog');prog.style.display='block';prog.max=n;prog.value=0;$('bMC').disabled=true;
+  const rnd=mulberry32(4242);let ok=0,tot=0,chocs=0,wrong=0,tmo=0,tsum=0;const fails=[];
+  for(let i=0;i<n;i++){
+    const s=createSim(Object.assign({},P),Object.assign({},ENV),500+i*13,{});s.run(500);
+    let cur=0;const seq=[];
+    for(let k=0;k<3;k++){let d;do{d=Math.floor(rnd()*4)}while(d===cur);seq.push(d);cur=d}
+    for(let k=0;k<seq.length;k++){s.send('GOTO,'+PLACE_NAMES[seq[k]]);s.step();s.run(110000,function(){return s.F.navState===0});if(s.F.navState!==0||s.R.chocs>0||s.stats.ko>0)break}
+    const good=s.stats.ok===seq.length&&s.stats.ko===0&&s.R.chocs===0&&s.F.navState===0;
+    tot++;if(good){ok++;tsum+=s.F.t/1000}else{
+      if(s.R.chocs>0)chocs++;else if(s.stats.ko>0)wrong++;else tmo++;
+      fails.push('essai '+(i+1)+' ('+seq.map(function(q){return PLACE_NAMES[q].slice(0,4)}).join('>')+') : '+(s.R.chocs?s.R.chocs+' choc(s)':s.stats.ko?'mauvais lieu':'blocage')+' en '+s.zoneText());
+    }
+    chocs=chocs;prog.value=i+1;
+    $('testOut').innerHTML='<p>Monte-Carlo en cours : '+(i+1)+' / '+n+' parcours…</p>';
+    await new Promise(function(res){setTimeout(res,0)});
+  }
+  prog.style.display='none';$('bMC').disabled=false;
+  const pct=Math.round(ok/tot*100);
+  $('testOut').innerHTML='<div class="'+(pct>=95?'okbox':'warnbox')+'"><b>'+ok+' / '+tot+' parcours réussis ('+pct+' %)</b> : 3 destinations successives tirées au hasard, bruit et dispersion actuels.'+(ok?'<br>Durée moyenne d\'un parcours réussi : '+(tsum/ok).toFixed(0)+' s.':'')+'</div>'+
+    (fails.length?'<ul style="margin:6px 0 0 18px;padding:0;font-size:12.5px">'+fails.slice(0,8).map(function(f){return'<li>'+f+'</li>'}).join('')+'</ul>':'');
+  return{ok:ok,tot:tot,fails:fails};
+}
+$('bTests').addEventListener('click',runTests);
+$('bMC').addEventListener('click',function(){monteCarlo(20)});
+
+/* ---------- boucle d'affichage ---------- */
+let last=performance.now(),tick=0;
+function frame(ts){
+  const dt=Math.min(100,ts-last);last=ts;
+  if(running){simAcc+=dt*speed;let n=0;while(simAcc>=DT&&n<500){sim.step();simAcc-=DT;n++}if(n>=500)simAcc=0}
+  drawMap();drawScope();
+  if(tick++%3===0){updateStatus();updateConsole()}
+  requestAnimationFrame(frame);
+}
+window.addEventListener('resize',function(){layout()});
+if(window.matchMedia)window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',function(){readColors()});
+buildParams();doReset();refreshCal();
+requestAnimationFrame(frame);
+window.HIAR={runTests:runTests,monteCarlo:monteCarlo,getSim:function(){return sim},P:P,setParams:setParams,TESTS:TESTS,idealValues:idealValues};
+})();
+</script>
+</body>
+</html>
