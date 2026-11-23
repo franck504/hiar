@@ -189,7 +189,13 @@
       const title = $("queue-title");
       if (title) title.textContent = "Rendez-vous des patients - Médecin " + (queue.doctor || currentDoctor);
       const dateEl = $("queue-date");
-      if (dateEl) dateEl.textContent = "Date : " + day;
+      if (dateEl) {
+        const dObj = new Date(day + "T00:00:00");
+        const niceDate = isNaN(dObj.getTime())
+          ? day
+          : dObj.toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+        dateEl.textContent = "Date : " + niceDate;
+      }
       renderSessions(sessions.sessions || []);
       renderQueue(queue.appointments || []);
     } catch (err) {

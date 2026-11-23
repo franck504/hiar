@@ -526,6 +526,20 @@ class TestVoiceIntentParserWithLLM:
         assert "hiar" in instruction["text_to_speak"].lower()
         assert instruction["instruction_ui"]["screen"] == "home"
 
+    def test_greeting_creator_attribution(self):
+        """Vérifie que la question sur le concepteur attribue la création à Mlle Cecilia Razakaharisoa."""
+        backend = MockBackend()
+        config = LLMConfig(enabled=True, backend="mock")
+        engine = LLMIntentEngine(config=config, backend_override=backend)
+        parser = VoiceIntentParser(enable_llm=True, llm_engine=engine)
+
+        intent = parser.parse("Qui t'a conçu ?")
+        assert intent.intent_type == "GREETING"
+        instruction = parser.build_instruction(intent)
+        assert "cecilia" in instruction["text_to_speak"].lower()
+        assert "razakaharisoa" in instruction["text_to_speak"].lower()
+        assert "iot" in instruction["text_to_speak"].lower()
+
     def test_parser_falls_back_to_unknown_if_llm_disabled(self):
         """Si le LLM est désactivé, le comportement historique UNKNOWN est conservé."""
         parser = VoiceIntentParser(enable_llm=False)

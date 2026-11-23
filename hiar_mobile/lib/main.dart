@@ -350,7 +350,14 @@ class _HiarAppState extends State<HiarApp> {
         break;
 
       case 'consult.start':
+        _clearConsultationData();
         _goToScreen('consultation');
+        break;
+
+      case 'consult.finish':
+      case 'consult.cancel':
+        _clearConsultationData();
+        _goToScreen('home');
         break;
 
       case 'consult.step':
@@ -751,6 +758,36 @@ class _HiarAppState extends State<HiarApp> {
     }
   }
 
+  /// Efface entièrement les données du formulaire de consultation et réinitialise les constantes.
+  void _clearConsultationData() {
+    setState(() {
+      _consultationStep = 1;
+      _dynamicFields.remove('patient_name');
+      _dynamicFields.remove('contact');
+      _dynamicFields.remove('patient_phone');
+      _dynamicFields.remove('reason_code');
+      _dynamicFields.remove('selected_reason');
+      _dynamicFields.remove('doctor_code');
+      _dynamicFields.remove('selected_doctor');
+      _dynamicFields.remove('doctor');
+      _dynamicFields.remove('period');
+      _dynamicFields.remove('selected_period');
+      _dynamicFields.remove('temperature_c');
+      _dynamicFields.remove('temperature');
+      _dynamicFields.remove('heart_rate_bpm');
+      _dynamicFields.remove('heart_rate');
+      _dynamicFields.remove('spo2_percent');
+      _dynamicFields.remove('spo2');
+      _dynamicFields.remove('ticket_label');
+      _dynamicFields.remove('appointment_id');
+      _dynamicFields.remove('booking_error');
+      _dynamicFields.remove('form_validation_error');
+      _dynamicFields.remove('vitals_state');
+      _dynamicFields.remove('vitals_error');
+    });
+    _consultationKey.currentState?.resetForm();
+  }
+
   void _goToScreen(String screen) {
     VoiceService.instance.stopSpeaking();
     setState(() {
@@ -1132,6 +1169,7 @@ class _HiarAppState extends State<HiarApp> {
                   _goToScreen('information');
                 },
                 onOpenConsultation: () {
+                  _clearConsultationData();
                   _hub.publishAction('consult.start', {});
                   _goToScreen('consultation');
                 },
@@ -1258,12 +1296,12 @@ class _HiarAppState extends State<HiarApp> {
                   _hub.publishUiState('consultation', ['confirming'], step: 5);
                 },
                 onCancel: () {
-                  _consultationStep = 1;
+                  _clearConsultationData();
                   _hub.publishAction('consult.cancel', {});
                   _goToScreen('home');
                 },
                 onFinish: () {
-                  _consultationStep = 1;
+                  _clearConsultationData();
                   _hub.publishAction('consult.finish', {});
                   _goToScreen('home');
                 },

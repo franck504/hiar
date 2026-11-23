@@ -63,8 +63,7 @@
   }
 
   function todayISO() {
-    const d = new Date();
-    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    return new Date().toLocaleDateString("sv-SE", { timeZone: "Indian/Antananarivo" });
   }
 
   function formatDate(iso) {

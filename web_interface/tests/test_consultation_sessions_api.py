@@ -566,3 +566,12 @@ def test_public_consultation_sessions_rejects_invalid_date(client):
     )
 
     assert response.status_code == 400
+
+
+def test_public_consultation_sessions_defaults_to_today(client):
+    response = client.get("/api/consultation/sessions")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert "date" in data
+    assert len(data["date"]) == 10

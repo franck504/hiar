@@ -281,6 +281,40 @@ class ConsultationScreenState extends State<ConsultationScreen> {
   void nextStep() => _nextStep();
   void prevStep() => _prevStep();
 
+  /// Réinitialise l'intégralité du formulaire et des constantes vitales pour le patient suivant.
+  void resetForm() {
+    _submitTimeoutTimer?.cancel();
+    _vitalsTimeoutTimer?.cancel();
+    _nameController.clear();
+    _phoneController.clear();
+    setState(() {
+      _currentStep = 1;
+      _selectedReason = null;
+      _selectedDoctor = null;
+      _selectedPeriod = null;
+      _formValidationError = null;
+      _vitalsRunning = false;
+      _vitalsSuccess = false;
+      _vitalsError = null;
+      _temperatureC = null;
+      _heartRateBpm = null;
+      _spo2Percent = null;
+      _ticketLabel = null;
+      _isSubmitting = false;
+      _submitError = null;
+    });
+  }
+
+  void _handleCancel() {
+    resetForm();
+    widget.onCancel();
+  }
+
+  void _handleFinish() {
+    resetForm();
+    widget.onFinish();
+  }
+
   void _nextStep() {
     setState(() {
       _formValidationError = null;
@@ -399,7 +433,7 @@ class ConsultationScreenState extends State<ConsultationScreen> {
         _currentStep--;
         widget.onStepChanged?.call(_currentStep);
       } else {
-        widget.onCancel();
+        _handleCancel();
       }
     });
   }
@@ -451,7 +485,7 @@ class ConsultationScreenState extends State<ConsultationScreen> {
                 side: const BorderSide(color: HiarColors.border),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
               ),
-              onPressed: widget.onCancel,
+              onPressed: _handleCancel,
               child: const Text(
                 "Annuler (🎤 « Annuler »)",
                 maxLines: 1,
@@ -1202,7 +1236,7 @@ class ConsultationScreenState extends State<ConsultationScreen> {
     return LandscapeScaffold(
       title: "Rendez-vous confirmé",
       showBack: true,
-      onBack: widget.onFinish,
+      onBack: _handleFinish,
       onStopRobotTap: widget.onStopRobotTap,
       voiceState: widget.voiceState,
       voiceStatus: widget.voiceStatus,
@@ -1318,7 +1352,7 @@ class ConsultationScreenState extends State<ConsultationScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                       elevation: 3,
                     ),
-                    onPressed: widget.onFinish,
+                    onPressed: _handleFinish,
                     icon: const Icon(Icons.check_rounded, size: 20),
                     label: const Text(
                       "Terminer (🎤 « Terminer »)",

@@ -143,4 +143,34 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('ConsultationScreen resetForm efface tous les champs et constantes', (tester) async {
+    final key = GlobalKey<ConsultationScreenState>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConsultationScreen(
+          key: key,
+          initialStep: 3,
+          dynamicFields: const {
+            'patient_name': 'Alice Test',
+            'patient_phone': '0320000000',
+            'temperature_c': 37.2,
+            'heart_rate_bpm': 75,
+            'spo2_percent': 98,
+          },
+          onCancel: () {},
+          onFinish: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Alice Test'), findsOneWidget);
+
+    key.currentState?.resetForm();
+    await tester.pump();
+
+    expect(find.text('Alice Test'), findsNothing);
+  });
 }

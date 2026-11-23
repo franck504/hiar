@@ -1228,6 +1228,7 @@ class HMIWebSocketBridgeNode(Node):
                     },
                     "voice_hints": ["Terminer", "Accueil"],
                 }
+                self._current_consultation_data.clear()
                 await self.broadcast("server/instruction", instruction)
                 await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal", "screen": "consultation"})
             else:
@@ -1251,12 +1252,14 @@ class HMIWebSocketBridgeNode(Node):
                     },
                     "voice_hints": ["Réessayer", "Annuler"],
                 }
+                self._current_consultation_data.clear()
                 await self.broadcast("server/instruction", instruction)
                 await self.broadcast("voice/tts/request", {"text": speech, "priority": "normal", "screen": "consultation"})
 
         elif action_id == "consult.start":
             self._current_screen = "consultation"
             self._current_step = 1
+            self._current_consultation_data.clear()
 
         elif action_id == "consult.step_changed":
             step = args.get("step")

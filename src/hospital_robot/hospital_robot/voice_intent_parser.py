@@ -473,7 +473,7 @@ class VoiceIntentParser:
 
         if self.enable_deterministic_fallback:
             norm = normalize_text(raw_text)
-            if any(w in norm for w in ["qui es-tu", "tu es qui", "qui etes-vous", "vous etes qui", "presente-toi", "ton nom"]):
+            if any(w in norm for w in ["qui es-tu", "tu es qui", "qui etes-vous", "vous etes qui", "presente-toi", "ton nom", "createur", "concepteur", "ingenieur", "qui t'a concu", "qui t'a cree"]):
                 return ParsedIntent(
                     intent_type="GREETING",
                     confidence=confidence,
@@ -721,7 +721,11 @@ class VoiceIntentParser:
         if intent.intent_type == "GREETING":
             speech = intent.details.get("llm_text_to_speak")
             if not speech or any(w in speech.lower() for w in ["pas compris", "comprends pas", "pas votre", "préciser"]):
-                speech = "Bonjour ! Je suis le robot hospitalier HIAR. Que puis-je faire pour vous ?"
+                raw_norm = normalize_text(intent.details.get("raw_text") or "")
+                if any(w in raw_norm for w in ["createur", "concepteur", "ingenieur", "qui t'a concu", "qui t'a cree"]):
+                    speech = "J'ai été conçu par Mlle Cecilia RAZAKAHARISOA, ingénieure en IoT et IA."
+                else:
+                    speech = "Bonjour ! Je suis le robot hospitalier HIAR, conçu par Mlle Cecilia RAZAKAHARISOA, ingénieure en IoT et IA."
             return {
                 "origin": "voice",
                 "text_to_speak": speech,

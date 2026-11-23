@@ -496,7 +496,9 @@ def api_create_session_appointment():
 def api_public_consultation_sessions():
     """Expose uniquement les sessions ouvertes aux inscriptions."""
     requested_date = request.args.get("date", "").strip()
-    if requested_date and not validate_date(requested_date):
+    if not requested_date:
+        requested_date = datetime.now(TZ).date().isoformat()
+    elif not validate_date(requested_date):
         return jsonify({"ok": False, "error": "Format de date invalide (AAAA-MM-JJ attendu)."}), 400
 
     try:

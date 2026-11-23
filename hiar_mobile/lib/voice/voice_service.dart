@@ -40,7 +40,7 @@ class VoiceService {
       // 1. Initialisation TTS
       final langRes = await _tts.setLanguage("fr-FR");
       debugPrint("VoiceService: TTS setLanguage fr-FR -> $langRes");
-      await _tts.setSpeechRate(0.5);
+      await _tts.setSpeechRate(0.62);
       await _tts.setVolume(1.0);
       await _tts.setPitch(1.0);
 

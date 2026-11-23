@@ -291,7 +291,8 @@
       const stLabel = STATUS_LABELS[st] || st;
       const stClass = ST_CLASS_MAP[st] || ("status-" + String(st).toLowerCase().replace(/\s+/g, "_"));
 
-      const dateStr = a.requested_date ? (a.requested_time ? `${a.requested_date} ${a.requested_time}` : a.requested_date) : "-";
+      const timePart = a.created_at ? a.created_at.substring(11, 16) : (a.requested_time || "");
+      const dateStr = a.requested_date ? (timePart ? `${a.requested_date} ${timePart}` : a.requested_date) : "-";
       const doctorStr = a.doctor ? `Dr. ${a.doctor} (${a.period || 'MAT'})` : "-";
 
       tr.innerHTML = `
