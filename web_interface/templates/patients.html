@@ -92,6 +92,7 @@
         </div>
         <div class="doctor-quick-select" style="margin-left: auto;">
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-outline btn-small quick-doc-btn btn-primary" data-doc="ALL">Tous</button>
             <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="A">Médecin A</button>
             <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="B">Médecin B</button>
             <button type="button" class="btn btn-outline btn-small quick-doc-btn" data-doc="C">Médecin C</button>
@@ -118,6 +119,6 @@
     </section>
   </main>
 
-  <script src="{{ url_for('static', filename='doctor.js') }}?v=6pin" defer></script>
+  <script src="{{ url_for('static', filename='doctor.js') }}?v=7all" defer></script>
 </body>
 </html>

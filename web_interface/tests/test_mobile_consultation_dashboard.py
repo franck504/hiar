@@ -100,3 +100,89 @@ def test_mobile_consultation_vitals_appear_in_dashboard(client, monkeypatch):
     stats = dash_data.get("stats", {})
     assert stats.get("alerts", 0) >= 1
     assert stats.get("total", 0) >= 1
+
+
+def _book_for(doctor, period, phone):
+    """Crée un rendez-vous comme le fait l'application mobile via le pont."""
+    bridge = HMIWebSocketBridgeNode()
+    return bridge._book_appointment({
+        "patient_name": "Patient Test",
+        "contact": phone,
+        "reason_code": "consultation_generale",
+        "doctor_code": doctor,
+        "period": period,
+    })
+
+
+def test_rendez_vous_page_all_doctors_view_shows_mobile_bookings(client):
+    """La page Rendez-vous (PIN) doit lister les réservations de TOUS les médecins."""
+    today_iso = datetime.now(TZ).date().isoformat()
+    assert _book_for("B", "MAT", "0321234501").get("ok") is True
+    assert _book_for("C", "AM", "0321234502").get("ok") is True
+
+    pin = {"X-Web-PIN": "123456"}
+
+    all_res = client.get(
+        f"/api/doctor/appointments?date={today_iso}&doctor=ALL",
+        headers={**pin, "X-Doctor-Code": "ALL"},
+    )
+    assert all_res.status_code == 200
+    body = all_res.get_json()
+    assert body["doctor"] == "ALL"
+    assert {a["doctor"] for a in body["appointments"]} == {"B", "C"}
+
+    # Le filtre par médecin reste fonctionnel
+    only_a = client.get(
+        f"/api/doctor/appointments?date={today_iso}",
+        headers={**pin, "X-Doctor-Code": "A"},
+    ).get_json()
+    assert only_a["appointments"] == []
+    only_b = client.get(
+        f"/api/doctor/appointments?date={today_iso}",
+        headers={**pin, "X-Doctor-Code": "B"},
+    ).get_json()
+    assert [a["doctor"] for a in only_b["appointments"]] == ["B"]
+
+
+def test_all_doctors_view_can_update_any_ticket_but_not_sessions(client):
+    """En vue « Tous », le PIN peut appeler un patient de n'importe quel médecin."""
+    today_iso = datetime.now(TZ).date().isoformat()
+    booked = _book_for("D", "MAT", "0321234503")
+    assert booked.get("ok") is True
+    headers = {"X-Web-PIN": "123456", "X-Doctor-Code": "ALL"}
+
+    patch = client.patch(
+        f"/api/doctor/appointments/{booked['appointment_id']}",
+        json={"status": "appelé"},
+        headers=headers,
+    )
+    assert patch.status_code == 200
+
+    sessions = client.get(f"/api/doctor/sessions?date={today_iso}", headers=headers).get_json()
+    assert {s["doctor_code"] for s in sessions["sessions"]} >= {"A", "B", "C", "D"}
+
+    # Ouvrir/fermer une session exige un médecin précis
+    res = client.post(
+        "/api/doctor/sessions",
+        json={"requested_date": today_iso, "period": "MAT", "is_open": False},
+        headers=headers,
+    )
+    assert res.status_code == 400
+
+
+def test_doctor_token_cannot_use_all_view(client, monkeypatch):
+    """Un jeton médecin reste limité à son propre code, même avec X-Doctor-Code: ALL."""
+    monkeypatch.setenv("HIAR_DOCTOR_TOKEN_B", "tok-b-123")
+    monkeypatch.setenv("HIAR_DOCTOR_TOKEN_C", "tok-c-456")
+    today_iso = datetime.now(TZ).date().isoformat()
+    assert _book_for("B", "MAT", "0321234504").get("ok") is True
+    assert _book_for("C", "MAT", "0321234505").get("ok") is True
+
+    res = client.get(
+        f"/api/doctor/appointments?date={today_iso}",
+        headers={"X-Doctor-Token": "tok-b-123", "X-Doctor-Code": "ALL"},
+    )
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["doctor"] == "B"
+    assert {a["doctor"] for a in body["appointments"]} == {"B"}

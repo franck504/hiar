@@ -3,7 +3,7 @@
 
   let token = "";
   let pin = "";
-  let currentDoctor = "A";
+  let currentDoctor = "ALL"; // "ALL" = tous les médecins (accès PIN)
   let timer = null;
 
   const DOCTOR_TOKENS = {
@@ -98,6 +98,13 @@
     const box = $("sessions");
     if (!box) return;
     box.replaceChildren();
+    if (currentDoctor === "ALL") {
+      const hint = document.createElement("span");
+      hint.className = "muted";
+      hint.textContent = "Tous les médecins : choisissez un médecin ci-dessus pour ouvrir ou fermer ses consultations.";
+      box.append(hint);
+      return;
+    }
     Object.keys(PERIODS).forEach((period) => {
       const found = (sessions || []).find((s) => s.period === period);
       const open = Boolean(found && found.is_open);
@@ -187,7 +194,10 @@
         api("/api/doctor/appointments?date=" + day + "&doctor=" + currentDoctor),
       ]);
       const title = $("queue-title");
-      if (title) title.textContent = "Rendez-vous des patients - Médecin " + (queue.doctor || currentDoctor);
+      if (title) {
+        const who = queue.doctor || currentDoctor;
+        title.textContent = "Rendez-vous des patients - " + (who === "ALL" ? "Tous les médecins" : "Médecin " + who);
+      }
       const dateEl = $("queue-date");
       if (dateEl) {
         const dObj = new Date(day + "T00:00:00");

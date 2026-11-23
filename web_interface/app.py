@@ -560,10 +560,19 @@ def staff_auth_error():
     return jsonify({"ok": False, "error": error}), status_code
 
 
+ALL_DOCTORS = "ALL"
+
+
 def doctor_identity():
-    """Retourne le code du médecin identifié par son jeton ou par session PIN."""
+    """Retourne le code du médecin identifié par son jeton ou par session PIN.
+
+    Avec le PIN (accès personnel), le code spécial ``ALL`` donne la vue de tous
+    les médecins ; un jeton médecin reste toujours limité à son propre code.
+    """
     if is_authenticated():
         doc_code = request.headers.get("X-Doctor-Code") or request.args.get("doctor") or "A"
+        if doc_code.strip().upper() == ALL_DOCTORS:
+            return ALL_DOCTORS, None
         if doc_code not in DOCTORS:
             doc_code = "A"
         return doc_code, None
@@ -631,10 +640,11 @@ def api_doctor_sessions():
     try:
         init_sessions_db()
         sessions = list_doctor_sessions(requested_date)
-        sessions = [
-            session for session in sessions
-            if session["doctor_code"] == doctor_code
-        ]
+        if doctor_code != ALL_DOCTORS:
+            sessions = [
+                session for session in sessions
+                if session["doctor_code"] == doctor_code
+            ]
     except ValueError as err:
         return jsonify({"ok": False, "error": str(err)}), 400
     except Exception:
@@ -653,6 +663,12 @@ def api_doctor_update_session():
     doctor_code, auth_error = doctor_identity()
     if auth_error:
         return doctor_auth_error(auth_error)
+
+    if doctor_code == ALL_DOCTORS:
+        return jsonify({
+            "ok": False,
+            "error": "Choisissez un médecin pour ouvrir ou fermer ses consultations.",
+        }), 400
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -721,7 +737,7 @@ def api_doctor_appointments():
         init_sessions_db()
         appointments = list_session_appointments(
             requested_date,
-            doctor_code=doctor_code,
+            doctor_code=None if doctor_code == ALL_DOCTORS else doctor_code,
             period=period,
             status=status,
         )
@@ -771,7 +787,7 @@ def api_update_doctor_appointment(appointment_id):
         updated = update_session_appointment_status(
             appointment_id,
             status.strip(),
-            doctor_code=doctor_code,
+            doctor_code=None if doctor_code == ALL_DOCTORS else doctor_code,
         )
     except ValueError as err:
         return jsonify({"ok": False, "error": str(err)}), 400
