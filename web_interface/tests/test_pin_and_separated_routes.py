@@ -7,7 +7,7 @@ from app import app
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("HIAR_APPOINTMENTS_DB", str(tmp_path / "appts.sqlite3"))
     monkeypatch.setenv("HIAR_SESSIONS_DB", str(tmp_path / "sessions.sqlite3"))
-    monkeypatch.setenv("HIAR_WEB_PIN", "4321")
+    monkeypatch.setenv("HIAR_WEB_PIN", "654321")
     return app.test_client()
 
 
@@ -16,7 +16,7 @@ def test_patients_route_has_correct_title_and_no_diagnostics_panel(client):
     res = client.get("/patients")
     assert res.status_code == 200
     html = res.get_data(as_text=True)
-    assert "<title>Rendez-vous — HIAR</title>" in html
+    assert "<title>Rendez-vous - HIAR</title>" in html
     assert "queue-panel" in html
     assert "login-panel" in html
     assert "pin-inputs" in html
@@ -30,7 +30,7 @@ def test_admin_route_has_correct_title_and_no_queue_panel(client):
     res = client.get("/admin")
     assert res.status_code == 200
     html = res.get_data(as_text=True)
-    assert "<title>Gestion de HIAR — HIAR</title>" in html
+    assert "<title>Gestion de HIAR - HIAR</title>" in html
     assert "diagnostics-panel" in html
     assert "diag-grid" in html
     assert "dashboard-panel" in html
@@ -70,7 +70,7 @@ def test_admin_dashboard_api(client):
     assert unauth.status_code == 401
 
     # 2. Authentifié via X-Web-PIN -> 200
-    res = client.get("/api/admin/dashboard", headers={"X-Web-PIN": "4321"})
+    res = client.get("/api/admin/dashboard", headers={"X-Web-PIN": "654321"})
     assert res.status_code == 200
     data = res.get_json()
     assert data["ok"] is True
@@ -107,31 +107,31 @@ def test_both_pages_share_navigation_links(client):
 
 
 def test_pin_authentication_success_and_failure(client):
-    """Vérifie la validation du code PIN à 4 chiffres configuré dans .env"""
+    """Vérifie la validation du code PIN à 6 chiffres configuré dans .env"""
     from app import _reset_pin_rate_limiter
     _reset_pin_rate_limiter()
 
-    # 1. Échec avec un mauvais PIN
-    fail_res = client.post("/api/auth/pin", json={"pin": "9999"})
+    # 1. Échec avec un mauvais PIN 6 chiffres
+    fail_res = client.post("/api/auth/pin", json={"pin": "999999"})
     assert fail_res.status_code == 401
     assert fail_res.get_json()["ok"] is False
     assert "incorrect" in fail_res.get_json()["error"]
 
-    # 2. Échec avec une longueur invalide
-    len_res = client.post("/api/auth/pin", json={"pin": "12"})
+    # 2. Échec avec une longueur invalide (4 au lieu de 6)
+    len_res = client.post("/api/auth/pin", json={"pin": "1234"})
     assert len_res.status_code == 401
 
-    # 3. Succès avec le bon PIN (4321)
-    ok_res = client.post("/api/auth/pin", json={"pin": "4321"})
+    # 3. Succès avec le bon PIN (654321)
+    ok_res = client.post("/api/auth/pin", json={"pin": "654321"})
     assert ok_res.status_code == 200
     data = ok_res.get_json()
     assert data["ok"] is True
-    assert data["pin"] == "4321"
+    assert data["pin"] == "654321"
 
     # 4. Requête API authentifiée par le PIN via X-Web-PIN
     api_res = client.get(
         "/api/doctor/appointments?date=2026-11-20",
-        headers={"X-Web-PIN": "4321"},
+        headers={"X-Web-PIN": "654321"},
     )
     assert api_res.status_code == 200
     assert api_res.get_json()["ok"] is True
@@ -140,7 +140,7 @@ def test_pin_authentication_success_and_failure(client):
 def test_pin_logout_clears_session(client):
     """Vérifie la déconnexion"""
     # Connexion
-    client.post("/api/auth/pin", json={"pin": "4321"})
+    client.post("/api/auth/pin", json={"pin": "654321"})
     # Déconnexion
     logout_res = client.post("/api/auth/logout", json={})
     assert logout_res.status_code == 200
@@ -154,16 +154,16 @@ def test_pin_rate_limiter_and_lockout(client):
 
     # 4 échecs consécutifs (401)
     for i in range(4):
-        res = client.post("/api/auth/pin", json={"pin": f"000{i}"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
+        res = client.post("/api/auth/pin", json={"pin": f"00000{i}"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
         assert res.status_code == 401
         assert res.get_json()["attempts_left"] == 4 - i
 
     # 5ème échec consécutif -> Verrouillé (429)
-    res_lock = client.post("/api/auth/pin", json={"pin": "0005"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
+    res_lock = client.post("/api/auth/pin", json={"pin": "000005"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
     assert res_lock.status_code == 429
     assert res_lock.get_json()["locked"] is True
 
     # 6ème tentative (même avec bon PIN) -> Reste bloquée (429)
-    res_blocked = client.post("/api/auth/pin", json={"pin": "4321"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
+    res_blocked = client.post("/api/auth/pin", json={"pin": "654321"}, environ_base={"REMOTE_ADDR": "192.168.1.100"})
     assert res_blocked.status_code == 429
     assert res_blocked.get_json()["locked"] is True

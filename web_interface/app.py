@@ -105,8 +105,8 @@ bridge = RosBridge()
 
 
 def get_web_pin() -> str:
-    """Retourne le code PIN à 4 chiffres configuré en dur dans le .env."""
-    return str(os.environ.get("HIAR_WEB_PIN", "1234")).strip()
+    """Retourne le code PIN à 6 chiffres configuré dans le .env (défaut 123456)."""
+    return str(os.environ.get("HIAR_WEB_PIN", "123456")).strip()
 
 
 def is_authenticated() -> bool:
@@ -114,7 +114,7 @@ def is_authenticated() -> bool:
     if session.get("authenticated") is True:
         return True
     supplied_pin = request.headers.get("X-Web-PIN", "").strip()
-    if supplied_pin and len(supplied_pin) == 4 and hmac.compare_digest(get_web_pin(), supplied_pin):
+    if supplied_pin and len(supplied_pin) == 6 and hmac.compare_digest(get_web_pin(), supplied_pin):
         return True
     return False
 
@@ -180,7 +180,7 @@ def api_auth_pin():
     supplied = str(data.get("pin", "")).strip()
     expected = get_web_pin()
 
-    if len(supplied) == 4 and hmac.compare_digest(expected, supplied):
+    if len(supplied) == 6 and hmac.compare_digest(expected, supplied):
         _PIN_ATTEMPTS.pop(ip, None)
         session["authenticated"] = True
         return jsonify({"ok": True, "pin": supplied, "redirect": "/patients"}), 200

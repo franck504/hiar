@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HIAR</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/robot_logo.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='hiar-tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='hmi.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='consultation.css') }}">
@@ -111,9 +112,7 @@
 
     <header class="hiar-header" aria-label="Identité HIAR">
       <div class="hiar-header-brand">
-        <svg class="hiar-logo-mark" aria-hidden="true">
-          <use href="#hiar-icon-logo"></use>
-        </svg>
+        <img class="hiar-logo-mark" src="{{ url_for('static', filename='img/robot_logo.png') }}" alt="HIAR" width="48" height="48" style="object-fit: contain;">
       </div>
       <div style="margin-left: auto; display: flex; gap: 10px;">
         <a class="btn btn-outline btn-small" href="/doctor" style="text-decoration: none; padding: 6px 12px; border-radius: 6px; border: 1px solid currentColor; color: inherit; font-size: 13px;">Espace Médecin</a>
@@ -178,15 +177,15 @@
         <p class="subtitle">Mesures facultatives, non diagnostiques.</p>
         <div class="vital-card">
           <div><span class="vital-name">Température corporelle</span><span class="vital-sensor">Capteur DS18B20</span></div>
-          <div class="vital-right"><span class="vital-value" id="vital-temp-value">—</span><span class="pill pill-wait" id="vital-temp-pill">En attente</span></div>
+          <div class="vital-right"><span class="vital-value" id="vital-temp-value">-</span><span class="pill pill-wait" id="vital-temp-pill">En attente</span></div>
         </div>
         <div class="vital-card">
           <div><span class="vital-name">Fréquence cardiaque</span><span class="vital-sensor">Capteur MAX30102</span></div>
-          <div class="vital-right"><span class="vital-value" id="vital-hr-value">—</span><span class="pill pill-wait" id="vital-hr-pill">En attente</span></div>
+          <div class="vital-right"><span class="vital-value" id="vital-hr-value">-</span><span class="pill pill-wait" id="vital-hr-pill">En attente</span></div>
         </div>
         <div class="vital-card">
           <div><span class="vital-name">Saturation en oxygène (SpO₂)</span><span class="vital-sensor">Capteur MAX30102</span></div>
-          <div class="vital-right"><span class="vital-value" id="vital-spo2-value">—</span><span class="pill pill-wait" id="vital-spo2-pill">En attente</span></div>
+          <div class="vital-right"><span class="vital-value" id="vital-spo2-value">-</span><span class="pill pill-wait" id="vital-spo2-pill">En attente</span></div>
         </div>
         <p class="feedback" id="vitals-message" role="status" aria-live="polite"></p>
         <button class="back-button" type="button" id="vitals-start">Lancer la mesure</button>
@@ -210,7 +209,7 @@
         <p class="subtitle" id="success-message" style="white-space: pre-line"></p>
         <div class="queue-block" id="queue-block">
           <p class="queue-label">Votre numéro de file</p>
-          <p class="queue-number" id="success-queue">—</p>
+          <p class="queue-number" id="success-queue">-</p>
         </div>
         <dl class="recap" id="success-recap"></dl>
         <p class="feedback info" id="ticket-countdown" role="status" aria-live="polite"></p>

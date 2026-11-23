@@ -5,20 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#12304A">
-  <title>HIAR — Espace du personnel</title>
+  <title>HIAR - Espace du personnel</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/robot_logo.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='hiar-tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='staff.css') }}">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="HIAR — Accueil"><svg class="brand-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <rect x="4" y="4" width="40" height="40" rx="13" fill="none" stroke="currentColor" stroke-width="2.5"/>
-      <rect x="11" y="13" width="26" height="21" rx="7" fill="none" stroke="currentColor" stroke-width="2.2"/>
-      <circle cx="19" cy="22" r="2.3" fill="currentColor"/>
-      <circle cx="29" cy="22" r="2.3" fill="currentColor"/>
-      <path d="M18 29 Q24 34 30 29" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-      <path d="M24 13 V8 M20 8 H28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-    </svg></a>
+    <a class="brand" href="/" aria-label="HIAR - Accueil"><img class="brand-logo" src="{{ url_for('static', filename='img/robot_logo.png') }}" alt="HIAR"></a>
     <span class="topbar-title">Espace du personnel médical</span>
     <a class="btn btn-outline btn-small" href="/doctor" style="margin-left: auto; margin-right: 12px; text-decoration: none;">Espace Médecin</a>
     <div id="staff-topbar-actions" class="staff-topbar-actions" hidden>

@@ -17,8 +17,8 @@
   };
 
   const PERIODS = {
-    MAT: "Matin (08 h – 12 h)",
-    AM: "Après-midi (13 h – 18 h)",
+    MAT: "Matin (08 h - 12 h)",
+    AM: "Après-midi (13 h - 18 h)",
   };
 
   const PILL = {
@@ -275,7 +275,7 @@
         && isFinite(raw);
 
       byId("vital-" + item[0] + "-value").textContent =
-        show ? raw + " " + item[2] : "—";
+        show ? raw + " " + item[2] : "-";
     });
   }
 
@@ -342,7 +342,7 @@
 
       return typeof raw === "number"
         ? raw + " " + item[2]
-        : "—";
+        : "-";
     }).join(" / ");
   }
 
@@ -379,7 +379,7 @@
     byId("consult-contact").value = "";
 
     byId("success-message").textContent = "";
-    byId("success-queue").textContent = "—";
+    byId("success-queue").textContent = "-";
     byId("queue-block").hidden = false;
     byId("success-recap").replaceChildren();
     byId("ticket-countdown").textContent = "";
@@ -438,7 +438,7 @@
       data.message || "Votre inscription est enregistrée.";
 
     fillList(byId("success-recap"), [
-      ["Référence", String(data.appointment_id || "—")],
+      ["Référence", String(data.appointment_id || "-")],
       ["Date", formatDate(state.date)],
       ["Médecin", doctorLabel(state.session.doctor_code)],
       ["Période", periodLabel(state.session.period)],

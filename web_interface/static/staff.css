@@ -360,6 +360,7 @@ td.empty {
   display: block;
   width: 42px;
   height: 42px;
+  object-fit: contain;
 }
 
 /* Boutons icônes de l'espace médecin. */
@@ -537,6 +538,10 @@ td.empty {
 .diag-error,
 .diag-offline { background: var(--err-bg); color: var(--err); }
 
+:root {
+  --brand-blue: #0B4F7C;
+}
+
 /* Navigation d'en-tête unifiée [/patients : Rendez-vous] & [/admin : Gestion de HIAR] */
 .topbar-nav {
   display: flex;
@@ -551,29 +556,46 @@ td.empty {
   gap: 6px;
   padding: 8px 16px;
   border-radius: 12px;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.9);
   text-decoration: none;
   font-weight: 600;
   font-size: 0.92rem;
   transition: all 0.2s ease;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid transparent;
 }
 
 .topbar-nav-link:hover {
   color: #FFFFFF;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.topbar-nav-link:focus,
+.topbar-nav-link:focus-visible {
+  outline: 3px solid #82DFF7;
+  outline-offset: 2px;
 }
 
 .topbar-nav-link.active {
-  color: var(--secondary);
-  background: #FFFFFF;
+  color: #0B4F7C !important;
+  background: #FFFFFF !important;
+  border-color: #FFFFFF;
   font-weight: 700;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
 }
 
-/* Formulaire d'authentification par Code PIN à 4 chiffres */
+.topbar-nav-link.active:hover,
+.topbar-nav-link.active:focus,
+.topbar-nav-link.active:focus-visible {
+  color: #0B4F7C !important;
+  background: #FFFFFF !important;
+  outline: 3px solid #82DFF7;
+  outline-offset: 2px;
+}
+
+/* Formulaire d'authentification par Code PIN à 6 chiffres */
 .pin-login-panel {
-  max-width: 380px;
+  max-width: 400px;
   margin: 48px auto;
   text-align: center;
 }
@@ -585,18 +607,18 @@ td.empty {
 .pin-inputs {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
   margin: 20px 0 16px;
 }
 
 .pin-digit {
-  width: 52px;
-  height: 62px;
-  border-radius: 14px;
+  width: 46px;
+  height: 56px;
+  border-radius: 12px;
   border: 2px solid var(--border);
   background: var(--surface);
   color: var(--secondary);
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   font-weight: 800;
   text-align: center;
   outline: none;
@@ -672,26 +694,62 @@ td.empty {
 
 .admin-tab-btn {
   background: #FFFFFF;
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   padding: 10px 18px;
   border-radius: 12px;
   font-weight: 700;
   font-size: 0.92rem;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .admin-tab-btn:hover {
-  border-color: var(--brand-blue);
-  color: var(--brand-blue);
+  border-color: var(--secondary);
+  color: var(--secondary);
+  background: var(--surface-soft);
+}
+
+.admin-tab-btn:focus,
+.admin-tab-btn:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+  border-color: var(--secondary);
+  color: var(--secondary);
+  background: #FFFFFF;
 }
 
 .admin-tab-btn.active {
-  background: var(--brand-blue);
-  border-color: var(--brand-blue);
-  color: #FFFFFF;
-  box-shadow: 0 4px 12px rgba(11, 79, 124, 0.2);
+  background: var(--secondary) !important;
+  border-color: var(--secondary) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 12px rgba(11, 79, 124, 0.25);
+}
+
+.admin-tab-btn.active:hover,
+.admin-tab-btn.active:focus,
+.admin-tab-btn.active:focus-visible {
+  background: var(--secondary-dark) !important;
+  border-color: var(--secondary-dark) !important;
+  color: #FFFFFF !important;
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.quick-doc-btn.btn-primary {
+  background: var(--secondary) !important;
+  border-color: var(--secondary) !important;
+  color: #FFFFFF !important;
+  font-weight: 700;
+}
+
+.quick-doc-btn.btn-primary:hover,
+.quick-doc-btn.btn-primary:focus {
+  background: var(--secondary-dark) !important;
+  border-color: var(--secondary-dark) !important;
+  color: #FFFFFF !important;
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .dashboard-panel {

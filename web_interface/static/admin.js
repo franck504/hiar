@@ -46,7 +46,7 @@
 
     const detailEl = document.createElement("p");
     detailEl.className = "diag-card-detail";
-    detailEl.textContent = detail || "—";
+    detailEl.textContent = detail || "-";
 
     card.append(head, detailEl);
 
@@ -72,7 +72,7 @@
     const net = (data && data.network) || {};
     const timeStr = new Date().toLocaleTimeString("fr-FR");
     subtitle.textContent = online
-      ? "IP Robot : " + (net.ip || "—") + " · Firmware : " + (data.firmware_diagnostics || "—") + " · Mis à jour à " + timeStr
+      ? "IP Robot : " + (net.ip || "-") + " · Firmware : " + (data.firmware_diagnostics || "-") + " · Mis à jour à " + timeStr
       : "En attente du pont ROS 2 (hmi_websocket_bridge) · Vérifié à " + timeStr;
 
     const esp32 = (data && data.esp32) || {};
@@ -158,7 +158,7 @@
     if ($("dashboard-panel")) $("dashboard-panel").hidden = true;
     $("admin-topbar-actions").hidden = true;
     $("login-panel").hidden = false;
-    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4") ];
+    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4"), $("pin-5"), $("pin-6") ];
     digits.forEach(d => { if (d) d.value = ""; });
     if (digits[0]) digits[0].focus();
     if (message) say("login-feedback", message);
@@ -291,15 +291,15 @@
       const stLabel = STATUS_LABELS[st] || st;
       const stClass = ST_CLASS_MAP[st] || ("status-" + String(st).toLowerCase().replace(/\s+/g, "_"));
 
-      const dateStr = a.requested_date ? (a.requested_time ? `${a.requested_date} ${a.requested_time}` : a.requested_date) : "—";
-      const doctorStr = a.doctor ? `Dr. ${a.doctor} (${a.period || 'MAT'})` : "—";
+      const dateStr = a.requested_date ? (a.requested_time ? `${a.requested_date} ${a.requested_time}` : a.requested_date) : "-";
+      const doctorStr = a.doctor ? `Dr. ${a.doctor} (${a.period || 'MAT'})` : "-";
 
       tr.innerHTML = `
         <td><strong>${escapeHtml(dateStr)}</strong></td>
-        <td><span class="ticket-badge">${escapeHtml(a.ticket_label || "—")}</span></td>
-        <td>${escapeHtml(a.patient_name || "—")}</td>
-        <td>${escapeHtml(a.contact || "—")}</td>
-        <td>${escapeHtml(a.reason_code || "—")}</td>
+        <td><span class="ticket-badge">${escapeHtml(a.ticket_label || "-")}</span></td>
+        <td>${escapeHtml(a.patient_name || "-")}</td>
+        <td>${escapeHtml(a.contact || "-")}</td>
+        <td>${escapeHtml(a.reason_code || "-")}</td>
         <td>${escapeHtml(doctorStr)}</td>
         <td>${vitalsHtml}</td>
         <td><span class="status-pill ${stClass}">${escapeHtml(stLabel)}</span></td>
@@ -312,7 +312,7 @@
 
   function initPinAuth() {
     const form = $("login-form");
-    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4") ];
+    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4"), $("pin-5"), $("pin-6") ];
     if (!form || !digits[0]) return;
 
     function getEnteredPin() {
@@ -328,8 +328,8 @@
       d.addEventListener("input", () => {
         if (d.value.length >= 1) {
           d.value = d.value.slice(-1);
-          if (i < 3 && digits[i + 1]) digits[i + 1].focus();
-          else if (getEnteredPin().length === 4) form.requestSubmit();
+          if (i < 5 && digits[i + 1]) digits[i + 1].focus();
+          else if (getEnteredPin().length === 6) form.requestSubmit();
         }
       });
       d.addEventListener("keydown", (e) => {
@@ -348,11 +348,11 @@
           return;
         }
         if (val !== undefined && val !== "") {
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < 6; i++) {
             if (digits[i] && !digits[i].value) {
               digits[i].value = val;
-              if (i < 3 && digits[i + 1]) digits[i + 1].focus();
-              else if (getEnteredPin().length === 4) form.requestSubmit();
+              if (i < 5 && digits[i + 1]) digits[i + 1].focus();
+              else if (getEnteredPin().length === 6) form.requestSubmit();
               break;
             }
           }
@@ -363,8 +363,8 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const enteredPin = getEnteredPin();
-      if (enteredPin.length !== 4) {
-        say("login-feedback", "Veuillez saisir les 4 chiffres du code PIN.");
+      if (enteredPin.length !== 6) {
+        say("login-feedback", "Veuillez saisir les 6 chiffres du code PIN.");
         return;
       }
       say("login-feedback", "");
@@ -376,13 +376,15 @@
         });
         const data = await res.json();
         if (res.ok && data.ok) {
-          localStorage.setItem("hiar_web_pin", enteredPin);
           unlockAdmin();
         } else {
           say("login-feedback", data.error || "Code PIN incorrect.");
           clearDigits();
         }
       } catch (_) {
+        say("login-feedback", "Erreur réseau. Veuillez réessayer.");
+      }
+    });
         say("login-feedback", "Erreur réseau. Veuillez réessayer.");
       }
     });
@@ -437,18 +439,6 @@
 
     const filterSearch = $("filter-search");
     if (filterSearch) filterSearch.addEventListener("input", renderDashboardTable);
-
-    const savedPin = localStorage.getItem("hiar_web_pin");
-    if (savedPin && savedPin.length === 4) {
-      fetch("/api/auth/pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: savedPin }),
-      }).then(r => r.json()).then(data => {
-        if (data && data.ok) unlockAdmin();
-        else localStorage.removeItem("hiar_web_pin");
-      }).catch(() => {});
-    }
   }
 
   document.addEventListener("DOMContentLoaded", initPinAuth);

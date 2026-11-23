@@ -12,7 +12,7 @@ RE_TIME = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 RE_DOCTOR_CODE = re.compile(r"^[a-zA-Z0-9_\-]{1,32}$")
 RE_PERIOD = re.compile(r"^(MAT|AM|APM)$")
 RE_REASON_CODE = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
-RE_PIN = re.compile(r"^\d{4,8}$")
+RE_PIN = re.compile(r"^\d{6}$")
 DANGEROUS_CHARS = {"<", ">", ";", "`", "$", "{", "}", "\x00"}
 
 

@@ -65,7 +65,7 @@
     $("queue-panel").hidden = true;
     $("doctor-topbar-actions").hidden = true;
     $("login-panel").hidden = false;
-    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4") ];
+    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4"), $("pin-5"), $("pin-6") ];
     digits.forEach(d => { if (d) d.value = ""; });
     if ($("token")) $("token").value = "";
     if (digits[0]) digits[0].focus();
@@ -147,7 +147,7 @@
       cell(tr, item.doctor + "-" + item.period + "-" + item.ticket_number);
       cell(tr, PERIODS[item.period] || item.period);
       cell(tr, item.patient_name);
-      cell(tr, item.contact || "—");
+      cell(tr, item.contact || "-");
       cell(tr, item.reason);
 
       // Signes vitaux mesurés par HIAR (sans emojis dans les chaînes clés)
@@ -187,7 +187,7 @@
         api("/api/doctor/appointments?date=" + day + "&doctor=" + currentDoctor),
       ]);
       const title = $("queue-title");
-      if (title) title.textContent = "Rendez-vous des patients — Médecin " + (queue.doctor || currentDoctor);
+      if (title) title.textContent = "Rendez-vous des patients - Médecin " + (queue.doctor || currentDoctor);
       const dateEl = $("queue-date");
       if (dateEl) dateEl.textContent = "Date : " + day;
       renderSessions(sessions.sessions || []);
@@ -199,7 +199,7 @@
 
   function initPinAndForm() {
     const form = $("login-form");
-    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4") ];
+    const digits = [ $("pin-1"), $("pin-2"), $("pin-3"), $("pin-4"), $("pin-5"), $("pin-6") ];
 
     function getEnteredPin() {
       return digits.map(d => d ? d.value : "").join("");
@@ -215,8 +215,8 @@
       d.addEventListener("input", () => {
         if (d.value.length >= 1) {
           d.value = d.value.slice(-1);
-          if (i < 3 && digits[i + 1]) digits[i + 1].focus();
-          else if (getEnteredPin().length === 4) form.requestSubmit();
+          if (i < 5 && digits[i + 1]) digits[i + 1].focus();
+          else if (getEnteredPin().length === 6) form.requestSubmit();
         }
       });
       d.addEventListener("keydown", (e) => {
@@ -235,11 +235,11 @@
           return;
         }
         if (val !== undefined && val !== "") {
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < 6; i++) {
             if (digits[i] && !digits[i].value) {
               digits[i].value = val;
-              if (i < 3 && digits[i + 1]) digits[i + 1].focus();
-              else if (getEnteredPin().length === 4) form.requestSubmit();
+              if (i < 5 && digits[i + 1]) digits[i + 1].focus();
+              else if (getEnteredPin().length === 6) form.requestSubmit();
               break;
             }
           }
@@ -253,8 +253,8 @@
         const enteredPin = getEnteredPin();
         const fallbackToken = $("token") ? $("token").value.trim() : "";
 
-        // Cas 1 : Connexion par code PIN 4 chiffres
-        if (enteredPin.length === 4) {
+        // Connexion par code PIN 6 chiffres
+        if (enteredPin.length === 6) {
           say("login-feedback", "");
           try {
             const res = await fetch("/api/auth/pin", {
@@ -266,8 +266,6 @@
             if (res.ok && data.ok) {
               pin = enteredPin;
               token = DOCTOR_TOKENS[currentDoctor] || DOCTOR_TOKENS.A;
-              localStorage.setItem("hiar_web_pin", enteredPin);
-              localStorage.setItem("hiar_doctor_token", token);
               unlockQueue();
               return;
             } else {
@@ -281,19 +279,18 @@
           }
         }
 
-        // Cas 2 : Connexion de secours par jeton médecin (si token rempli)
+        // Connexion de secours par jeton médecin (si token rempli manuellement)
         if (fallbackToken) {
           token = fallbackToken;
           pin = "";
           try {
             await api("/api/doctor/sessions?date=" + today());
-            localStorage.setItem("hiar_doctor_token", token);
             unlockQueue();
           } catch (err) {
             say("login-feedback", "Jeton médecin invalide.");
           }
         } else {
-          say("login-feedback", "Veuillez saisir les 4 chiffres du code PIN.");
+          say("login-feedback", "Veuillez saisir les 6 chiffres du code PIN.");
         }
       });
     }
@@ -324,29 +321,7 @@
       });
     }
 
-    // Restauration de session automatique si PIN mémorisé
-    const savedPin = localStorage.getItem("hiar_web_pin");
-    if (savedPin && savedPin.length === 4) {
-      fetch("/api/auth/pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: savedPin }),
-      }).then(r => r.json()).then(data => {
-        if (data && data.ok) {
-          pin = savedPin;
-          token = DOCTOR_TOKENS[currentDoctor] || DOCTOR_TOKENS.A;
-          unlockQueue();
-        } else {
-          localStorage.removeItem("hiar_web_pin");
-        }
-      }).catch(() => {});
-    } else {
-      const savedToken = localStorage.getItem("hiar_doctor_token");
-      if (savedToken) {
-        token = savedToken;
-        unlockQueue();
-      }
-    }
+    // Le formulaire de PIN reste actif par défaut pour demander la saisie explicite de l'utilisateur
   }
 
   document.addEventListener("DOMContentLoaded", initPinAndForm);

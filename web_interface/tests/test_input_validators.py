@@ -69,12 +69,13 @@ def test_validate_reason_code():
 
 
 def test_validate_pin():
-    assert validate_pin("1234") is True
-    assert validate_pin("0000") is True
-    assert validate_pin("12345678") is True
+    assert validate_pin("123456") is True
+    assert validate_pin("000000") is True
+    assert validate_pin("12345678") is False
+    assert validate_pin("1234") is False
     assert validate_pin("12") is False
-    assert validate_pin("1234a") is False
-    assert validate_pin("1234' OR '1'='1") is False
+    assert validate_pin("12345a") is False
+    assert validate_pin("123456' OR '1'='1") is False
 
 
 def test_validate_safe_text():
