@@ -450,3 +450,47 @@ def test_udp_discovery_beacon_signature(monkeypatch):
 
     assert sig == expected_sig
     node.destroy_node()
+
+
+def test_orientation_menu_and_stray_yes_do_not_start_a_mission(bridge_node):
+    """« Guide-moi » ouvre l'écran des lieux ; un « oui » sans rien à confirmer ne lance rien."""
+    node, port = bridge_node
+    stub = node.intent_parser.llm_engine._backend
+    # Placé en premier : le contexte « attente confirmation Oui/Non » contient « oui »
+    stub.canned_responses = {"guide-moi": json.dumps({
+        "intent": "ORIENTATION_MENU", "target": None, "text_to_speak": "", "screen": "orientation",
+    }), **stub.canned_responses}
+
+    async def _next(ws, topic):
+        for _ in range(4):
+            m = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
+            if m.get("topic") == topic:
+                return m["payload"]
+        raise AssertionError(f"{topic} non reçu")
+
+    async def _run():
+        async with websockets.connect(f"ws://127.0.0.1:{port}/ws") as ws:
+            await asyncio.wait_for(ws.recv(), timeout=2.0)  # welcome
+
+            # Une destination était en attente : le menu repart de zéro
+            node._pending_orientation = {"destination": "PHARMACY", "label": "Pharmacie",
+                                         "ros_request": {"category": "ORIENTATION", "destination": "PHARMACY"}}
+            await ws.send(json.dumps({"v": 1, "type": "pub", "topic": "voice/stt/final", "ts": 1,
+                                      "payload": {"text": "Guide-moi", "confidence": 0.95}}))
+            inst = await _next(ws, "server/instruction")
+            assert inst["instruction_ui"]["screen"] == "orientation"
+            assert inst["voice_hints"] == ["Pharmacie", "Laboratoire", "Radiologie", "Réception"]
+            assert node._pending_orientation is None
+            assert node.hmi_request_pub.published == []
+
+            # « oui » sans rien à confirmer : pas d'écran mission, aucune demande ROS 2
+            await asyncio.sleep(2.6)  # anti-rebond STT
+            node._current_screen = "orientation"
+            await ws.send(json.dumps({"v": 1, "type": "pub", "topic": "voice/stt/final", "ts": 2,
+                                      "payload": {"text": "oui", "confidence": 0.95}}))
+            reply = await _next(ws, "server/instruction")
+            assert "instruction_ui" not in reply
+            assert "rien à confirmer" in reply["text_to_speak"].lower()
+            assert node.hmi_request_pub.published == []
+
+    asyncio.run(_run())

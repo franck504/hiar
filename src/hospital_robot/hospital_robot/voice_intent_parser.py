@@ -50,22 +50,28 @@ class ParsedIntent:
 class VoiceIntentParser:
     """Classifie le texte vocal et produit les instructions serveur/instruction."""
 
+    # Ordre et libellés identiques à l'écran tactile « Orientation » (orientation_screen.dart).
+    # "spoken" = forme avec article, utilisée dans les phrases lues par le robot.
     DEPARTMENTS = {
         "PHARMACY": {
             "label": "Pharmacie",
-            "regex": r"\b(pharmacie|medicaments?|ordonnance|remede)\b",
+            "spoken": "la pharmacie",
+            "regex": r"\b(pharmacie|pharmacien(ne)?|medicaments?|ordonnances?|remedes?|pilules?|comprimes?|sirop|cachets?)\b",
         },
         "LABORATORY": {
-            "label": "Laboratoire d'analyses",
-            "regex": r"\b(laboratoire|labo|analyses?|prise de sang|biologie)\b",
-        },
-        "RECEPTION": {
-            "label": "Accueil",
-            "regex": r"\b(accueil|reception|entree|guichet)\b",
+            "label": "Laboratoire",
+            "spoken": "le laboratoire",
+            "regex": r"\b(laboratoires?|labo|analyses?|prises? de sang|prelevements?|biologie|bilan sanguin|bilan biologique|examens? de sang)\b",
         },
         "RADIOLOGY": {
             "label": "Radiologie",
-            "regex": r"\b(radiologie|radio|scanner|irm|radiographie|imagerie)\b",
+            "spoken": "la radiologie",
+            "regex": r"\b(radiologie|radios?|radiographies?|scanner|irm|imagerie|echographies?|mammographie|fractures?)\b",
+        },
+        "RECEPTION": {
+            "label": "Réception",
+            "spoken": "la réception",
+            "regex": r"\b(accueil|reception|entree|sortie|guichet|admissions?|secretariat)\b",
         },
     }
 
@@ -104,7 +110,15 @@ class VoiceIntentParser:
     CONFIRM_NO_REGEX = r"\b(non|nan|pas du tout|annuler|annule|non merci|pas maintenant|laisse tomber|laisser tomber|refuser|refuse|plus tard|pas la peine)\b"
     VITALS_REGEX = r"\b(constantes?|signes? vitaux|pouls|temperature|frequence cardiaque|oxymetre|oxymetrie|saturation|tensiometre|mesurer|demarrer la mesure|prise de mesure)\b"
     CONSULTATION_REGEX = r"\b(rendez-vous|rdv|consultation|consulter|medecin|docteur|visite medicale|prendre rdv)\b"
-    HOME_REGEX = r"\b(retour.*accueil|page d'accueil|ecran d'accueil|aller.*accueil|revenir.*accueil|retour au menu|menu principal|ecran principal|revenir au debut|accueil principal|quitter|fermer|retour accueil)\b|^accueil$|^menu$|^retour$"
+    HOME_REGEX = r"\b(retour.*accueil|revenir.*accueil|(page|ecran|menu) d ?accueil|retour au menu|menu principal|ecran principal|revenir au debut|accueil principal|quitter|fermer|retour accueil)\b|^accueil$|^menu$|^retour$"
+    # Demande d'orientation sans lieu précis : on ouvre l'écran Orientation (les 4 lieux)
+    ORIENTATION_MENU_REGEX = (
+        r"\b(orientation|orienter|guide[- ]moi|guidez[- ]moi|accompagne[- ]moi|accompagnez[- ]moi|"
+        r"conduis[- ]moi|conduisez[- ]moi|emmene[- ]moi|emmenez[- ]moi|ou aller|ou puis[- ]je aller|"
+        r"ou dois[- ]je aller|quels? (services?|endroits?|lieux|destinations?|departements?)|"
+        r"liste des (services|lieux|endroits|destinations)|je suis perdu|je me suis perdu|"
+        r"je ne sais pas ou aller|aller quelque part|je cherche (un|le) (service|endroit|lieu|departement))\b"
+    )
 
     GREETING_REGEX = r"\b(bonjour|salut|bonsoir|coucou|hello|hey|allo)\b"
     THANKS_REGEX = r"\b(merci|merci beaucoup|remercie|parfait merci|super merci)\b"
@@ -344,6 +358,15 @@ class VoiceIntentParser:
                     ros_request={"category": "ORIENTATION", "destination": dest_key},
                 )
 
+        # ORIENTATION SANS LIEU PRÉCIS : afficher les 4 lieux comme l'écran tactile
+        if re.search(self.ORIENTATION_MENU_REGEX, norm):
+            return ParsedIntent(
+                intent_type="ORIENTATION_MENU",
+                confidence=confidence,
+                category="ORIENTATION",
+                label="Orientation",
+            )
+
         # MESURE DES SIGNES VITAUX
         if re.search(self.VITALS_REGEX, norm):
             return ParsedIntent(
@@ -531,6 +554,19 @@ class VoiceIntentParser:
                 details=_make_details(),
             )
 
+        if intent_type in ("ORIENTATION", "ORIENTATION_MENU") and not (
+            target and target in self.DEPARTMENTS
+        ):
+            # Aucun lieu reconnu : ne JAMAIS deviner une destination (ancien défaut « Pharmacie »),
+            # on ouvre l'écran Orientation qui propose les 4 lieux, comme le tactile.
+            return ParsedIntent(
+                intent_type="ORIENTATION_MENU",
+                confidence=confidence,
+                category="ORIENTATION",
+                label="Orientation",
+                details=_make_details("orientation"),
+            )
+
         if (target and target in self.DEPARTMENTS) or intent_type == "ORIENTATION":
             dest_key = target if (target and target in self.DEPARTMENTS) else "PHARMACY"
             label = self.DEPARTMENTS.get(dest_key, {}).get("label", dest_key)
@@ -639,6 +675,24 @@ class VoiceIntentParser:
 
         return None
 
+    def orientation_hints(self) -> List[str]:
+        """Libellés de tous les lieux d'orientation (identiques aux boutons tactiles)."""
+        return [info["label"] for info in self.DEPARTMENTS.values()]
+
+    def orientation_menu_speech(self, lead: Optional[str] = None) -> str:
+        """Phrase listant TOUS les lieux d'orientation disponibles dans l'application.
+
+        `lead` = courte phrase du LLM (ex. « Ce lieu n'est pas disponible. »). Elle est ignorée
+        si elle pose déjà une question, pour ne pas répéter « Où souhaitez-vous aller ? ».
+        """
+        spoken = [info.get("spoken") or info["label"].lower() for info in self.DEPARTMENTS.values()]
+        listing = ", ".join(spoken[:-1]) + " ou " + spoken[-1] if len(spoken) > 1 else spoken[0]
+        sentence = f"Je peux vous accompagner vers {listing}. Où souhaitez-vous aller ?"
+        lead = (lead or "").strip()
+        if lead and "?" not in lead and len(lead) <= 80:
+            return f"{lead} {sentence}"
+        return sentence
+
     def build_instruction(self, intent: ParsedIntent, raw_text: str = "") -> Dict:
         """Construit le payload conforme au topic 'server/instruction'."""
         if intent.intent_type == "IGNORED_FRAGMENT":
@@ -711,7 +765,7 @@ class VoiceIntentParser:
                     "screen": "home",
                     "require_confirmation": False,
                 },
-                "voice_hints": ["Pharmacie", "Laboratoire", "Consultation", "Constantes"],
+                "voice_hints": ["Orientation", "Pharmacie", "Laboratoire", "Radiologie", "Réception"],
                 "robot_status": {
                     "face_expression": "happy",
                     "status_label": "Robot prêt",
@@ -734,7 +788,7 @@ class VoiceIntentParser:
                     "screen": "home",
                     "require_confirmation": False,
                 },
-                "voice_hints": ["Pharmacie", "Laboratoire", "Consultation", "Constantes"],
+                "voice_hints": ["Orientation", "Pharmacie", "Laboratoire", "Radiologie", "Réception"],
                 "robot_status": {
                     "face_expression": "happy",
                     "status_label": "Bonjour !",
@@ -751,6 +805,26 @@ class VoiceIntentParser:
                 "robot_status": {
                     "face_expression": "happy",
                     "status_label": "Avec plaisir",
+                },
+            }
+
+        if intent.intent_type == "ORIENTATION_MENU":
+            speech = self.orientation_menu_speech(intent.details.get("llm_text_to_speak"))
+            return {
+                "origin": "voice",
+                "text_to_speak": speech,
+                "speech_priority": "normal",
+                "instruction_ui": {
+                    "screen": "orientation",
+                    "require_confirmation": False,
+                },
+                "fields": {
+                    "available_destinations": list(self.DEPARTMENTS.keys()),
+                },
+                "voice_hints": self.orientation_hints(),
+                "robot_status": {
+                    "face_expression": "speaking",
+                    "status_label": "Où souhaitez-vous aller ?",
                 },
             }
 
@@ -973,7 +1047,7 @@ class VoiceIntentParser:
                     "screen": "home",
                     "require_confirmation": False,
                 },
-                "voice_hints": ["Pharmacie", "Laboratoire", "Constantes", "Paludisme"],
+                "voice_hints": ["Orientation", "Pharmacie", "Laboratoire", "Radiologie", "Réception"],
                 "robot_status": {
                     "face_expression": "neutral",
                     "status_label": "En attente",
@@ -981,12 +1055,12 @@ class VoiceIntentParser:
             }
 
         # UNKNOWN fallback
-        speech = intent.details.get("llm_text_to_speak") or "Je n'ai pas bien compris votre demande. Vous pouvez me demander la pharmacie, le laboratoire, mesurer vos constantes ou des informations de santé."
+        speech = intent.details.get("llm_text_to_speak") or "Je n'ai pas bien compris votre demande. Vous pouvez me demander la pharmacie, le laboratoire, la radiologie, la réception, une consultation ou des informations de santé."
         return {
             "origin": "voice",
             "text_to_speak": speech,
             "speech_priority": "normal",
-            "voice_hints": ["Pharmacie", "Laboratoire", "Constantes", "Paludisme"],
+            "voice_hints": ["Orientation", "Pharmacie", "Laboratoire", "Radiologie", "Réception"],
             "robot_status": {
                 "face_expression": "neutral",
                 "status_label": "En attente",

@@ -219,6 +219,7 @@ Le robot comprend le langage naturel. Voici les principales phrases reconnues :
 |---|---|---|
 | **Salutations** | « Bonjour », « Salut », « Coucou », « Hello » | Salue et invite à choisir un service |
 | **Orientation** | « Emmène-moi à la pharmacie »<br>« Où sont les médicaments ? »<br>« Direction le laboratoire »<br>« Je cherche l'accueil » | Démarre le guidage physique vers la destination |
+| **Orientation (sans lieu précis)** | « Orientation »<br>« Guide-moi »<br>« Où puis-je aller ? »<br>« Je suis perdu » | Ouvre l'écran Orientation et énumère les 4 lieux (Pharmacie, Laboratoire, Radiologie, Réception), comme le tactile. Un lieu inexistant (toilettes, cafétéria…) donne le même résultat |
 | **Arrêt d'urgence** | « **Stop** », « Arrête », « Arrête-toi », « Pause », « Danger » | Arrêt immédiat des moteurs et passage en sécurité |
 | **Reprise** | « **Reprendre** », « Reprends », « Repartir », « En route » | Reprise de la marche après un arrêt |
 | **Fin de mission** | « **Terminer** », « C'est bon », « On est arrivé », « Fini » | Clôture la mission et retourne à l'accueil |

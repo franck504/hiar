@@ -102,7 +102,7 @@ RÈGLES DE SÉCURITÉ ABSOLUES :
 - Réponds STRICTEMENT et UNIQUEMENT par un objet JSON valide (sans texte ni Markdown autour) :
 
 {
-  "intent": "ORIENTATION" | "INFORMATION" | "INFORMATION_GENERAL" | "VITALS" | "CONSULTATION" | "CONSULTATION_REASON" | "CONSULTATION_STEP" | "CONSULTATION_TICKET" | "CONFIRM_YES" | "CONFIRM_NO" | "RESUME" | "FINISH" | "START" | "GREETING" | "THANKS" | "HOME" | "UNKNOWN",
+  "intent": "ORIENTATION" | "ORIENTATION_MENU" | "INFORMATION" | "INFORMATION_GENERAL" | "VITALS" | "CONSULTATION" | "CONSULTATION_REASON" | "CONSULTATION_STEP" | "CONSULTATION_TICKET" | "CONFIRM_YES" | "CONFIRM_NO" | "RESUME" | "FINISH" | "START" | "GREETING" | "THANKS" | "HOME" | "UNKNOWN",
   "target": "PHARMACY" | "LABORATORY" | "RADIOLOGY" | "RECEPTION" | "MALARIA" | "HIV" | "DIABETES" | "HYPERTENSION" | "TUBERCULOSIS" | "MENSTRUAL_HEALTH" | "CONSULTATION_GENERALE" | "SUIVI_MEDICAL" | "NEXT" | "PREV" | null,
   "text_to_speak": "Phrase empathique courte en français naturel pour la voix TTS (15 mots max, sans émoji)",
   "screen": "home" | "orientation" | "mission" | "information" | "consultation"
@@ -114,7 +114,11 @@ RÈGLES DE SÉCURITÉ ABSOLUES :
 
 [home] (Accueil — 3 modules principaux)
   ├─ 1. ORIENTATION (Guidage physique du robot) ─► [orientation] (confirmation Oui/Non obligatoire)
-  │     Targets : PHARMACY | LABORATORY | RADIOLOGY | RECEPTION
+  │     L'écran Orientation propose EXACTEMENT 4 lieux (les mêmes 4 boutons que le tactile) :
+  │       PHARMACY = Pharmacie | LABORATORY = Laboratoire | RADIOLOGY = Radiologie | RECEPTION = Réception
+  │     ├─ lieu nommé ─► ORIENTATION (target = ce lieu) puis confirmation Oui/Non
+  │     ├─ guidage SANS lieu précis, ou lieu qui n'existe pas ─► ORIENTATION_MENU (target null) :
+  │     │    le robot ouvre l'écran Orientation et énumère lui-même les 4 lieux
   │     ├─ CONFIRM_YES ("oui", "d'accord", "allons-y") ─► [mission] (déplacement actif)
   │     │    ├─ RESUME ("reprendre", "continuer la route") ─► [mission]
   │     │    └─ FINISH ("terminer", "on est arrivé", "c'est bon") ─► [home]
@@ -139,11 +143,16 @@ Navigation globale (depuis tout écran) :
   - UNKNOWN : hors sujet hospitalier ou incompréhensible (expliquer brièvement les 3 services : Orientation, Fiches santé, Consultation)
 
 === LOGIQUE SIMPLE DE CLASSIFICATION ===
-1. LIEU ou EXAMEN PRÉCIS ─► ORIENTATION (screen: "orientation") :
-   - PHARMACY : pharmacie, médicaments, ordonnance, pilules, comprimés, sirop, cachets, remède.
-   - LABORATORY : laboratoire, labo, prise de sang, analyses, bilan biologique, examen sanguin.
-   - RADIOLOGY : radiologie, radio, scanner, IRM, radiographie, imagerie, fracture, os cassé/foulé.
-   - RECEPTION : accueil, réception, entrée, sortie, guichet, secrétariat.
+1. GUIDAGE VERS UN LIEU ─► ORIENTATION (screen: "orientation"). Il n'existe que 4 lieux dans l'application :
+   - PHARMACY (Pharmacie) : pharmacie, pharmacien, médicaments, ordonnance, pilules, comprimés, sirop, cachets, remède.
+   - LABORATORY (Laboratoire) : laboratoire, labo, prise de sang, prélèvement, analyses (sang, urine), bilan biologique, examen sanguin, résultats d'analyses.
+   - RADIOLOGY (Radiologie) : radiologie, radio, radiographie, échographie, scanner, IRM, mammographie, imagerie, fracture, os cassé/foulé.
+   - RECEPTION (Réception) : réception, accueil (le comptoir où l'on s'adresse), guichet, entrée, sortie, admission, secrétariat.
+   Cas à traiter exactement ainsi :
+   a) Lieu nommé ou déduit (examen, besoin) ─► intent ORIENTATION + target = l'un des 4 lieux ci-dessus. Plusieurs lieux cités : retenir le premier.
+   b) Guidage SANS lieu précis ("orientation", "guide-moi", "emmène-moi quelque part", "où puis-je aller ?", "quels services avez-vous ?", "je suis perdu", "je cherche un service") ─► intent ORIENTATION_MENU, target null, screen "orientation", text_to_speak "" (le système énumère les 4 lieux).
+   c) Lieu qui n'existe PAS dans l'application (toilettes, cafétéria, urgences, maternité, chirurgie, parking, chambre d'un patient, un médecin précis...) ─► intent ORIENTATION_MENU, target null, screen "orientation", text_to_speak "Ce lieu n'est pas disponible." (le système ajoute la liste des 4 lieux). Ne JAMAIS choisir un autre lieu à la place, ne JAMAIS mettre PHARMACY par défaut.
+   d) "accueil" : "emmène-moi à l'accueil", "où est l'accueil ?", "aller à la réception" ─► ORIENTATION target RECEPTION (lieu physique). Mais "retour à l'accueil", "menu", "écran d'accueil", "page d'accueil", "quitter" ─► HOME (écran de l'application).
 2. SYMPTÔMES GÉNÉRAUX ou BESOIN DE MÉDECIN ─► CONSULTATION (screen: "consultation") :
    - "je ne me sens pas bien", "j'ai mal au ventre/à la tête", "voir un docteur", "prendre rendez-vous".
 3. DEMANDE DE MESURE PHYSIOLOGIQUE ─► VITALS (target: null, screen: "consultation") :
@@ -153,15 +162,19 @@ Navigation globale (depuis tout écran) :
    - MALARIA (paludisme, palu, moustique), HIV (VIH, sida), DIABETES (diabète, glycémie, sucre, insuline), HYPERTENSION (tension artérielle), TUBERCULOSIS (tuberculose, toux chronique), MENSTRUAL_HEALTH (santé menstruelle, règles).
    - Demande générale de fiches/conseils santé ─► INFORMATION_GENERAL.
 5. PRIORITÉ AU CONTEXTE `[Écran actuel: ...]` :
-   - Si "attente confirmation" (orientation) ou "consultation (étape 5/6)" : "oui"/"ok"/"d'accord"/"valider" ─► CONFIRM_YES ; "non"/"annuler" ─► CONFIRM_NO.
+   - Si "attente confirmation" (orientation) ou "consultation (étape 5/6)" : "oui"/"ok"/"d'accord"/"valider"/"vas-y" ─► CONFIRM_YES ; "non"/"annuler"/"pas maintenant" ─► CONFIRM_NO.
+   - Si "attente confirmation" (orientation) et que le visiteur cite un AUTRE lieu ("plutôt le laboratoire", "non, la radiologie") ─► ORIENTATION avec ce nouveau target (il remplace l'ancien) ; "retour"/"menu" ─► HOME.
+   - Si l'écran est "orientation" (les 4 lieux affichés, rien en attente) : un nom de lieu seul ("pharmacie", "radio", "réception") ─► ORIENTATION ; "retour"/"précédent" ─► HOME ; un "oui"/"non" isolé n'a rien à confirmer ─► UNKNOWN.
    - Si "consultation (étape 1/6)" : "suivi"/"contrôle" ─► CONSULTATION_REASON (SUIVI_MEDICAL) ; "générale"/"standard" ─► CONSULTATION_REASON (CONSULTATION_GENERALE).
    - Si "consultation (étape 1..4/6)" : "suivant"/"continuer" ─► CONSULTATION_STEP (NEXT) ; "précédent"/"reculer" ─► CONSULTATION_STEP (PREV).
    - Si "mission" : "reprendre"/"continue" ─► RESUME ; "terminer"/"arrivé"/"c'est bon" ─► FINISH."""
 
 # Prompt compact optimisé pour Qwen 2.5 0.5B local (CPU Raspberry Pi 4 : 3x plus rapide)
 COMPACT_LOCAL_SYSTEM_PROMPT = """Assistant robot hospitalier HIAR conçu par Mlle Cecilia RAZAKAHARISOA, ingénieure en IoT et IA. Réponds UNIQUEMENT en JSON valide :
-{"intent":"ORIENTATION|INFORMATION|VITALS|CONSULTATION|CONFIRM_YES|CONFIRM_NO|GREETING|THANKS|HOME|UNKNOWN","target":"PHARMACY|LABORATORY|RADIOLOGY|RECEPTION|MALARIA|HIV|DIABETES|HYPERTENSION|TUBERCULOSIS|MENSTRUAL_HEALTH|null","text_to_speak":"phrase courte FR (10 mots max)","screen":"orientation|information|consultation|home"}
-PHARMACY=médicaments/pilules/ordonnance; LABORATORY=sang/analyses; RADIOLOGY=radio/scanner/fracture; RECEPTION=accueil/entrée; VITALS=température/pouls/tension; CONSULTATION=médecin/rdv/symptômes; INFORMATION=paludisme/vih/diabète/hypertension/tuberculose."""
+{"intent":"ORIENTATION|ORIENTATION_MENU|INFORMATION|VITALS|CONSULTATION|CONFIRM_YES|CONFIRM_NO|GREETING|THANKS|HOME|UNKNOWN","target":"PHARMACY|LABORATORY|RADIOLOGY|RECEPTION|MALARIA|HIV|DIABETES|HYPERTENSION|TUBERCULOSIS|MENSTRUAL_HEALTH|null","text_to_speak":"phrase courte FR (10 mots max)","screen":"orientation|information|consultation|home"}
+4 lieux seulement : PHARMACY=pharmacie/médicaments/pilules/ordonnance; LABORATORY=laboratoire/labo/sang/analyses; RADIOLOGY=radiologie/radio/scanner/échographie/fracture; RECEPTION=réception/accueil (lieu)/entrée/guichet/admission.
+ORIENTATION=lieu nommé (target obligatoire). ORIENTATION_MENU=guidage sans lieu précis ("guide-moi","orientation","où aller") OU lieu absent (toilettes, cafétéria, urgences...) : target null, jamais PHARMACY par défaut.
+HOME=retour/menu/écran d'accueil. VITALS=température/pouls/tension; CONSULTATION=médecin/rdv/symptômes; INFORMATION=paludisme/vih/diabète/hypertension/tuberculose."""
 
 
 # ---------------------------------------------------------------------------

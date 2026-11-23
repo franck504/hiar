@@ -880,7 +880,11 @@ class HMIWebSocketBridgeNode(Node):
                 })
                 return
             else:
+                # Rien à confirmer : ne surtout pas basculer sur l'écran « mission » (le robot
+                # ne bougerait pas), on redemande simplement ce que souhaite le visiteur.
                 self.get_logger().info("ℹ️ Confirmation reçue sans action en attente.")
+                await self._reply_nothing_to_confirm()
+                return
 
         elif intent.intent_type == "CONFIRM_NO":
             if self._pending_orientation:
@@ -902,6 +906,13 @@ class HMIWebSocketBridgeNode(Node):
                 return
             else:
                 self.get_logger().info("ℹ️ Annulation reçue sans action en attente.")
+
+        elif intent.intent_type == "ORIENTATION_MENU":
+            # Demande de guidage sans lieu précis : on repart de zéro (aucune destination en attente)
+            # et le mobile ouvre l'écran Orientation avec les mêmes 4 lieux que le tactile.
+            self._pending_orientation = None
+            self._current_screen = "orientation"
+            self.get_logger().info("🧭 [ORIENTATION] Aucun lieu précis : affichage des lieux disponibles.")
 
         elif self._current_screen == "consultation" and self._current_step == 5 and intent.intent_type == "CONSULTATION_STEP" and (intent.target_value or "next") == "next":
             self.get_logger().info("✅ [CONSULTATION ÉTAPE 5] Suivant/Valider reçu vocalement, réservation en base !")
@@ -1035,6 +1046,21 @@ class HMIWebSocketBridgeNode(Node):
         if not intent.ros_command and intent.intent_type not in ["ORIENTATION", "CONFIRM_YES"] and not intent.ros_request and not vitals_id:
             self.get_logger().info(f"│    🤖 ROS 2       : Aucun ordre moteur nécessaire")
         self.get_logger().info("└────────────────────────────────────────────────────────────────────────")
+
+    async def _reply_nothing_to_confirm(self):
+        """Répond à un « oui » isolé sans changer d'écran ni lancer le robot."""
+        speech = "Je n'ai rien à confirmer pour le moment. Dites-moi où vous souhaitez aller ou ce dont vous avez besoin."
+        await self.broadcast("server/instruction", {
+            "origin": "voice",
+            "text_to_speak": speech,
+            "speech_priority": "normal",
+            "voice_hints": self.intent_parser.orientation_hints(),
+            "robot_status": {"face_expression": "neutral", "status_label": "En attente"},
+        })
+        await self.broadcast(
+            "voice/tts/request",
+            {"text": speech, "priority": "normal", "screen": self._current_screen},
+        )
 
     # ========================================================
     # LOGIQUE TACTILE UI ACTION

@@ -348,3 +348,83 @@ def test_ignored_fragments_do_not_trigger_tts(parser):
 def test_empty_input(parser):
     intent = parser.parse("   ")
     assert intent.intent_type == "UNKNOWN"
+
+
+# ============================================================
+# ORIENTATION VOCALE = MÊME CHOIX QUE LE TACTILE (4 lieux)
+# ============================================================
+
+TACTILE_DESTINATIONS = {
+    "PHARMACY": "Pharmacie",
+    "LABORATORY": "Laboratoire",
+    "RADIOLOGY": "Radiologie",
+    "RECEPTION": "Réception",
+}
+
+
+def test_departments_match_tactile_orientation_screen(parser):
+    """Mêmes clés, mêmes libellés et même ordre que orientation_screen.dart."""
+    labels = {key: info["label"] for key, info in parser.DEPARTMENTS.items()}
+    assert labels == TACTILE_DESTINATIONS
+    assert list(parser.DEPARTMENTS) == list(TACTILE_DESTINATIONS)
+    assert parser.orientation_hints() == list(TACTILE_DESTINATIONS.values())
+
+
+@pytest.mark.parametrize("phrase", [
+    "Orientation",
+    "Guide-moi",
+    "Où puis-je aller ?",
+    "Quels services avez-vous ?",
+    "Quels endroits peux-tu me montrer",
+    "Je suis perdu",
+    "Je ne sais pas où aller",
+    "Emmène-moi quelque part",
+])
+def test_orientation_without_place_opens_menu_with_all_places(parser, phrase):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "ORIENTATION_MENU"
+    # Aucune destination devinée : rien n'est envoyé à ROS 2
+    assert intent.ros_request is None
+    assert intent.ros_command is None
+
+    instruction = parser.build_instruction(intent, phrase)
+    assert instruction["instruction_ui"]["screen"] == "orientation"
+    assert instruction["instruction_ui"]["require_confirmation"] is False
+    assert "destination" not in instruction["instruction_ui"]
+    assert instruction["voice_hints"] == list(TACTILE_DESTINATIONS.values())
+    assert instruction["fields"]["available_destinations"] == list(TACTILE_DESTINATIONS)
+    speech = instruction["text_to_speak"].lower()
+    for spoken in ("pharmacie", "laboratoire", "radiologie", "réception"):
+        assert spoken in speech
+    assert speech.rstrip().endswith("?")
+
+
+@pytest.mark.parametrize("phrase,expected_dest", [
+    ("Où faire une échographie ?", "RADIOLOGY"),
+    ("Je dois faire un prélèvement", "LABORATORY"),
+    ("Je cherche le guichet", "RECEPTION"),
+    ("Aller à l'accueil", "RECEPTION"),
+    ("Emmène-moi à la réception", "RECEPTION"),
+    ("Où est le pharmacien ?", "PHARMACY"),
+])
+def test_orientation_synonyms_cover_every_place(parser, phrase, expected_dest):
+    intent = parser.parse(phrase)
+    assert intent.intent_type == "ORIENTATION"
+    assert intent.target_value == expected_dest
+
+
+@pytest.mark.parametrize("phrase", [
+    "Retour à l'accueil",
+    "Revenir à l'accueil",
+    "Écran d'accueil",
+    "Page d'accueil",
+    "Menu principal",
+])
+def test_home_screen_phrases_are_not_reception(parser, phrase):
+    assert parser.parse(phrase).intent_type == "HOME"
+
+
+def test_menu_speech_ignores_llm_lead_that_asks_a_question(parser):
+    assert "Ce lieu n'est pas disponible." in parser.orientation_menu_speech("Ce lieu n'est pas disponible.")
+    # Une question du LLM ferait doublon avec « Où souhaitez-vous aller ? »
+    assert parser.orientation_menu_speech("Où voulez-vous aller ?").count("?") == 1

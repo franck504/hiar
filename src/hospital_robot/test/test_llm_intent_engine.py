@@ -743,3 +743,77 @@ class TestGroqSoloMode:
             assert res.intent == "UNKNOWN"
             assert res.backend_used == "security_guard"
             assert "assistant hospitalier HIAR" in res.text_to_speak
+
+
+# ---------------------------------------------------------------------------
+# Orientation vocale : prompt et conversion alignés sur l'écran tactile
+# ---------------------------------------------------------------------------
+
+class TestOrientationPromptAndMenu:
+    PLACES = {
+        "PHARMACY": "Pharmacie",
+        "LABORATORY": "Laboratoire",
+        "RADIOLOGY": "Radiologie",
+        "RECEPTION": "Réception",
+    }
+
+    def test_full_prompt_lists_every_place_and_menu_intent(self):
+        from hospital_robot.llm_intent_engine import COMPACT_LOCAL_SYSTEM_PROMPT
+
+        for key in VoiceIntentParser.DEPARTMENTS:
+            assert key in DEFAULT_SYSTEM_PROMPT, key
+            assert key in COMPACT_LOCAL_SYSTEM_PROMPT, key
+        for label in self.PLACES.values():
+            assert label in DEFAULT_SYSTEM_PROMPT, label
+        assert "ORIENTATION_MENU" in DEFAULT_SYSTEM_PROMPT
+        assert "ORIENTATION_MENU" in COMPACT_LOCAL_SYSTEM_PROMPT
+        # Règle accueil (lieu) / accueil (écran) explicitée
+        assert "HOME" in DEFAULT_SYSTEM_PROMPT and "RECEPTION" in DEFAULT_SYSTEM_PROMPT
+
+    @pytest.mark.parametrize("llm_json", [
+        {"intent": "ORIENTATION", "target": None, "text_to_speak": "", "screen": "orientation"},
+        {"intent": "ORIENTATION_MENU", "target": None, "text_to_speak": "", "screen": "orientation"},
+        {"intent": "ORIENTATION", "target": "TOILETTES", "text_to_speak": "Ce lieu n'est pas disponible.", "screen": "orientation"},
+    ])
+    def test_orientation_without_known_place_never_defaults_to_pharmacy(self, llm_json):
+        backend = MockBackend(canned_responses={"quelque part": json.dumps(llm_json)})
+        engine = LLMIntentEngine(config=LLMConfig(backend="mock", cache_enabled=False), backend_override=backend)
+        parser = VoiceIntentParser(enable_llm=True, llm_engine=engine)
+
+        intent = parser.parse("Emmène-moi quelque part", current_screen="home")
+        assert intent.intent_type == "ORIENTATION_MENU"
+        assert intent.ros_request is None
+        assert intent.target_value is None
+
+        instruction = parser.build_instruction(intent)
+        assert instruction["instruction_ui"]["screen"] == "orientation"
+        assert instruction["instruction_ui"]["require_confirmation"] is False
+        for spoken in ("pharmacie", "laboratoire", "radiologie", "réception"):
+            assert spoken in instruction["text_to_speak"].lower()
+
+    def test_unavailable_place_message_is_spoken_before_the_list(self):
+        backend = MockBackend(canned_responses={"toilettes": json.dumps({
+            "intent": "ORIENTATION_MENU", "target": None,
+            "text_to_speak": "Ce lieu n'est pas disponible.", "screen": "orientation",
+        })})
+        engine = LLMIntentEngine(config=LLMConfig(backend="mock", cache_enabled=False), backend_override=backend)
+        parser = VoiceIntentParser(enable_llm=True, llm_engine=engine)
+        intent = parser.parse("Où sont les toilettes ?")
+        speech = parser.build_instruction(intent)["text_to_speak"]
+        assert speech.startswith("Ce lieu n'est pas disponible.")
+        assert "radiologie" in speech.lower()
+
+    @pytest.mark.parametrize("key,label", list(PLACES.items()))
+    def test_each_named_place_still_goes_through_confirmation(self, key, label):
+        backend = MockBackend(canned_responses={"vite": json.dumps({
+            "intent": "ORIENTATION", "target": key, "text_to_speak": "", "screen": "orientation",
+        })})
+        engine = LLMIntentEngine(config=LLMConfig(backend="mock", cache_enabled=False), backend_override=backend)
+        parser = VoiceIntentParser(enable_llm=True, llm_engine=engine)
+        intent = parser.parse("Emmène-moi vite", current_screen="home")
+        assert intent.intent_type == "ORIENTATION"
+        assert intent.target_value == key
+        assert intent.ros_request == {"category": "ORIENTATION", "destination": key}
+        instruction = parser.build_instruction(intent)
+        assert instruction["instruction_ui"]["require_confirmation"] is True
+        assert instruction["instruction_ui"]["destination"] == label

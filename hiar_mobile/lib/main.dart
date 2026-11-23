@@ -320,11 +320,11 @@ class _HiarAppState extends State<HiarApp> {
       case 'PHARMACY':
         return 'Pharmacie';
       case 'LABORATORY':
-        return "Laboratoire d'analyses";
+        return 'Laboratoire';
       case 'RADIOLOGY':
         return 'Radiologie';
       case 'RECEPTION':
-        return 'Accueil';
+        return 'Réception';
       default:
         return trimmed;
     }
