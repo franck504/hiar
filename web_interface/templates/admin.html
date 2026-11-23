@@ -12,7 +12,7 @@
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/robot_logo_192.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='hiar-tokens.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='staff.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='staff.css') }}?v=6pin">
 </head>
 <body>
   <header class="topbar">
@@ -196,6 +196,6 @@
     </section>
   </main>
 
-  <script src="{{ url_for('static', filename='admin.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='admin.js') }}?v=6pin" defer></script>
 </body>
 </html>

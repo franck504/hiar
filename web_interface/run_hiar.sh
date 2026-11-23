@@ -19,7 +19,7 @@ source "$ENV_FILE"
 set +a
 
 export HIAR_STAFF_API_TOKEN="${HIAR_STAFF_API_TOKEN:-hiar_default_staff_token_2026}"
-export HIAR_WEB_PIN="${HIAR_WEB_PIN:-1234}"
+export HIAR_WEB_PIN="${HIAR_WEB_PIN:-123456}"
 
 DOCTOR_SECRETS="$PROJECT_ROOT/web_interface/.doctor-secrets"
 if [[ ! -f "$DOCTOR_SECRETS" ]]; then

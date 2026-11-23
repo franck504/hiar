@@ -279,6 +279,11 @@
           }
         }
 
+        if (!fallbackToken) {
+          say("login-feedback", "Veuillez saisir les 6 chiffres du code PIN.");
+          return;
+        }
+
         // Connexion de secours par jeton médecin (si token rempli manuellement)
         if (fallbackToken) {
           token = fallbackToken;
