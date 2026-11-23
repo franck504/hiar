@@ -68,8 +68,8 @@ def test_auth_challenge_generation_and_verification():
     ESP32Interface.send_auth_challenge(node)
     nonce = node.current_challenge_nonce
     assert nonce is not None
-    assert len(nonce) == 16
-    node.serial_connection.write.assert_called_once_with(f"AUTH_CHALLENGE,nonce={nonce}\n".encode("utf-8"))
+    assert len(nonce) == 8
+    node.serial_connection.write.assert_called_once_with(f"AUTH,{nonce}\n".encode("utf-8"))
 
     # Vérification HMAC valide
     valid_hmac = ESP32Interface.compute_auth_response(node, nonce)
@@ -127,4 +127,29 @@ def test_read_serial_rejects_on_invalid_hmac():
 
     assert node.authenticated is False
     node.close_serial_connection.assert_called_once()
+
+
+def test_try_connect_serial_does_not_send_auth_challenge_when_auth_not_required(monkeypatch):
+    node = make_esp32_node()
+    node.require_auth = False
+    node.authenticated = True
+    node.port = "/dev/ttyUSB0"
+    node._candidate_serial_ports = MagicMock(return_value=["/dev/ttyUSB0"])
+    node._send_health_probe = MagicMock()
+    node.send_auth_challenge = MagicMock()
+
+    class FakeSerial:
+        def __init__(self, *args, **kwargs):
+            self.is_open = True
+            self.in_waiting = 0
+
+    monkeypatch.setattr("serial.Serial", FakeSerial)
+
+    node.serial_connection = None
+    res = ESP32Interface._try_connect_serial(node)
+    assert res is True
+    # send_auth_challenge ne DOIT PAS être appelé pour ne pas saturer le buffer ESP32 existant
+    node.send_auth_challenge.assert_not_called()
+    node._send_health_probe.assert_called_once()
+
 

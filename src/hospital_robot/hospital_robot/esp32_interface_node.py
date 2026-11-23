@@ -164,8 +164,9 @@ class ESP32Interface(Node):
                 self.port = candidate
                 self.get_logger().info(f'Connected to ESP32 on {self.port}')
                 self.last_rx_at = time.monotonic()
-                # Authentification / intégrité (Item 16)
-                self.send_auth_challenge()
+                # Authentification / intégrité (Item 16) - UNIQUEMENT si explicitement activé
+                if getattr(self, 'require_auth', False):
+                    self.send_auth_challenge()
                 # Demander immédiatement l'état matériel après connexion
                 self._send_health_probe()
                 return True
@@ -193,10 +194,11 @@ class ESP32Interface(Node):
         """Envoie un challenge cryptographique HMAC pour vérifier l'intégrité de l'ESP32."""
         if self.serial_connection is None:
             return
-        nonce = secrets.token_hex(8)
+        nonce = secrets.token_hex(4)
         self.current_challenge_nonce = nonce
         try:
-            challenge_frame = f"AUTH_CHALLENGE,nonce={nonce}\n"
+            # Format court (< 32 octets) adapté au buffer série RX_MAX de l'ESP32
+            challenge_frame = f"AUTH,{nonce}\n"
             self.serial_connection.write(challenge_frame.encode("utf-8"))
             self.get_logger().info(f"Sent ESP32 auth challenge: {nonce}")
         except (serial.SerialException, OSError) as error:
@@ -516,10 +518,15 @@ class ESP32Interface(Node):
                     self.last_pong_at = now
                     continue
 
-                if response.startswith('AUTH_RESPONSE,'):
-                    kv = parse_kv_frame(response, 'AUTH_RESPONSE')
-                    if kv and getattr(self, 'current_challenge_nonce', None):
-                        received_hmac = kv.get('hmac', '').strip().lower()
+                if response.startswith(('AUTH_RESPONSE,', 'AUTH,')):
+                    kv = parse_kv_frame(response, 'AUTH_RESPONSE') or parse_kv_frame(response, 'AUTH')
+                    received_hmac = ''
+                    if kv:
+                        received_hmac = kv.get('hmac', kv.get('token', '')).strip().lower()
+                    elif ',' in response:
+                        received_hmac = response.split(',', 1)[1].strip().lower()
+
+                    if received_hmac and getattr(self, 'current_challenge_nonce', None):
                         expected_hmac = self.compute_auth_response(self.current_challenge_nonce).lower()
                         if hmac.compare_digest(received_hmac, expected_hmac):
                             self.authenticated = True
