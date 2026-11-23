@@ -251,8 +251,10 @@ def test_bridge_lifecycle_and_messages(bridge_node):
                 if cand.is_dir() and str(cand) not in sys.path:
                     sys.path.insert(0, str(cand))
 
+            from appointments_store import init_sessions_db
             from consultation_sessions_store import set_doctor_session, TZ
             from datetime import datetime
+            init_sessions_db()  # base temporaire vierge (voir conftest) : créer le schéma
             today_iso = datetime.now(TZ).date().isoformat()
             set_doctor_session(today_iso, "B", "MAT", True)
 

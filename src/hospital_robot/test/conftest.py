@@ -8,6 +8,8 @@ On the Raspberry Pi (or machines with ROS 2 installed), real ROS 2 is preserved.
 import sys
 from unittest.mock import MagicMock
 
+import pytest
+
 
 def _ensure_ros_mocked():
     if "rclpy" not in sys.modules:
@@ -99,3 +101,26 @@ def _ensure_ros_mocked():
 
 
 _ensure_ros_mocked()
+
+
+def _ensure_web_interface_importable():
+    """Rend `web_interface/` importable (le pont réserve via ses modules SQLite)."""
+    from pathlib import Path
+
+    web = Path(__file__).resolve().parents[3] / "web_interface"
+    if web.is_dir() and str(web) not in sys.path:
+        sys.path.insert(0, str(web))
+
+
+_ensure_web_interface_importable()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_appointments_db(tmp_path, monkeypatch):
+    """Isole chaque test dans une base SQLite temporaire.
+
+    Sans cela, les tests du pont (réservation « Alice Dupont »…) écrivaient dans la VRAIE base
+    ``web_interface/instance/appointments.sqlite3`` : faux patients dans la file des médecins.
+    """
+    monkeypatch.setenv("HIAR_APPOINTMENTS_DB", str(tmp_path / "test_appointments.sqlite3"))
+    yield
