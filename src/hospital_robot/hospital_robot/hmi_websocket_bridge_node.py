@@ -75,6 +75,7 @@ try:
     from hospital_robot.vitals_data_parser import build_vitals_instruction, parse_vitals_frame
     from hospital_robot import consultation_catalog, consultation_voice
     from hospital_robot.consultation_voice import ConsultationVoiceMixin
+    from hospital_robot.clock_sync import ClockGuard
     from hospital_robot.llm_intent_engine import (
         GroqBackend,
         HybridGroqQwenBackend,
@@ -88,6 +89,7 @@ except ImportError:
     import consultation_catalog
     import consultation_voice
     from consultation_voice import ConsultationVoiceMixin
+    from clock_sync import ClockGuard
     try:
         from llm_intent_engine import (
             GroqBackend,
@@ -331,6 +333,8 @@ class HMIWebSocketBridgeNode(ConsultationVoiceMixin, Node):
         self._current_step: int = 1
         self._current_consultation_data: Dict[str, Any] = {}
         self._vitals_started_at: Optional[float] = None
+        # Horloge du Pi comparée à celle de la tablette (le Pi n'a pas de pile RTC)
+        self._clock = ClockGuard()
         self._init_consultation_dialog()
         self._last_ticket_label: Optional[str] = None
         self._last_stt_text = ""
@@ -671,6 +675,11 @@ class HMIWebSocketBridgeNode(ConsultationVoiceMixin, Node):
         msg_type = data.get("type", "pub")
         topic = data.get("topic", "")
         payload = data.get("payload", {})
+
+        # L'heure de la tablette (Android, synchronisée) sert de référence à l'horloge du Pi
+        clock_note = self._clock.observe(data.get("ts"), mission_active=bool(self._active_destination_label))
+        if clock_note:
+            self.get_logger().warning(f"🕒 [HORLOGE] {clock_note}")
 
         # Réponse au heartbeat ping
         if msg_type == "ping":
@@ -1636,6 +1645,10 @@ class HMIWebSocketBridgeNode(ConsultationVoiceMixin, Node):
             "llm": {
                 "status": llm_status,
                 "detail": llm_detail,
+            },
+            "clock": {
+                **self._clock.diagnostics(),
+                "robot_time": time.strftime("%Y-%m-%d %H:%M"),
             },
             "network": {
                 "hostname": socket.gethostname(),

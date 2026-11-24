@@ -295,6 +295,8 @@ class HubClient {
   void _sendHello() {
     final hello = HiarEnvelope(
       type: "hello",
+      // Heure Android (synchronisée) : le Raspberry Pi, sans pile RTC, s'y recale
+      ts: DateTime.now().millisecondsSinceEpoch,
       deviceId: "mobile_client_1",
       role: "kiosk",
       appVersion: "1.0.0",

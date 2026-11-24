@@ -79,6 +79,7 @@
     const sensors = (data && data.sensors) || {};
     const rosNodes = (data && data.ros_nodes) || {};
     const llm = (data && data.llm) || {};
+    const clock = (data && data.clock) || {};
 
     const cards = [
       makeDiagCard("🩺", "MAX30102 (Pouls / SpO2)", sensors.max30102?.status, sensors.max30102?.detail || "En attente de mesure", sensors.max30102?.meta),
@@ -88,6 +89,9 @@
       makeDiagCard("➡️", "HC-SR04 Droite (Obstacles)", sensors.ultrasonic_right?.status, sensors.ultrasonic_right?.detail || "Capteur latéral droit", sensors.ultrasonic_right?.meta),
       makeDiagCard("⚡", "ESP32 Châssis & Moteurs", esp32.status, esp32.detail || "Liaison série USB", esp32.port ? "Port : " + esp32.port : null),
       makeDiagCard("🧠", "IA Hybride (Gemini + Qwen)", llm.status, llm.detail || "Gemini Cloud + Fallback Edge Qwen 2.5", llm.meta),
+      makeDiagCard("🕒", "Horloge du robot", clock.status || "unknown",
+        clock.detail || "En attente de la tablette",
+        clock.robot_time ? "Heure du Raspberry Pi : " + clock.robot_time : null),
       makeDiagCard("🤖", "Nœuds ROS 2 du Robot", rosNodes.status, rosNodes.detail || "Superviseur & Navigation", rosNodes.meta),
       makeDiagCard("🌐", "Pont WebSocket & Réseau", online ? "ok" : "offline", online ? "ws://" + (net.ip || "127.0.0.1") + ":" + (net.ws_port || 5000) + "/ws" : "Déconnecté", "Port Web : " + (net.web_port || 5001)),
     ];

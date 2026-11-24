@@ -38,11 +38,54 @@
     return value ? value.replace(":", " h ") : "—";
   }
 
+  // ---- Date du ROBOT (et non du navigateur) : c'est elle qui date les rendez-vous ----
+  let serverDay = null;
+  let clockSkewMs = 0;
+
+  async function syncServerClock() {
+    try {
+      const res = await fetch("/api/server/time", { cache: "no-store" });
+      const body = await res.json();
+      if (!body.ok) return;
+      serverDay = body.date;
+      clockSkewMs = Date.now() - body.epoch_ms;
+      showClockWarning();
+    } catch (_) { /* hors ligne : on garde la date du navigateur */ }
+  }
+
+  function showClockWarning() {
+    const id = "hiar-clock-warning";
+    let box = document.getElementById(id);
+    if (Math.abs(clockSkewMs) < 5 * 60 * 1000) {
+      if (box) box.remove();
+      return;
+    }
+    if (!box) {
+      box = document.createElement("div");
+      box.id = id;
+      box.setAttribute("role", "alert");
+      box.style.cssText = "margin:12px auto;max-width:1040px;padding:10px 14px;border-radius:12px;" +
+        "background:#FEF3C7;color:#B45309;border:1px solid #F59E0B;font-weight:600;font-size:14px";
+      const main = document.querySelector("main") || document.body;
+      main.prepend(box);
+    }
+    const robotDate = new Date(serverDay + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+    const days = Math.round(Math.abs(clockSkewMs) / 86400000);
+    const ecart = days >= 1 ? days + " jour(s)" : Math.round(Math.abs(clockSkewMs) / 60000) + " minute(s)";
+    box.textContent = "⚠ L'horloge du robot indique le " + robotDate + " (écart de " + ecart +
+      " avec cet appareil). Les rendez-vous sont affichés à la date du robot. Faites recaler l'heure du Raspberry Pi.";
+  }
+
   function localDateString() {
-    return new Date().toLocaleDateString("sv-SE", { timeZone: "Indian/Antananarivo" });
+    return serverDay || new Date().toLocaleDateString("sv-SE", { timeZone: "Indian/Antananarivo" });
   }
 
   byId("date-filter").value = localDateString();
+  // Dès que la date du robot est connue, le filtre la prend (sauf si l'utilisateur l'a déjà changé)
+  const initialFilter = byId("date-filter").value;
+  syncServerClock().then(() => {
+    if (serverDay && byId("date-filter").value === initialFilter) byId("date-filter").value = serverDay;
+  });
 
   function makeButton(label, className, action, id) {
     const button = document.createElement("button");

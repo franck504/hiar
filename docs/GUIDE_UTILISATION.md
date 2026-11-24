@@ -294,6 +294,21 @@ suivant, précédent, oui, non, annuler), la saisie du nom et du téléphone, et
 Tout le reste répond « *le service est momentanément indisponible* ». Une confirmation de guidage non validée
 expire au bout de **45 secondes** : un « oui » tardif ne lance jamais le robot.
 
+### Les rendez-vous n'apparaissent pas dans l'onglet « Rendez-vous » / mauvaises dates
+Le Raspberry Pi **n'a pas de pile d'horloge** : sans Internet, il redémarre à une date ancienne et date
+les rendez-vous de travers. C'est **l'horloge du Pi** qui date les rendez-vous, et désormais aussi qui
+choisit le jour affiché dans le web (un bandeau orange signale un écart avec l'appareil qui consulte).
+La carte « Horloge du robot » de la page *Gestion de HIAR* indique l'écart mesuré avec la tablette.
+
+1. **Une fois, sur le Pi** : `sudo ./scripts/hiar_setup_clock.sh` (fuseau Antananarivo, NTP, et
+   autorisation pour que le pont recale le Pi sur l'heure de la tablette à chaque connexion).
+   Mise à l'heure immédiate possible : `sudo ./scripts/hiar_setup_clock.sh "2026-11-24 14:30"`.
+2. **Rendez-vous déjà enregistrés à une mauvaise date** (ex. pris le 24/11 mais datés du 18/11) :
+   `python3 scripts/hiar_fix_dates.py --from-date 2026-11-18 --to-date 2026-11-18 --shift-days 6`
+   affiche la simulation ; ajoutez `--apply` pour écrire (sauvegarde automatique de la base, refus en cas
+   de doublon de ticket ou de téléphone ; `--renumber` attribue alors le numéro libre suivant).
+3. Solution matérielle définitive : un module **RTC DS3231** sur le bus I2C du Pi.
+
 ### Comment compiler une version Release finale (APK) ?
 Pour distribuer l'application à installer sur n'importe quel smartphone Android :
 ```bash

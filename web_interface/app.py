@@ -1085,6 +1085,24 @@ def api_request():
     return jsonify(response), 200
 
 
+@app.route("/api/server/time", methods=["GET"])
+def api_server_time():
+    """Date et heure du robot : la SEULE référence pour dater et afficher les rendez-vous.
+
+    Les pages web ne doivent pas utiliser l'horloge du navigateur : si le Raspberry Pi est
+    déréglé, les rendez-vous enregistrés sont datés selon le Pi, et une page qui interroge
+    « aujourd'hui » selon le navigateur n'en trouve aucun.
+    """
+    now = datetime.now(TZ)
+    return jsonify({
+        "ok": True,
+        "date": now.date().isoformat(),
+        "now": now.isoformat(timespec="seconds"),
+        "epoch_ms": int(now.timestamp() * 1000),
+        "timezone": str(TZ),
+    }), 200
+
+
 @app.route("/api/system/diagnostics", methods=["GET"])
 def api_system_diagnostics():
     """Retourne l'état temps réel de l'ESP32, des capteurs, des nœuds ROS 2 et du LLM."""
